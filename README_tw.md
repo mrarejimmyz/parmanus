@@ -112,6 +112,7 @@ python run_flow.py
 
 ## 致謝
 
-感謝 [anthropic-computer-use](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo) 和 [broswer-use](https://github.com/browser-use/browser-use) 為本項目提供基本支持！
+感謝 [anthropic-computer-use](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)
+和 [browser-use](https://github.com/browser-use/browser-use) 為本項目提供基本支持！
 
 OpenManus 由 MetaGPT 的貢獻者構建。非常感謝這個代理社區！

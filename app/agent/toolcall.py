@@ -154,7 +154,7 @@ class ToolCallAgent(ReActAgent):
         except json.JSONDecodeError:
             error_msg = f"Error parsing arguments for {name}: Invalid JSON format"
             logger.error(
-                f"📝 Oops! The arguments for '{name}' don't make sense - invalid JSON"
+                f"📝 Oops! The arguments for '{name}' don't make sense - invalid JSON, arguments:{command.function.arguments}"
             )
             return f"Error: {error_msg}"
         except Exception as e:

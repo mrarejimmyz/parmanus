@@ -3,29 +3,34 @@ import asyncio
 from app.agent.manus import Manus
 from app.flow.base import FlowType
 from app.flow.flow_factory import FlowFactory
+from app.logger import logger
 
 
 async def run_flow():
-    agent = Manus()
+    agents = {
+        "manus": Manus(),
+    }
 
     while True:
         try:
             prompt = input("Enter your prompt (or 'exit' to quit): ")
             if prompt.lower() == "exit":
-                print("Goodbye!")
+                logger.info("Goodbye!")
                 break
 
             flow = FlowFactory.create_flow(
                 flow_type=FlowType.PLANNING,
-                agents=agent,
+                agents=agents,
             )
-
-            print("Processing your request...")
+            if prompt.strip().isspace():
+                logger.warning("Skipping empty prompt.")
+                continue
+            logger.warning("Processing your request...")
             result = await flow.execute(prompt)
-            print(result)
+            logger.info(result)
 
         except KeyboardInterrupt:
-            print("Goodbye!")
+            logger.warning("Goodbye!")
             break
 
 
