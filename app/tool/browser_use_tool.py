@@ -11,7 +11,6 @@ from pydantic_core.core_schema import ValidationInfo
 
 from app.tool.base import BaseTool, ToolResult
 
-
 _BROWSER_DESCRIPTION = """
 Interact with a web browser to perform various actions such as navigation, element interaction,
 content extraction, and tab management. Supported actions include:
@@ -20,6 +19,7 @@ content extraction, and tab management. Supported actions include:
 - 'input_text': Input text into an element
 - 'screenshot': Capture a screenshot
 - 'get_html': Get page HTML content
+- 'get_text': Get text content of the page
 - 'execute_js': Execute JavaScript code
 - 'scroll': Scroll the page
 - 'switch_tab': Switch to a specific tab
@@ -43,6 +43,7 @@ class BrowserUseTool(BaseTool):
                     "input_text",
                     "screenshot",
                     "get_html",
+                    "get_text",
                     "execute_js",
                     "scroll",
                     "switch_tab",
@@ -171,14 +172,20 @@ class BrowserUseTool(BaseTool):
                 elif action == "screenshot":
                     screenshot = await context.take_screenshot(full_page=True)
                     return ToolResult(
-                        output=f"Screenshot captured (base64 length: {len(screenshot)})",
+                        output=
+                        f"Screenshot captured (base64 length: {len(screenshot)})",
                         system=screenshot,
                     )
 
                 elif action == "get_html":
                     html = await context.get_page_html()
-                    truncated = html[:2000] + "..." if len(html) > 2000 else html
+                    truncated = html[:2000] + "..." if len(
+                        html) > 2000 else html
                     return ToolResult(output=truncated)
+
+                elif action == "get_text":
+                    text = await context.execute_javascript('document.body.innerText')
+                    return ToolResult(output=text)
 
                 elif action == "execute_js":
                     if not script:
