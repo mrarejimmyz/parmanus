@@ -139,7 +139,6 @@ After comprehensively gathering feedback from community members, we have decided
 - [ ] Implement containerized deployment to simplify installation and usage workflows
 - [ ] Enrich example libraries with more practical cases, including analysis of both successful and failed examples
 - [ ] Frontend/backend development to improve user experience
-- [ ] RAG enhancement: Implement external knowledge graph retrieval and fusion mechanisms
 
 ## Community Group
 
