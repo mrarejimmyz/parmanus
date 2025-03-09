@@ -1,12 +1,13 @@
 English | [中文](README_zh.md)
 
-<p align="left">
-    <a href="https://discord.gg/6dn7Sa3a"><img src="https://dcbadge.vercel.app/api/server/DYn29wFk9z?style=flat" alt="Discord Follow"></a>
-</p>
+[![Discord Follow](https://dcbadge.vercel.app/api/server/https://discord.gg/6dn7Sa3a?style=flat)](https://discord.gg/6dn7Sa3a) &ensp;
+[![Twitter Follow](https://img.shields.io/twitter/follow/openmanus?style=social)](https://twitter.com/openmanus) &ensp;
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 
 # 👋 OpenManus
 
-Manus is incredible, but OpenManus can achieve any ideas without an Invite Code 🛫!
+Manus is incredible, but OpenManus can achieve any idea without an *Invite Code* 🛫!
 
 Our team
 members [@mannaandpoem](https://github.com/mannaandpoem) [@XiangJinyu](https://github.com/XiangJinyu) [@MoshiQAQ](https://github.com/MoshiQAQ) [@didiforgithub](https://github.com/didiforgithub) [@stellaHSR](https://github.com/stellaHSR)
@@ -141,6 +142,9 @@ After comprehensively gathering feedback from community members, we have decided
 - [ ] Frontend/backend development to improve user experience
 
 ## Community Group
+Join our discord group
+
+[![Discord Follow](https://dcbadge.vercel.app/api/server/https://discord.gg/jkT5udP9bw?style=flat)](https://discord.gg/jkT5udP9bw) &ensp;
 
 Join our networking group on Feishu and share your experience with other developers!
 
