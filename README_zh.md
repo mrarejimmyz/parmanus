@@ -7,7 +7,7 @@
 
 # 👋 OpenManus
 
-[Official Website](https://openmanus.github.io/)
+[官方网站](https://openmanus.github.io/)
 
 Manus 非常棒，但 OpenManus 无需邀请码即可实现任何创意 🛫！
 
