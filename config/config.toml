@@ -1,7 +1,0 @@
-# Global LLM configuration
-[llm]
-model = "qwen-plus"
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-api_key = "sk-e8dcd91a089f4a71993b7043f84790f4"
-max_tokens = 8192
-temperature = 1.0
