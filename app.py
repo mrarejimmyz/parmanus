@@ -169,11 +169,7 @@ async def task_events(task_id: str):
 
         task = task_manager.tasks.get(task_id)
         if task:
-            yield f"event: status\ndata: {dumps({
-                'type': 'status',
-                'status': task.status,
-                'steps': task.steps
-            })}\n\n"
+            yield f"event: status\ndata: {dumps({'type': 'status','status': task.status,'steps': task.steps})}\n\n"
 
         while True:
             try:
@@ -191,11 +187,7 @@ async def task_events(task_id: str):
                 elif event["type"] == "step":
                     task = task_manager.tasks.get(task_id)
                     if task:
-                        yield f"event: status\ndata: {dumps({
-                            'type': 'status',
-                            'status': task.status,
-                            'steps': task.steps
-                        })}\n\n"
+                        yield f"event: status\ndata: {dumps({ 'type': 'status','status': task.status,'steps': task.steps })}\n\n"
                     yield f"event: {event['type']}\ndata: {formatted_event}\n\n"
                 elif event["type"] in ["think", "tool", "act", "run"]:
                     yield f"event: {event['type']}\ndata: {formatted_event}\n\n"
