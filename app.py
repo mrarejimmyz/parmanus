@@ -1,13 +1,14 @@
-from fastapi import FastAPI, Request, Body, HTTPException
+import asyncio
+import uuid
+from datetime import datetime
+from json import dumps
+
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from datetime import datetime
-import asyncio
-import uuid
-from json import dumps
 
 app = FastAPI()
 
@@ -99,6 +100,7 @@ async def create_task(prompt: str = Body(..., embed=True)):
 
 from app.agent.manus import Manus
 
+
 async def run_task(task_id: str, prompt: str):
     try:
         task_manager.tasks[task_id].status = "running"
@@ -108,7 +110,7 @@ async def run_task(task_id: str, prompt: str):
             description="A versatile agent that can solve various tasks using multiple tools",
             max_steps=30
         )
-        
+
         async def on_think(thought):
             await task_manager.update_task_step(task_id, 0, thought, "think")
 
@@ -120,18 +122,19 @@ async def run_task(task_id: str, prompt: str):
 
         async def on_run(step, result):
             await task_manager.update_task_step(task_id, step, result, "run")
-            
+
         from app.logger import logger
-        
+
         class SSELogHandler:
             def __init__(self, task_id):
                 self.task_id = task_id
-                
+
             async def __call__(self, message):
                 import re
+
                 # 提取 - 后面的内容
                 cleaned_message = re.sub(r'^.*? - ', '', message)
-                
+
                 event_type = "log"
                 if "✨ Manus's thoughts:" in cleaned_message:
                     event_type = "think"
@@ -143,9 +146,9 @@ async def run_task(task_id: str, prompt: str):
                     event_type = "error"
                 elif "🏁 Special tool" in cleaned_message:
                     event_type = "complete"
-                    
+
                 await task_manager.update_task_step(self.task_id, 0, cleaned_message, event_type)
-                
+
         sse_handler = SSELogHandler(task_id)
         logger.add(sse_handler)
 
@@ -163,7 +166,7 @@ async def task_events(task_id: str):
             return
 
         queue = task_manager.queues[task_id]
-        
+
         task = task_manager.tasks.get(task_id)
         if task:
             yield f"event: status\ndata: {dumps({
@@ -176,9 +179,9 @@ async def task_events(task_id: str):
             try:
                 event = await queue.get()
                 formatted_event = dumps(event)
-                
+
                 yield ": heartbeat\n\n"
-                
+
                 if event["type"] == "complete":
                     yield f"event: complete\ndata: {formatted_event}\n\n"
                     break
@@ -198,7 +201,7 @@ async def task_events(task_id: str):
                     yield f"event: {event['type']}\ndata: {formatted_event}\n\n"
                 else:
                     yield f"event: {event['type']}\ndata: {formatted_event}\n\n"
-                    
+
             except asyncio.CancelledError:
                 print(f"Client disconnected for task {task_id}")
                 break

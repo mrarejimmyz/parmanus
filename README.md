@@ -129,14 +129,7 @@ Or contact @mannaandpoem via 📧email: mannaandpoem@gmail.com
 
 ## Roadmap
 
-After comprehensively gathering feedback from community members, we have decided to adopt a 3-4 day iteration cycle to gradually implement the highly anticipated features.
-
-- [ ] Enhance Planning capabilities, optimize task breakdown and execution logic
-- [ ] Introduce standardized evaluation metrics (based on GAIA and TAU-Bench) for continuous performance assessment and optimization
-- [ ] Expand model adaptation and optimize low-cost application scenarios
-- [ ] Implement containerized deployment to simplify installation and usage workflows
-- [ ] Enrich example libraries with more practical cases, including analysis of both successful and failed examples
-- [ ] Frontend/backend development to improve user experience
+- [ ] Improve the UI’s visual appeal to create a more intuitive and seamless user experience.
 
 ## Community Group
 Join our networking group on Feishu and share your experience with other developers!

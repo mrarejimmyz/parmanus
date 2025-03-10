@@ -3,7 +3,7 @@ let currentEventSource = null;
 function createTask() {
     const promptInput = document.getElementById('prompt-input');
     const prompt = promptInput.value.trim();
-    
+
     if (!prompt) {
         alert("Please enter a valid prompt");
         promptInput.focus();
@@ -692,4 +692,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-

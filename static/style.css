@@ -278,7 +278,7 @@ button:hover {
     white-space: pre-wrap;
     color: var(--text-color);
     background: var(--bg-color);
-    
+
     &.log {
         background: var(--bg-color);
         border-left: 4px solid var(--text-light);
