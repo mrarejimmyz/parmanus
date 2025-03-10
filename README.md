@@ -148,3 +148,14 @@ Thanks to [anthropic-computer-use](https://github.com/anthropics/anthropic-quick
 and [browser-use](https://github.com/browser-use/browser-use) for providing basic support for this project!
 
 OpenManus is built by contributors from MetaGPT. Huge thanks to this agent community!
+
+## Cite
+
+@misc{openmanus2024,
+  author = {Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong},
+  title = {OpenManus: An open-source framework for building general AI agents},
+  year = {2025},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/mannaandpoem/OpenManus}},
+}
