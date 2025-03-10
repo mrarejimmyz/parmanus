@@ -150,7 +150,7 @@ and [browser-use](https://github.com/browser-use/browser-use) for providing basi
 OpenManus is built by contributors from MetaGPT. Huge thanks to this agent community!
 
 ## Cite
-
+```bibtex
 @misc{openmanus2024,
   author = {Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong},
   title = {OpenManus: An open-source framework for building general AI agents},
@@ -159,3 +159,4 @@ OpenManus is built by contributors from MetaGPT. Huge thanks to this agent commu
   journal = {GitHub repository},
   howpublished = {\url{https://github.com/mannaandpoem/OpenManus}},
 }
+```
