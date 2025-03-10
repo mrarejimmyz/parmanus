@@ -97,27 +97,27 @@ async def create_task(prompt: str = Body(..., embed=True)):
     asyncio.create_task(run_task(task.id, prompt))
     return {"task_id": task.id}
 
-from app.agent.toolcall import ToolCallAgent
+from app.agent.manus import Manus
 
 async def run_task(task_id: str, prompt: str):
     try:
         task_manager.tasks[task_id].status = "running"
-        
-        agent = ToolCallAgent(
-            name="TaskAgent",
-            description="Agent for handling task execution",
+
+        agent = Manus(
+            name="Manus",
+            description="A versatile agent that can solve various tasks using multiple tools",
             max_steps=30
         )
         
         async def on_think(thought):
             await task_manager.update_task_step(task_id, 0, thought, "think")
-            
+
         async def on_tool_execute(tool, input):
-            await task_manager.update_task_step(task_id, 0, f"执行工具: {tool}\n输入: {input}", "tool")
-            
+            await task_manager.update_task_step(task_id, 0, f"Executing tool: {tool}\nInput: {input}", "tool")
+
         async def on_action(action):
-            await task_manager.update_task_step(task_id, 0, f"执行动作: {action}", "act")
-            
+            await task_manager.update_task_step(task_id, 0, f"Executing action: {action}", "act")
+
         async def on_run(step, result):
             await task_manager.update_task_step(task_id, step, result, "run")
             
@@ -133,9 +133,9 @@ async def run_task(task_id: str, prompt: str):
                 cleaned_message = re.sub(r'^.*? - ', '', message)
                 
                 event_type = "log"
-                if "✨ TaskAgent's thoughts:" in cleaned_message:
+                if "✨ Manus's thoughts:" in cleaned_message:
                     event_type = "think"
-                elif "🛠️ TaskAgent selected" in cleaned_message:
+                elif "🛠️ Manus selected" in cleaned_message:
                     event_type = "tool"
                 elif "🎯 Tool" in cleaned_message:
                     event_type = "act"
@@ -239,9 +239,9 @@ async def get_task(task_id: str):
 async def generic_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
-        content={"message": f"服务器内部错误: {str(exc)}"}
+        content={"message": f"Server error: {str(exc)}"}
     )
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="localhost", port=5172)
