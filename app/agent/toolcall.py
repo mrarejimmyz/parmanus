@@ -1,12 +1,12 @@
 import json
-from typing import Any, List, Literal
+from typing import Any, List
 
 from pydantic import Field
 
 from app.agent.react import ReActAgent
 from app.logger import logger
 from app.prompt.toolcall import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.schema import AgentState, Message, ToolCall
+from app.schema import AgentState, Message, ToolCall, TOOL_CHOICE_TYPE, ToolChoice
 from app.tool import CreateChatCompletion, Terminate, ToolCollection
 
 
@@ -25,7 +25,7 @@ class ToolCallAgent(ReActAgent):
     available_tools: ToolCollection = ToolCollection(
         CreateChatCompletion(), Terminate()
     )
-    tool_choices: Literal["none", "auto", "required"] = "auto"
+    tool_choices: TOOL_CHOICE_TYPE = ToolChoice.AUTO # type: ignore
     special_tool_names: List[str] = Field(default_factory=lambda: [Terminate().name])
 
     tool_calls: List[ToolCall] = Field(default_factory=list)
@@ -61,7 +61,7 @@ class ToolCallAgent(ReActAgent):
 
         try:
             # Handle different tool_choices modes
-            if self.tool_choices == "none":
+            if self.tool_choices == ToolChoice.NONE:
                 if response.tool_calls:
                     logger.warning(
                         f"🤔 Hmm, {self.name} tried to use tools when they weren't available!"
@@ -81,11 +81,11 @@ class ToolCallAgent(ReActAgent):
             )
             self.memory.add_message(assistant_msg)
 
-            if self.tool_choices == "required" and not self.tool_calls:
+            if self.tool_choices == ToolChoice.REQUIRED and not self.tool_calls:
                 return True  # Will be handled in act()
 
             # For 'auto' mode, continue with content if no commands but content exists
-            if self.tool_choices == "auto" and not self.tool_calls:
+            if self.tool_choices == ToolChoice.AUTO and not self.tool_calls:
                 return bool(response.content)
 
             return bool(self.tool_calls)
@@ -101,7 +101,7 @@ class ToolCallAgent(ReActAgent):
     async def act(self) -> str:
         """Execute tool calls and handle their results"""
         if not self.tool_calls:
-            if self.tool_choices == "required":
+            if self.tool_choices == ToolChoice.REQUIRED:
                 raise ValueError(TOOL_CALL_REQUIRED)
 
             # Return last message content if no tool calls

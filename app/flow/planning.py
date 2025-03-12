@@ -8,7 +8,7 @@ from app.agent.base import BaseAgent
 from app.flow.base import BaseFlow, PlanStepStatus
 from app.llm import LLM
 from app.logger import logger
-from app.schema import AgentState, Message
+from app.schema import AgentState, Message, ToolChoice
 from app.tool import PlanningTool
 
 
@@ -124,7 +124,7 @@ class PlanningFlow(BaseFlow):
             messages=[user_message],
             system_msgs=[system_message],
             tools=[self.planning_tool.to_param()],
-            tool_choice="required",
+            tool_choice=ToolChoice.REQUIRED,
         )
 
         # Process tool calls if present
