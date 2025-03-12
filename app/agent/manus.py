@@ -43,7 +43,6 @@ class Manus(ToolCallAgent):
     @staticmethod
     def get_search_tool():
         """Determines the search tool to use based on the configuration."""
-        print(config.search_config)
         if config.search_config is None:
             return GoogleSearch()
         else:
