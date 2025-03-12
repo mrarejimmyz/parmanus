@@ -1,5 +1,5 @@
 import json
-from typing import Any, List, Literal
+from typing import Any, List, Literal, Optional, Union
 
 from pydantic import Field
 
@@ -31,6 +31,7 @@ class ToolCallAgent(ReActAgent):
     tool_calls: List[ToolCall] = Field(default_factory=list)
 
     max_steps: int = 30
+    max_observe: Optional[Union[int, bool]] = None
 
     async def think(self) -> bool:
         """Process current state and decide next actions using tools"""
@@ -110,6 +111,10 @@ class ToolCallAgent(ReActAgent):
         results = []
         for command in self.tool_calls:
             result = await self.execute_tool(command)
+
+            if self.max_observe:
+                result = result[: self.max_observe]
+
             logger.info(
                 f"🎯 Tool '{command.function.name}' completed its mission! Result: {result}"
             )

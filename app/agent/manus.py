@@ -26,11 +26,12 @@ class Manus(ToolCallAgent):
     system_prompt: str = SYSTEM_PROMPT
     next_step_prompt: str = NEXT_STEP_PROMPT
 
+    max_observe: int = 2000
+    max_steps: int = 20
+
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
             PythonExecute(), GoogleSearch(), BrowserUseTool(), FileSaver(), Terminate()
         )
     )
-
-    max_steps: int = 20
