@@ -1,13 +1,4 @@
-<br>
-
-<details>
-<summary>🌐 Other Languages</summary>
-
-- English
-- [中文](README_zh.md)
-- [한국어](README_ko.md)
-
-</details>
+English | [中文](README_zh.md) | [한국어](README_ko.md)
 
 [![GitHub stars](https://img.shields.io/github/stars/mannaandpoem/OpenManus?style=social)](https://github.com/mannaandpoem/OpenManus/stargazers)
 &ensp;
