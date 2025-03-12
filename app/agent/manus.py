@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import Field
 
 from app.agent.toolcall import ToolCallAgent
@@ -35,3 +37,7 @@ class Manus(ToolCallAgent):
             PythonExecute(), GoogleSearch(), BrowserUseTool(), FileSaver(), Terminate()
         )
     )
+
+    async def _handle_special_tool(self, name: str, result: Any, **kwargs):
+        await self.available_tools.get_tool(BrowserUseTool().name).cleanup()
+        await super()._handle_special_tool(name, result, **kwargs)
