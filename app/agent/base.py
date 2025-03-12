@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.llm import LLM
 from app.logger import logger
-from app.schema import AgentState, Memory, Message
+from app.schema import AgentState, Memory, Message, ROLE_TYPE
 
 
 class BaseAgent(BaseModel, ABC):
@@ -82,7 +82,7 @@ class BaseAgent(BaseModel, ABC):
 
     def update_memory(
         self,
-        role: Literal["user", "system", "assistant", "tool"],
+        role: ROLE_TYPE, # type: ignore
         content: str,
         **kwargs,
     ) -> None:
