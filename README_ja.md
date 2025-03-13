@@ -66,7 +66,7 @@ cd OpenManus
 3. 新しい仮想環境を作成してアクティベートします：
 
 ```bash
-uv venv
+uv venv --python 3.12
 source .venv/bin/activate  # Unix/macOSの場合
 # Windowsの場合：
 # .venv\Scripts\activate
