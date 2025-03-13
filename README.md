@@ -65,7 +65,7 @@ cd OpenManus
 3. Create a new virtual environment and activate it:
 
 ```bash
-uv venv
+uv venv --python 3.12
 source .venv/bin/activate  # On Unix/macOS
 # Or on Windows:
 # .venv\Scripts\activate
