@@ -66,7 +66,7 @@ cd OpenManus
 3. 새로운 가상 환경을 생성하고 활성화합니다:
 
 ```bash
-uv venv
+uv venv --python 3.12
 source .venv/bin/activate  # Unix/macOS의 경우
 # Windows의 경우:
 # .venv\Scripts\activate
