@@ -1,11 +1,9 @@
 import asyncio
 from typing import List
 
-from googlesearch import search as google_search
-from baidusearch.baidusearch import search as baidu_search
-
 from app.tool.base import BaseTool
 from app.config import config
+from app.tool.search import WebSearchEngine, BaiduSearchEngine, GoogleSearchEngine, DuckDuckGoSearchEngine
 
 
 class WebSearch(BaseTool):
@@ -29,9 +27,10 @@ The tool returns a list of URLs that match the search query.
         },
         "required": ["query"],
     }
-    _search_engine: dict = {
-        "google": google_search,
-        "baidu": baidu_search,
+    _search_engine: dict[str, WebSearchEngine] = {
+        "google": GoogleSearchEngine(),
+        "baidu": BaiduSearchEngine(),
+        "duckduckgo": DuckDuckGoSearchEngine(),
     }
 
     async def execute(self, query: str, num_results: int = 10) -> List[str]:
@@ -53,11 +52,12 @@ The tool returns a list of URLs that match the search query.
         )
 
         return links
-    
-    def get_search_engine(self):
+
+    def get_search_engine(self) -> WebSearchEngine:
         """Determines the search engine to use based on the configuration."""
+        default_engine = self._search_engine.get("google")
         if config.search_config is None:
-            return google_search
+            return default_engine
         else:
             engine = config.search_config.engine.lower()
-            return self._search_engine.get(engine, google_search)
+            return self._search_engine.get(engine, default_engine)
