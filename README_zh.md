@@ -69,7 +69,7 @@ cd OpenManus
 3. 创建并激活虚拟环境：
 
 ```bash
-uv venv
+uv venv --python 3.12
 source .venv/bin/activate  # Unix/macOS 系统
 # Windows 系统使用：
 # .venv\Scripts\activate
