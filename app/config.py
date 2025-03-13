@@ -158,7 +158,6 @@ class Config:
         search_settings = None
         if search_config:
             search_settings = SearchSettings(**search_config)
-            print("search setting", search_settings)
 
         config_dict = {
             "llm": {

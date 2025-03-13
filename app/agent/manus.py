@@ -7,8 +7,7 @@ from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.file_saver import FileSaver
-from app.tool.google_search import GoogleSearch
-from app.tool.baidu_search import BaiduSearch
+from app.tool.web_search import WebSearch
 from app.tool.python_execute import PythonExecute
 from app.config import config
 
@@ -36,21 +35,9 @@ class Manus(ToolCallAgent):
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
-            PythonExecute(), Manus.get_search_tool(), BrowserUseTool(), FileSaver(), Terminate()
+            PythonExecute(), WebSearch(), BrowserUseTool(), FileSaver(), Terminate()
         )
     )
-    
-    @staticmethod
-    def get_search_tool():
-        """Determines the search tool to use based on the configuration."""
-        if config.search_config is None:
-            return GoogleSearch()
-        else:
-            # Check search engine
-            engine = config.search_config.engine.lower()
-            if engine == "baidu":
-                return BaiduSearch()
-            return GoogleSearch()
 
     async def _handle_special_tool(self, name: str, result: Any, **kwargs):
         await self.available_tools.get_tool(BrowserUseTool().name).cleanup()
