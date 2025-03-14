@@ -84,14 +84,15 @@ class LLM:
         formatted_messages = []
 
         for message in messages:
+            if isinstance(message, Message):
+                message = message.to_dict()
             if isinstance(message, dict):
-                # If message is already a dict, ensure it has required fields
+                # If message is a dict, ensure it has required fields
                 if "role" not in message:
                     raise ValueError("Message dict must contain 'role' field")
-                formatted_messages.append(message)
-            elif isinstance(message, Message):
-                # If message is a Message object, convert it to dict
-                formatted_messages.append(message.to_dict())
+                if "content" in message or "tool_calls"  in message:
+                    formatted_messages.append(message)
+                # else: do not include the message
             else:
                 raise TypeError(f"Unsupported message type: {type(message)}")
 
@@ -99,10 +100,6 @@ class LLM:
         for msg in formatted_messages:
             if msg["role"] not in ROLE_VALUES:
                 raise ValueError(f"Invalid role: {msg['role']}")
-            if "content" not in msg and "tool_calls" not in msg:
-                raise ValueError(
-                    "Message must contain either 'content' or 'tool_calls'"
-                )
 
         return formatted_messages
 
