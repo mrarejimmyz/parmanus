@@ -128,6 +128,8 @@ python run_flow.py
 
 または @mannaandpoem に📧メールでご連絡ください：mannaandpoem@gmail.com
 
+**注意**: プルリクエストを送信する前に、pre-commitツールを使用して変更を確認してください。`pre-commit run --all-files`を実行してチェックを実行します。
+
 ## コミュニティグループ
 Feishuのネットワーキンググループに参加して、他の開発者と経験を共有しましょう！
 

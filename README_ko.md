@@ -128,6 +128,8 @@ python run_flow.py
 
 또는 📧 메일로 연락주세요. @mannaandpoem : mannaandpoem@gmail.com
 
+**참고**: pull request를 제출하기 전에 pre-commit 도구를 사용하여 변경 사항을 확인하십시오. `pre-commit run --all-files`를 실행하여 검사를 실행합니다.
+
 ## 커뮤니티 그룹
 Feishu 네트워킹 그룹에 참여하여 다른 개발자들과 경험을 공유하세요!
 

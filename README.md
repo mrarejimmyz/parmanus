@@ -127,6 +127,8 @@ We welcome any friendly suggestions and helpful contributions! Just create issue
 
 Or contact @mannaandpoem via 📧email: mannaandpoem@gmail.com
 
+**Note**: Before submitting a pull request, please use the pre-commit tool to check your changes. Run `pre-commit run --all-files` to execute the checks.
+
 ## Community Group
 Join our networking group on Feishu and share your experience with other developers!
 
