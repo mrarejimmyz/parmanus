@@ -212,7 +212,7 @@ class PlanningAgent(ToolCallAgent):
             messages=messages,
             system_msgs=[Message.system_message(self.system_prompt)],
             tools=self.available_tools.to_params(),
-            tool_choice=ToolChoice.REQUIRED,
+            tool_choice=ToolChoice.AUTO,
         )
         assistant_msg = Message.from_tool_calls(
             content=response.content, tool_calls=response.tool_calls
