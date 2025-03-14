@@ -39,5 +39,8 @@ class Manus(ToolCallAgent):
     )
 
     async def _handle_special_tool(self, name: str, result: Any, **kwargs):
-        await self.available_tools.get_tool(BrowserUseTool().name).cleanup()
-        await super()._handle_special_tool(name, result, **kwargs)
+        if not self._is_special_tool(name):
+            return
+        else:
+            await self.available_tools.get_tool(BrowserUseTool().name).cleanup()
+            await super()._handle_special_tool(name, result, **kwargs)
