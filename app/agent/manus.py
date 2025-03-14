@@ -7,9 +7,8 @@ from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.file_saver import FileSaver
-from app.tool.web_search import WebSearch
 from app.tool.python_execute import PythonExecute
-from app.config import config
+from app.tool.web_search import WebSearch
 
 
 class Manus(ToolCallAgent):

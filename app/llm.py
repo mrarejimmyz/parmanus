@@ -12,9 +12,17 @@ from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 from app.config import LLMSettings, config
 from app.logger import logger  # Assuming a logger is set up in your app
-from app.schema import Message, TOOL_CHOICE_TYPE, ROLE_VALUES, TOOL_CHOICE_VALUES, ToolChoice
+from app.schema import (
+    ROLE_VALUES,
+    TOOL_CHOICE_TYPE,
+    TOOL_CHOICE_VALUES,
+    Message,
+    ToolChoice,
+)
+
 
 REASONING_MODELS = ["o1", "o3-mini"]
+
 
 class LLM:
     _instances: Dict[str, "LLM"] = {}
@@ -140,7 +148,7 @@ class LLM:
             }
 
             if self.model in REASONING_MODELS:
-                    params["max_completion_tokens"] = self.max_tokens
+                params["max_completion_tokens"] = self.max_tokens
             else:
                 params["max_tokens"] = self.max_tokens
                 params["temperature"] = temperature or self.temperature
@@ -191,7 +199,7 @@ class LLM:
         system_msgs: Optional[List[Union[dict, Message]]] = None,
         timeout: int = 300,
         tools: Optional[List[dict]] = None,
-        tool_choice: TOOL_CHOICE_TYPE = ToolChoice.AUTO, # type: ignore
+        tool_choice: TOOL_CHOICE_TYPE = ToolChoice.AUTO,  # type: ignore
         temperature: Optional[float] = None,
         **kwargs,
     ):

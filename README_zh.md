@@ -119,7 +119,7 @@ python main.py
 
 然后通过终端输入你的创意！
 
-如需体验开发中版本，可运行：
+如需体验不稳定的开发版本，可运行：
 
 ```bash
 python run_flow.py
@@ -148,7 +148,7 @@ python run_flow.py
 特别感谢 [anthropic-computer-use](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)
 和 [browser-use](https://github.com/browser-use/browser-use) 为本项目提供的基础支持！
 
-此外，我们感谢 [AAAJ](https://github.com/metauto-ai/agent-as-a-judge)，[MetaGPT](https://github.com/geekan/MetaGPT) 和 [OpenHands](https://github.com/All-Hands-AI/OpenHands).
+此外，我们感谢 [AAAJ](https://github.com/metauto-ai/agent-as-a-judge)，[MetaGPT](https://github.com/geekan/MetaGPT)，[OpenHands](https://github.com/All-Hands-AI/OpenHands) 和 [SWE-agent](https://github.com/SWE-agent/SWE-agent).
 
 OpenManus 由 MetaGPT 社区的贡献者共同构建，感谢这个充满活力的智能体开发者社区！
 
