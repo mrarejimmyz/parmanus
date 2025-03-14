@@ -1,10 +1,15 @@
 import asyncio
 from typing import List
 
-from app.tool.base import BaseTool
 from app.config import config
-from app.tool.search import WebSearchEngine, BaiduSearchEngine, GoogleSearchEngine, DuckDuckGoSearchEngine
 from tenacity import retry, stop_after_attempt, wait_exponential
+from app.tool.base import BaseTool
+from app.tool.search import (
+    BaiduSearchEngine,
+    DuckDuckGoSearchEngine,
+    GoogleSearchEngine,
+    WebSearchEngine,
+)
 
 class WebSearch(BaseTool):
     name: str = "web_search"
