@@ -33,7 +33,6 @@ class ToolCallAgent(ReActAgent):
 
     max_steps: int = 30
     max_observe: Optional[Union[int, bool]] = None
-    max_input_tokens: Optional[int] = None
 
     async def think(self) -> bool:
         """Process current state and decide next actions using tools"""
@@ -51,13 +50,15 @@ class ToolCallAgent(ReActAgent):
                 tools=self.available_tools.to_params(),
                 tool_choice=self.tool_choices,
             )
-        except ValueError as e:
+        except ValueError:
             raise
         except Exception as e:
             # Check if this is a RetryError containing TokenLimitExceeded
             if hasattr(e, "__cause__") and isinstance(e.__cause__, TokenLimitExceeded):
                 token_limit_error = e.__cause__
-                logger.error(f"🚨 Token limit error (from RetryError): {token_limit_error}")
+                logger.error(
+                    f"🚨 Token limit error (from RetryError): {token_limit_error}"
+                )
                 self.memory.add_message(
                     Message.assistant_message(
                         f"Maximum token limit reached, cannot continue execution: {str(token_limit_error)}"
