@@ -13,5 +13,6 @@
     "evenBetterToml.schema.enabled": true,
     "evenBetterToml.schema.associations": {
         "^.+config[/\\\\].+\\.toml$": "../config/schema.config.json"
-    }
+    },
+    "files.insertFinalNewline": true
 }
