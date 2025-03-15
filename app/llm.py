@@ -151,7 +151,7 @@ class LLM:
                 params["max_completion_tokens"] = self.max_tokens
             else:
                 params["max_tokens"] = self.max_tokens
-                params["temperature"] = temperature or self.temperature
+                params["temperature"] = temperature if temperature is not None else self.temperature
 
             if not stream:
                 # Non-streaming request
@@ -255,7 +255,7 @@ class LLM:
                 params["max_completion_tokens"] = self.max_tokens
             else:
                 params["max_tokens"] = self.max_tokens
-                params["temperature"] = temperature or self.temperature
+                params["temperature"] = temperature if temperature is not None else self.temperature
 
             response = await self.client.chat.completions.create(**params)
 
