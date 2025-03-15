@@ -90,7 +90,7 @@ class LLM:
                 # If message is a dict, ensure it has required fields
                 if "role" not in message:
                     raise ValueError("Message dict must contain 'role' field")
-                if "content" in message or "tool_calls"  in message:
+                if "content" in message or "tool_calls" in message:
                     formatted_messages.append(message)
                 # else: do not include the message
             else:
