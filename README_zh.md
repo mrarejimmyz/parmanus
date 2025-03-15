@@ -1,7 +1,8 @@
+<p align="center">
+  <img src="assets/logo.jpg" width="200"/>
+</p>
 
 [English](README.md) | 中文 | [한국어](README_ko.md) | [日本語](README_ja.md)
-
-
 
 [![GitHub stars](https://img.shields.io/github/stars/mannaandpoem/OpenManus?style=social)](https://github.com/mannaandpoem/OpenManus/stargazers)
 &ensp;
