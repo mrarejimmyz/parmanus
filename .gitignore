@@ -178,3 +178,6 @@ data/
 
 # Workspace
 workspace/
+
+# sensitive information
+config/config.toml
