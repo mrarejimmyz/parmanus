@@ -15,5 +15,6 @@
         "^.+config[/\\\\].+\\.toml$": "../config/schema.config.json"
     },
     "files.insertFinalNewline": true,
-    "files.trimTrailingWhitespace": true
+    "files.trimTrailingWhitespace": true,
+    "editor.formatOnSave": true
 }
