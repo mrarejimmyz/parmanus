@@ -119,13 +119,9 @@ jobs:
                   print("No meaningful diff detected.")
                   exit(0)
 
-              try:
-                  comment = generate_comment(diff_content)
-                  post_comment(comment)
-                  print("Comment posted successfully.")
-              except Exception as e:
-                  print(f"Failed to process: {str(e)}")
-                  exit(1)
+              comment = generate_comment(diff_content)
+              post_comment(comment)
+              print("Comment posted successfully.")
           EOF
 
           python /tmp/_workflow_core.py
