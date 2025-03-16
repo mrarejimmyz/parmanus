@@ -1,8 +1,8 @@
 name: PR Diff Summarization
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, ready_for_review, reopened]
+  # pull_request:
+  #   branches: [main]
+  #   types: [opened, ready_for_review, reopened]
   issue_comment:
     types: [created]
 permissions:
