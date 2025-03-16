@@ -3,15 +3,19 @@ on:
   schedule:
     - cron: '0 0/2 * * *'
   workflow_dispatch:
-
 jobs:
   ShowAndLabelTopIssues:
+    permissions:
+      issues: write
+      pull-requests: write
+      actions: read
+      contents: read
     name: Display and label top issues
     runs-on: ubuntu-latest
     if: github.repository == 'mannaandpoem/OpenManus'
     steps:
       - name: Run top issues action
-        uses: rickstaa/top-issues-action@7e8dda5d5ae3087670f9094b9724a9a091fc3ba1  # v1.3.101
+        uses: rickstaa/top-issues-action@7e8dda5d5ae3087670f9094b9724a9a091fc3ba1 # v1.3.101
         env:
           github_token: ${{ secrets.GITHUB_TOKEN }}
         with:
