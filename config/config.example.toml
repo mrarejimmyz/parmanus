@@ -1,6 +1,6 @@
 # Global LLM configuration
 [llm]
-model = "claude-3-7-sonnet"            # The LLM model to use
+model = "gpt-4o"                       # The LLM model to use
 base_url = "https://api.openai.com/v1" # API endpoint URL
 api_key = "sk-..."                     # Your API key
 max_tokens = 8192                      # Maximum number of tokens in the response
@@ -26,7 +26,7 @@ temperature = 0.0                      # Controls randomness
 
 # Optional configuration for specific LLM models
 [llm.vision]
-model = "claude-3-7-sonnet"            # The vision model to use
+model = "gpt-4o"                       # The vision model to use
 base_url = "https://api.openai.com/v1" # API endpoint URL for vision model
 api_key = "sk-..."                     # Your API key for vision model
 max_tokens = 8192                      # Maximum number of tokens in the response
