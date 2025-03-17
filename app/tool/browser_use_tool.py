@@ -31,6 +31,7 @@ content extraction, and tab management. Supported actions include:
 - 'new_tab': Open a new tab
 - 'close_tab': Close the current tab
 - 'refresh': Refresh the current page
+- 'get_current_state': Get the current browser state including URL, title, tabs, and interactive elements
 """
 
 
