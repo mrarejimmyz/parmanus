@@ -45,6 +45,7 @@ class BrowserUseTool(BaseTool):
                 "enum": [
                     "navigate",
                     "click",
+                    "get_current_state",
                     "input_text",
                     "screenshot",
                     "get_html",
@@ -64,7 +65,7 @@ class BrowserUseTool(BaseTool):
             },
             "index": {
                 "type": "integer",
-                "description": "Element index for 'click' or 'input_text' actions",
+                "description": "Element index (retrieved using get_current_state) for 'click' or 'input_text' actions",
             },
             "text": {"type": "string", "description": "Text for 'input_text' action"},
             "script": {
@@ -201,6 +202,9 @@ class BrowserUseTool(BaseTool):
                         output += f" - Downloaded file to {download_path}"
                     return ToolResult(output=output)
 
+                elif action == "get_current_state":
+                    return await self.get_current_state(context)
+
                 elif action == "input_text":
                     if index is None or not text:
                         return ToolResult(
@@ -287,21 +291,22 @@ class BrowserUseTool(BaseTool):
             except Exception as e:
                 return ToolResult(error=f"Browser action '{action}' failed: {str(e)}")
 
-    async def get_current_state(self) -> ToolResult:
+    async def get_current_state(self, context: BrowserContext) -> ToolResult:
         """Get the current browser state as a ToolResult."""
-        async with self.lock:
-            try:
-                context = await self._ensure_browser_initialized()
-                state = await context.get_state()
-                state_info = {
-                    "url": state.url,
-                    "title": state.title,
-                    "tabs": [tab.model_dump() for tab in state.tabs],
-                    "interactive_elements": state.element_tree.clickable_elements_to_string(),
-                }
-                return ToolResult(output=json.dumps(state_info))
-            except Exception as e:
-                return ToolResult(error=f"Failed to get browser state: {str(e)}")
+        try:
+            state = await context.get_state()
+            state_info = {
+                "url": state.url,
+                "title": state.title,
+                "tabs": [tab.model_dump() for tab in state.tabs],
+                "help": "[0], [1], [2], etc., represent clickable indices corresponding to the elements listed. Clicking on these indices will navigate to or interact with the respective content behind them.",
+                "interactive_elements": state.element_tree.clickable_elements_to_string(),
+            }
+            return ToolResult(
+                output=json.dumps(state_info, indent=4, ensure_ascii=False)
+            )
+        except Exception as e:
+            return ToolResult(error=f"Failed to get browser state: {str(e)}")
 
     async def cleanup(self):
         """Clean up browser resources."""
