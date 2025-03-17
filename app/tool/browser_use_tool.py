@@ -10,6 +10,7 @@ from pydantic import Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
 from app.config import config
+from app.llm import LLM
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
 
@@ -18,27 +19,22 @@ _BROWSER_DESCRIPTION = """
 Interact with a web browser to perform various actions such as navigation, element interaction, content extraction, and tab management. This tool provides a comprehensive set of browser automation capabilities:
 
 Navigation:
-- 'navigate': Go to a specific URL
-- 'go_back': Navigate back in browser history
+- 'go_to_url': Go to a specific URL in the current tab
+- 'go_back': Go back
 - 'refresh': Refresh the current page
-- 'web_search': Search the web with a specific query
+- 'web_search': Search the query in the current tab, the query should be a search query like humans search in web, concrete and not vague or super long. More the single most important items.
 
 Element Interaction:
 - 'click_element': Click an element by index
 - 'input_text': Input text into a form element
 - 'scroll_down'/'scroll_up': Scroll the page (with optional pixel amount)
-- 'scroll_to_text': Scroll to specific text on the page
-- 'send_keys': Send keyboard shortcuts or special keys
+- 'scroll_to_text': If you dont find something which you want to interact with, scroll to it
+- 'send_keys': Send strings of special keys like Escape,Backspace, Insert, PageDown, Delete, Enter, Shortcuts such as `Control+o`, `Control+Shift+T` are supported as well. This gets used in keyboard.press.
 - 'get_dropdown_options': Get all options from a dropdown
-- 'select_dropdown_option': Select an option from a dropdown by text
+- 'select_dropdown_option': Select dropdown option for interactive element index by the text of the option you want to select
 
 Content Extraction:
-- 'get_current_state': Get detailed browser state including URL, title, tabs, and interactive elements
-- 'get_html': Get page HTML content
-- 'get_text': Get text content of the page (supports start_index and end_index parameters)
-- 'read_links': Get all links on the page
-- 'extract_content': Extract specific information from the page using AI
-- 'screenshot': Capture a screenshot
+- 'extract_content': Extract page content to retrieve specific information from the page, e.g. all company names, a specifc description, all information about, links with companies in structured format or simply links
 
 Tab Management:
 - 'switch_tab': Switch to a specific tab
@@ -47,12 +43,6 @@ Tab Management:
 
 Utility:
 - 'wait': Wait for a specified number of seconds
-- 'execute_js': Execute JavaScript code on the page
-
-Task Completion:
-- 'done': Complete the task and return results
-
-Each action requires specific parameters. Use get_current_state first to understand the current browser context.
 """
 
 Context = TypeVar("Context")
@@ -67,15 +57,9 @@ class BrowserUseTool(BaseTool, Generic[Context]):
             "action": {
                 "type": "string",
                 "enum": [
-                    "navigate",
+                    "go_to_url",
                     "click_element",
-                    "get_current_state",
                     "input_text",
-                    "screenshot",
-                    "get_html",
-                    "get_text",
-                    "read_links",
-                    "execute_js",
                     "scroll_down",
                     "scroll_up",
                     "scroll_to_text",
@@ -85,22 +69,24 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     "go_back",
                     "web_search",
                     "wait",
-                    "done",
+                    "extract_content",
+                    "switch_tab",
+                    "open_tab",
+                    "close_tab",
                 ],
                 "description": "The browser action to perform",
             },
             "url": {
                 "type": "string",
-                "description": "URL for 'navigate' or 'new_tab' actions",
+                "description": "URL for 'go_to_url' or 'open_tab' actions",
             },
             "index": {
                 "type": "integer",
-                "description": "Element index (retrieved using get_current_state) for 'click_element' or 'input_text' actions",
+                "description": "Element index for 'click_element', 'input_text', 'get_dropdown_options', or 'select_dropdown_option' actions",
             },
-            "text": {"type": "string", "description": "Text for 'input_text' action"},
-            "script": {
+            "text": {
                 "type": "string",
-                "description": "JavaScript code for 'execute_js' action",
+                "description": "Text for 'input_text', 'scroll_to_text', or 'select_dropdown_option' actions",
             },
             "scroll_amount": {
                 "type": "integer",
@@ -110,14 +96,6 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                 "type": "integer",
                 "description": "Tab ID for 'switch_tab' action",
             },
-            "start_index": {
-                "type": "integer",
-                "description": "Starting character index for text observation (for 'scroll_to_text' and 'get_text' actions)",
-            },
-            "end_index": {
-                "type": "integer",
-                "description": "Ending character index for text observation (for 'scroll_to_text' and 'get_text' actions)",
-            },
             "query": {
                 "type": "string",
                 "description": "Search query for 'web_search' action",
@@ -125,10 +103,6 @@ class BrowserUseTool(BaseTool, Generic[Context]):
             "goal": {
                 "type": "string",
                 "description": "Extraction goal for 'extract_content' action",
-            },
-            "success": {
-                "type": "boolean",
-                "description": "Success status for 'done' action",
             },
             "keys": {
                 "type": "string",
@@ -141,12 +115,11 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         },
         "required": ["action"],
         "dependencies": {
-            "navigate": ["url"],
+            "go_to_url": ["url"],
             "click_element": ["index"],
             "input_text": ["index", "text"],
-            "execute_js": ["script"],
             "switch_tab": ["tab_id"],
-            "new_tab": ["url"],
+            "open_tab": ["url"],
             "scroll_down": ["scroll_amount"],
             "scroll_up": ["scroll_amount"],
             "scroll_to_text": ["text"],
@@ -156,7 +129,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
             "go_back": [],
             "web_search": ["query"],
             "wait": ["seconds"],
-            "done": ["text"],
+            "extract_content": ["goal"],
         },
     }
 
@@ -168,6 +141,8 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 
     # Context for generic functionality
     tool_context: Optional[Context] = Field(default=None, exclude=True)
+
+    llm: Optional[LLM] = Field(default_factory=LLM)
 
     @field_validator("parameters", mode="before")
     def validate_parameters(cls, v: dict, info: ValidationInfo) -> dict:
@@ -230,14 +205,10 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         url: Optional[str] = None,
         index: Optional[int] = None,
         text: Optional[str] = None,
-        script: Optional[str] = None,
         scroll_amount: Optional[int] = None,
         tab_id: Optional[int] = None,
-        start_index: Optional[int] = None,
-        end_index: Optional[int] = None,
         query: Optional[str] = None,
         goal: Optional[str] = None,
-        success: Optional[bool] = None,
         keys: Optional[str] = None,
         seconds: Optional[int] = None,
         **kwargs,
@@ -250,14 +221,10 @@ class BrowserUseTool(BaseTool, Generic[Context]):
             url: URL for navigation or new tab
             index: Element index for click or input actions
             text: Text for input action or search query
-            script: JavaScript code for execution
             scroll_amount: Pixels to scroll for scroll action
             tab_id: Tab ID for switch_tab action
-            start_index: Starting character index for text observation
-            end_index: Ending character index for text observation
             query: Search query for Google search
             goal: Extraction goal for content extraction
-            success: Success status for done action
             keys: Keys to send for keyboard actions
             seconds: Seconds to wait
             **kwargs: Additional arguments
@@ -275,10 +242,14 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                 )
 
                 # Navigation actions
-                if action == "navigate":
+                if action == "go_to_url":
                     if not url:
-                        return ToolResult(error="URL is required for 'navigate' action")
-                    await context.navigate_to(url)
+                        return ToolResult(
+                            error="URL is required for 'go_to_url' action"
+                        )
+                    page = await context.get_current_page()
+                    await page.goto(url)
+                    await page.wait_for_load_state()
                     return ToolResult(output=f"Navigated to {url}")
 
                 elif action == "go_back":
@@ -299,10 +270,22 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     if search_results:
                         # Navigate to the first search result
                         first_result = search_results[0]
-                        await context.navigate_to(first_result)
+                        if isinstance(first_result, dict) and "url" in first_result:
+                            url_to_navigate = first_result["url"]
+                        elif isinstance(first_result, str):
+                            url_to_navigate = first_result
+                        else:
+                            return ToolResult(
+                                error=f"Invalid search result format: {first_result}"
+                            )
+
+                        page = await context.get_current_page()
+                        await page.goto(url_to_navigate)
+                        await page.wait_for_load_state()
+
                         return ToolResult(
-                            output=f"Searched for '{query}' and navigated to first result: {first_result}\nAll results:"
-                            + "\n".join(search_results)
+                            output=f"Searched for '{query}' and navigated to first result: {url_to_navigate}\nAll results:"
+                            + "\n".join([str(r) for r in search_results])
                         )
                     else:
                         return ToolResult(
@@ -414,55 +397,70 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     )
 
                 # Content extraction actions
-                elif action == "get_current_state":
-                    return await self.get_current_state(context)
-
-                elif action == "get_html":
-                    html = await context.get_page_html()
-                    truncated = (
-                        html[:max_content_length] + "..."
-                        if len(html) > max_content_length
-                        else html
-                    )
-                    return ToolResult(output=truncated)
-
-                elif action == "get_text":
-                    start = start_index if start_index is not None else 0
-                    end = end_index if end_index is not None else max_content_length
-                    text = await context.execute_javascript(
-                        f"document.body.innerText.substring({start}, {end})"
-                    )
-                    full_length = await context.execute_javascript(
-                        "document.body.innerText.length"
-                    )
-                    result = f"Text from index {start} to {end}:\n{text}"
-                    if end < full_length:
-                        result += f"\n\n[Text continues... {full_length - end} more characters available]"
-                    if start > 0:
-                        result += f"\n[{start} characters before this point]"
-                    return ToolResult(output=result)
-
-                elif action == "read_links":
-                    links = await context.execute_javascript(
-                        "Array.from(document.querySelectorAll('a[href]')).map(elem => elem.innerText && elem.href ? `${elem.innerText.trim()} - ${elem.href}` : null).filter(Boolean).join('\\n')"
-                    )
-                    return ToolResult(output=links)
-
                 elif action == "extract_content":
                     if not goal:
                         return ToolResult(
                             error="Goal is required for 'extract_content' action"
                         )
-                    await context.get_page_html()
-                    # Note: In a real implementation, this would use an LLM to extract content
-                    return ToolResult(output=f"Extracted content for goal: {goal}")
+                    page = await context.get_current_page()
+                    try:
+                        # Get page content and convert to markdown for better processing
+                        html_content = await page.content()
 
-                elif action == "screenshot":
-                    screenshot = await context.take_screenshot(full_page=True)
-                    return ToolResult(
-                        output=f"Screenshot captured (base64 length: {len(screenshot)})",
-                        system=screenshot,
-                    )
+                        # Import markdownify here to avoid global import
+                        try:
+                            import markdownify
+
+                            content = markdownify.markdownify(html_content)
+                        except ImportError:
+                            # Fallback if markdownify is not available
+                            content = html_content
+
+                        # Create prompt for LLM
+                        prompt_text = """
+Your task is to extract the content of the page. You will be given a page and a goal, and you should extract all relevant information around this goal from the page.
+
+Examples of extraction goals:
+- Extract all company names
+- Extract specific descriptions
+- Extract all information about a topic
+- Extract links with companies in structured format
+- Extract all links
+
+If the goal is vague, summarize the page. Respond in JSON format.
+
+Extraction goal: {goal}
+
+Page content:
+{page}
+"""
+                        # Format the prompt with the goal and content
+                        max_content_length = min(50000, len(content))
+                        formatted_prompt = prompt_text.format(
+                            goal=goal, page=content[:max_content_length]
+                        )
+
+                        # Create a proper message list for the LLM
+                        from app.schema import Message
+
+                        messages = [Message.user_message(formatted_prompt)]
+
+                        # Use LLM to extract content based on the goal
+                        response = await self.llm.ask(messages)
+
+                        msg = f"Extracted from page:\n{response}\n"
+                        return ToolResult(output=msg)
+                    except Exception as e:
+                        # Provide a more helpful error message
+                        error_msg = f"Failed to extract content: {str(e)}"
+                        try:
+                            # Try to return a portion of the page content as fallback
+                            return ToolResult(
+                                output=f"{error_msg}\nHere's a portion of the page content:\n{content[:2000]}..."
+                            )
+                        except:
+                            # If all else fails, just return the error
+                            return ToolResult(error=error_msg)
 
                 # Tab management actions
                 elif action == "switch_tab":
@@ -471,13 +469,15 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                             error="Tab ID is required for 'switch_tab' action"
                         )
                     await context.switch_to_tab(tab_id)
+                    page = await context.get_current_page()
+                    await page.wait_for_load_state()
                     return ToolResult(output=f"Switched to tab {tab_id}")
 
                 elif action == "open_tab":
                     if not url:
                         return ToolResult(error="URL is required for 'open_tab' action")
                     await context.create_new_tab(url)
-                    return ToolResult(output=f"Opened new tab with URL {url}")
+                    return ToolResult(output=f"Opened new tab with {url}")
 
                 elif action == "close_tab":
                     await context.close_current_tab()
@@ -489,47 +489,61 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     await asyncio.sleep(seconds_to_wait)
                     return ToolResult(output=f"Waited for {seconds_to_wait} seconds")
 
-                elif action == "execute_js":
-                    if not script:
-                        return ToolResult(
-                            error="Script is required for 'execute_js' action"
-                        )
-                    result = await context.execute_javascript(script)
-                    return ToolResult(output=str(result))
-
-                # Task completion
-                elif action == "done":
-                    if not text:
-                        return ToolResult(error="Text is required for 'done' action")
-                    success_value = success if success is not None else True
-                    return ToolResult(output=text, is_done=True, success=success_value)
-
                 else:
                     return ToolResult(error=f"Unknown action: {action}")
 
             except Exception as e:
                 return ToolResult(error=f"Browser action '{action}' failed: {str(e)}")
 
-    async def get_current_state(self, context: BrowserContext) -> ToolResult:
-        """Get the current browser state as a ToolResult."""
+    async def get_current_state(
+        self, context: Optional[BrowserContext] = None
+    ) -> ToolResult:
+        """
+        Get the current browser state as a ToolResult.
+        If context is not provided, uses self.context.
+        """
         try:
-            state = await context.get_state()
+            # Use provided context or fall back to self.context
+            ctx = context or self.context
+            if not ctx:
+                return ToolResult(error="Browser context not initialized")
+
+            state = await ctx.get_state()
+
+            # Create a viewport_info dictionary if it doesn't exist
+            viewport_height = 0
+            if hasattr(state, "viewport_info") and state.viewport_info:
+                viewport_height = state.viewport_info.height
+            elif hasattr(ctx, "config") and hasattr(ctx.config, "browser_window_size"):
+                viewport_height = ctx.config.browser_window_size.get("height", 0)
+
+            # Take a screenshot for the state
+            screenshot = await ctx.take_screenshot(full_page=True)
+
+            # Build the state info with all required fields
             state_info = {
                 "url": state.url,
                 "title": state.title,
                 "tabs": [tab.model_dump() for tab in state.tabs],
                 "help": "[0], [1], [2], etc., represent clickable indices corresponding to the elements listed. Clicking on these indices will navigate to or interact with the respective content behind them.",
-                "interactive_elements": state.element_tree.clickable_elements_to_string(),
+                "interactive_elements": (
+                    state.element_tree.clickable_elements_to_string()
+                    if state.element_tree
+                    else ""
+                ),
                 "scroll_info": {
-                    "pixels_above": state.pixels_above,
-                    "pixels_below": state.pixels_below,
-                    "total_height": state.pixels_above
-                    + state.pixels_below
-                    + (state.viewport_info.height if state.viewport_info else 0),
+                    "pixels_above": getattr(state, "pixels_above", 0),
+                    "pixels_below": getattr(state, "pixels_below", 0),
+                    "total_height": getattr(state, "pixels_above", 0)
+                    + getattr(state, "pixels_below", 0)
+                    + viewport_height,
                 },
+                "viewport_height": viewport_height,
             }
+
             return ToolResult(
-                output=json.dumps(state_info, indent=4, ensure_ascii=False)
+                output=json.dumps(state_info, indent=4, ensure_ascii=False),
+                base64_image=screenshot,
             )
         except Exception as e:
             return ToolResult(error=f"Failed to get browser state: {str(e)}")
