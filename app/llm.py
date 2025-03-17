@@ -27,7 +27,6 @@ from app.schema import (
     ToolChoice,
 )
 
-
 REASONING_MODELS = ["o1", "o3-mini"]
 
 
@@ -300,7 +299,7 @@ class LLM:
             if not full_response:
                 raise ValueError("Empty response from streaming LLM")
 
-            # 对于流式响应，估算completion tokens
+            # estimate completion tokens for streaming response
             completion_tokens = self.count_tokens(completion_text)
             logger.info(
                 f"Estimated completion tokens for streaming response: {completion_tokens}"
