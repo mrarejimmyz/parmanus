@@ -201,7 +201,7 @@ class BrowserUseTool(BaseTool):
                     if download_path:
                         output += f" - Downloaded file to {download_path}"
                     return ToolResult(output=output)
-                
+
                 elif action == "get_current_state":
                     return await self.get_current_state(context)
 
@@ -299,10 +299,12 @@ class BrowserUseTool(BaseTool):
                 "url": state.url,
                 "title": state.title,
                 "tabs": [tab.model_dump() for tab in state.tabs],
-                "help": "The numbers in brackets ([0], [1], [2], etc.) represent clickable indices corresponding to the elements listed.",
+                "help": "[0], [1], [2], etc., represent clickable indices corresponding to the elements listed. Clicking on these indices will navigate to or interact with the respective content behind them.",
                 "interactive_elements": state.element_tree.clickable_elements_to_string(),
             }
-            return ToolResult(output=json.dumps(state_info, indent=4, ensure_ascii=False))
+            return ToolResult(
+                output=json.dumps(state_info, indent=4, ensure_ascii=False)
+            )
         except Exception as e:
             return ToolResult(error=f"Failed to get browser state: {str(e)}")
 
