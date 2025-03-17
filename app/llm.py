@@ -280,22 +280,58 @@ class LLM:
         formatted_messages = []
 
         for message in messages:
+            # Convert Message objects to dictionaries
             if isinstance(message, Message):
                 message = message.to_dict()
-            if isinstance(message, dict):
-                # If message is a dict, ensure it has required fields
-                if "role" not in message:
-                    raise ValueError("Message dict must contain 'role' field")
-                if "content" in message or "tool_calls" in message:
-                    formatted_messages.append(message)
-                # else: do not include the message
-            else:
+
+            if not isinstance(message, dict):
                 raise TypeError(f"Unsupported message type: {type(message)}")
 
-        # Validate all messages have required fields
-        for msg in formatted_messages:
-            if msg["role"] not in ROLE_VALUES:
-                raise ValueError(f"Invalid role: {msg['role']}")
+            # Validate required fields
+            if "role" not in message:
+                raise ValueError("Message dict must contain 'role' field")
+
+            # Process base64 images if present
+            if message.get("base64_image"):
+                # Initialize or convert content to appropriate format
+                if not message.get("content"):
+                    message["content"] = []
+                elif isinstance(message["content"], str):
+                    message["content"] = [{"type": "text", "text": message["content"]}]
+                elif isinstance(message["content"], list):
+                    # Convert string items to proper text objects
+                    message["content"] = [
+                        (
+                            {"type": "text", "text": item}
+                            if isinstance(item, str)
+                            else item
+                        )
+                        for item in message["content"]
+                    ]
+
+                # Add the image to content
+                message["content"].append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{message['base64_image']}"
+                        },
+                    }
+                )
+
+                # Remove the base64_image field
+                del message["base64_image"]
+
+            # Only include messages with content or tool_calls
+            if "content" in message or "tool_calls" in message:
+                formatted_messages.append(message)
+
+        # Validate all roles
+        invalid_roles = [
+            msg for msg in formatted_messages if msg["role"] not in ROLE_VALUES
+        ]
+        if invalid_roles:
+            raise ValueError(f"Invalid role: {invalid_roles[0]['role']}")
 
         return formatted_messages
 
