@@ -2,9 +2,9 @@ import asyncio
 from typing import List
 
 from tenacity import retry, stop_after_attempt, wait_exponential
-from app.logger import logger
 
 from app.config import config
+from app.logger import logger
 from app.tool.base import BaseTool
 from app.tool.search import (
     BaiduSearchEngine,
@@ -55,24 +55,30 @@ class WebSearch(BaseTool):
         """
         # Get retry settings from config
         retry_delay = 60  # Default to 60 seconds
-        max_retries = 3   # Default to 3 retries
+        max_retries = 3  # Default to 3 retries
 
         if config.search_config:
             retry_delay = getattr(config.search_config, "retry_delay", 60)
             max_retries = getattr(config.search_config, "max_retries", 3)
 
         # Try searching with retries when all engines fail
-        for retry_count in range(max_retries + 1):  # +1 because first try is not a retry
+        for retry_count in range(
+            max_retries + 1
+        ):  # +1 because first try is not a retry
             links = await self._try_all_engines(query, num_results)
             if links:
                 return links
 
             if retry_count < max_retries:
                 # All engines failed, wait and retry
-                logger.warning(f"All search engines failed. Waiting {retry_delay} seconds before retry {retry_count + 1}/{max_retries}...")
+                logger.warning(
+                    f"All search engines failed. Waiting {retry_delay} seconds before retry {retry_count + 1}/{max_retries}..."
+                )
                 await asyncio.sleep(retry_delay)
             else:
-                logger.error(f"All search engines failed after {max_retries} retries. Giving up.")
+                logger.error(
+                    f"All search engines failed after {max_retries} retries. Giving up."
+                )
 
         return []
 
@@ -99,16 +105,22 @@ class WebSearch(BaseTool):
                 )
                 if links:
                     if failed_engines:
-                        logger.info(f"Search successful with {engine_name.capitalize()} after trying: {', '.join(failed_engines)}")
+                        logger.info(
+                            f"Search successful with {engine_name.capitalize()} after trying: {', '.join(failed_engines)}"
+                        )
                     return links
             except Exception as e:
                 failed_engines.append(engine_name.capitalize())
                 is_rate_limit = "429" in str(e) or "Too Many Requests" in str(e)
 
                 if is_rate_limit:
-                    logger.warning(f"⚠️ {engine_name.capitalize()} search engine rate limit exceeded, trying next engine...")
+                    logger.warning(
+                        f"⚠️ {engine_name.capitalize()} search engine rate limit exceeded, trying next engine..."
+                    )
                 else:
-                    logger.warning(f"⚠️ {engine_name.capitalize()} search failed with error: {e}")
+                    logger.warning(
+                        f"⚠️ {engine_name.capitalize()} search failed with error: {e}"
+                    )
 
         if failed_engines:
             logger.error(f"All search engines failed: {', '.join(failed_engines)}")
@@ -130,7 +142,9 @@ class WebSearch(BaseTool):
             if config.search_config.engine:
                 preferred = config.search_config.engine.lower()
             if config.search_config.fallback_engines:
-                fallbacks = [engine.lower() for engine in config.search_config.fallback_engines]
+                fallbacks = [
+                    engine.lower() for engine in config.search_config.fallback_engines
+                ]
 
         engine_order = []
         # Add preferred engine first
