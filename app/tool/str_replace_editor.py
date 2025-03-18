@@ -138,10 +138,7 @@ class StrReplaceEditor(BaseTool):
         """
         # Check if its an absolute path
         if not path.is_absolute():
-            suggested_path = Path("") / path
-            raise ToolError(
-                f"The path {path} is not an absolute path, it should start with `/`. Maybe you meant {suggested_path}?"
-            )
+            raise ToolError(f"The path {path} is not an absolute path")
         # Check if path exists
         if not path.exists() and command != "create":
             raise ToolError(
