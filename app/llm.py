@@ -309,8 +309,8 @@ class LLM:
             elif isinstance(oe, APIError):
                 logger.error(f"API error: {oe}")
             raise
-        except Exception as e:
-            logger.error(f"Unexpected error in ask: {e}")
+        except Exception:
+            logger.exception(f"Unexpected error in ask")
             raise
 
     @retry(
