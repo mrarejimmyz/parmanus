@@ -2,7 +2,7 @@
 [llm] #AZURE OPENAI:
 api_type= 'azure'
 model = "gpt-4o-mini"                                                                   # The LLM model to use
-base_url = "{YOUR_AZURE_ENDPOINT.rstrip('/')}/openai/deployments/{AZURE_DEPOLYMENT_ID}" # API endpoint URL
+base_url = "{YOUR_AZURE_ENDPOINT.rstrip('/')}/openai/deployments/{AZURE_DEPLOYMENT_ID}" # API endpoint URL
 api_key = "YOUR_API_KEY"                                                                # Your API key
 max_tokens = 8096                                                                       # Maximum number of tokens in the response
 temperature = 0.0                                                                       # Controls randomness
@@ -12,7 +12,7 @@ api_version="AZURE API VERSION" #"2024-08-01-preview"                           
 # Optional configuration for specific LLM models
 [llm.vision]
 model = "gpt-4o"        # The vision model to use
-base_url = "{YOUR_AZURE_ENDPOINT.rstrip('/')}/openai/deployments/{AZURE_DEPOLYMENT_ID}"
+base_url = "{YOUR_AZURE_ENDPOINT.rstrip('/')}/openai/deployments/{AZURE_DEPLOYMENT_ID}"
 api_key = "YOUR_API_KEY"                    # Your API key for vision model
 max_tokens = 8192                           # Maximum number of tokens in the response
 temperature = 0.0                           # Controls randomness for vision model
