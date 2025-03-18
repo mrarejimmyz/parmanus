@@ -189,7 +189,7 @@ class LocalSandboxClient(BaseSandboxClient):
             self.sandbox = None
 
 
-async def create_sandbox_client() -> LocalSandboxClient:
+def create_sandbox_client() -> LocalSandboxClient:
     """Creates a sandbox client.
 
     Returns:

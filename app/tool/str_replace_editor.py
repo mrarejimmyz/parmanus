@@ -100,7 +100,6 @@ class StrReplaceEditor(BaseTool):
     }
     _file_history: DefaultDict[PathLike, List[str]] = defaultdict(list)
     _local_operator: LocalFileOperator = LocalFileOperator()
-    # todo: Sandbox resources need to be destroyed at the appropriate time.
     _sandbox_operator: SandboxFileOperator = SandboxFileOperator()
 
     # def _get_operator(self, use_sandbox: bool) -> FileOperator:
@@ -129,7 +128,7 @@ class StrReplaceEditor(BaseTool):
         operator = self._get_operator()
 
         # Validate path and command combination
-        await self.validate_path(command, path, operator)
+        await self.validate_path(command, Path(path), operator)
 
         # Execute the appropriate command
         if command == "view":
@@ -164,14 +163,12 @@ class StrReplaceEditor(BaseTool):
 
         return str(result)
 
-    # <<<<<<< HEAD
     async def validate_path(
         self, command: str, path: Path, operator: FileOperator
     ) -> None:
         """Validate path and command combination based on execution environment."""
         # Check if path is absolute
         if not path.is_absolute():
-            # suggested_path = f"/{path}"
             raise ToolError(f"The path {path} is not an absolute path")
 
         # Only check if path exists for non-create commands
@@ -184,27 +181,6 @@ class StrReplaceEditor(BaseTool):
             # Check if path is a directory
             is_dir = await operator.is_directory(path)
             if is_dir and command != "view":
-                # =======
-                #     def validate_path(self, command: str, path: Path):
-                #         """
-                #         Check that the path/command combination is valid.
-                #         """
-                #         # Check if its an absolute path
-                #         if not path.is_absolute():
-                #             raise ToolError(f"The path {path} is not an absolute path")
-                #         # Check if path exists
-                #         if not path.exists() and command != "create":
-                #             raise ToolError(
-                #                 f"The path {path} does not exist. Please provide a valid path."
-                #             )
-                #         if path.exists() and command == "create":
-                #             raise ToolError(
-                #                 f"File already exists at: {path}. Cannot overwrite files using command `create`."
-                #             )
-                #         # Check if the path points to a directory
-                #         if path.is_dir():
-                #             if command != "view":
-                # >>>>>>> upstream/main
                 raise ToolError(
                     f"The path {path} is a directory and only the `view` command can be used on directories"
                 )

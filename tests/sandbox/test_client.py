@@ -12,7 +12,7 @@ from app.sandbox.client import LocalSandboxClient, create_sandbox_client
 @pytest_asyncio.fixture(scope="function")
 async def local_client() -> AsyncGenerator[LocalSandboxClient, None]:
     """Creates a local sandbox client for testing."""
-    client = await create_sandbox_client()
+    client = create_sandbox_client()
     try:
         yield client
     finally:

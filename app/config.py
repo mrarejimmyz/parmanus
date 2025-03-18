@@ -210,18 +210,17 @@ class Config:
     def llm(self) -> Dict[str, LLMSettings]:
         return self._config.llm
 
+    @property
+    def sandbox(self) -> SandboxSettings:
+        return self._config.sandbox
 
-def sandbox(self) -> SandboxSettings:
-    return self._config.sandbox
+    @property
+    def browser_config(self) -> Optional[BrowserSettings]:
+        return self._config.browser_config
 
-
-def browser_config(self) -> Optional[BrowserSettings]:
-    return self._config.browser_config
-
-
-@property
-def search_config(self) -> Optional[SearchSettings]:
-    return self._config.search_config
+    @property
+    def search_config(self) -> Optional[SearchSettings]:
+        return self._config.search_config
 
 
 config = Config()
