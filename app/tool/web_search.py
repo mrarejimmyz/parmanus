@@ -156,11 +156,6 @@ class WebSearch(BaseTool):
             if fallback in self._search_engine and fallback not in engine_order:
                 engine_order.append(fallback)
 
-        # Add any remaining engines
-        for key in self._search_engine:
-            if key not in engine_order:
-                engine_order.append(key)
-
         return engine_order
 
     @retry(
