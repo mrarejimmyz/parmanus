@@ -263,23 +263,23 @@ class LLM:
 
             if not stream:
                 # Non-streaming request
-                params["stream"] = False
-
-                response = await self.client.chat.completions.create(**params)
+                response = await self.client.chat.completions.create(
+                    **params, stream=False
+                )
 
                 if not response.choices or not response.choices[0].message.content:
                     raise ValueError("Empty or invalid response from LLM")
 
                 # Update token counts
-                self.update_token_count(response.usage.prompt_tokens)
+                if response.usage:
+                    self.update_token_count(response.usage.prompt_tokens)
 
                 return response.choices[0].message.content
 
             # Streaming request, For streaming, update estimated token count before making the request
             self.update_token_count(input_tokens)
 
-            params["stream"] = True
-            response = await self.client.chat.completions.create(**params)
+            response = await self.client.chat.completions.create(**params, stream=True)
 
             collected_messages = []
             async for chunk in response:
@@ -291,6 +291,8 @@ class LLM:
             full_response = "".join(collected_messages).strip()
             if not full_response:
                 raise ValueError("Empty response from streaming LLM")
+
+            # TODO Update token counts
 
             return full_response
 
