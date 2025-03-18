@@ -8,7 +8,7 @@ from app.sandbox.core.sandbox import DockerSandbox, SandboxSettings
 def sandbox_config():
     """Creates sandbox configuration for testing."""
     return SandboxSettings(
-        image="python:3.10-slim",
+        image="python:3.12-slim",
         work_dir="/workspace",
         memory_limit="1g",
         cpu_limit=0.5,

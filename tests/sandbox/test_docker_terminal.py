@@ -17,7 +17,7 @@ def docker_client():
 async def docker_container(docker_client):
     """Fixture providing a test Docker container."""
     container = docker_client.containers.run(
-        "python:3.10-slim",
+        "python:3.12-slim",
         "tail -f /dev/null",
         name="test_container",
         detach=True,

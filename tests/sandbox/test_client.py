@@ -30,7 +30,7 @@ def temp_dir() -> Path:
 async def test_sandbox_creation(local_client: LocalSandboxClient):
     """Tests sandbox creation with specific configuration."""
     config = SandboxSettings(
-        image="python:3.10-slim",
+        image="python:3.12-slim",
         work_dir="/workspace",
         memory_limit="512m",
         cpu_limit=0.5,
