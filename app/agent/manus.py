@@ -1,4 +1,6 @@
 import json
+import os
+from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import Field
@@ -8,8 +10,11 @@ from app.logger import logger
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
-from app.tool.file_saver import FileSaver
 from app.tool.python_execute import PythonExecute
+from app.tool.str_replace_editor import StrReplaceEditor
+
+
+initial_working_directory = Path(os.getcwd()) / "workspace"
 
 
 class Manus(ToolCallAgent):
@@ -26,16 +31,16 @@ class Manus(ToolCallAgent):
         "A versatile agent that can solve various tasks using multiple tools"
     )
 
-    system_prompt: str = SYSTEM_PROMPT
+    system_prompt: str = SYSTEM_PROMPT.format(directory=initial_working_directory)
     next_step_prompt: str = NEXT_STEP_PROMPT
 
-    max_observe: int = 2000
+    max_observe: int = 10000
     max_steps: int = 20
 
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
-            PythonExecute(), BrowserUseTool(), FileSaver(), Terminate()
+            PythonExecute(), BrowserUseTool(), StrReplaceEditor(), Terminate()
         )
     )
 
