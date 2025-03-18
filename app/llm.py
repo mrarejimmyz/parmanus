@@ -299,11 +299,11 @@ class LLM:
         except TokenLimitExceeded:
             # Re-raise token limit errors without logging
             raise
-        except ValueError as ve:
-            logger.error(f"Validation error: {ve}")
+        except ValueError:
+            logger.exception(f"Validation error")
             raise
         except OpenAIError as oe:
-            logger.error(f"OpenAI API error: {oe}")
+            logger.exception(f"OpenAI API error")
             if isinstance(oe, AuthenticationError):
                 logger.error("Authentication failed. Check API key.")
             elif isinstance(oe, RateLimitError):
