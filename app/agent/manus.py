@@ -1,17 +1,13 @@
-import os
-from pathlib import Path
-
 from pydantic import Field
 
 from app.agent.browser import BrowserAgent
+from app.config import config
+from app.prompt.browser import NEXT_STEP_PROMPT as BROWSER_NEXT_STEP_PROMPT
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.python_execute import PythonExecute
 from app.tool.str_replace_editor import StrReplaceEditor
-
-
-initial_working_directory = Path(os.getcwd()) / "workspace"
 
 
 class Manus(BrowserAgent):
@@ -28,7 +24,7 @@ class Manus(BrowserAgent):
         "A versatile agent that can solve various tasks using multiple tools"
     )
 
-    system_prompt: str = SYSTEM_PROMPT.format(directory=initial_working_directory)
+    system_prompt: str = SYSTEM_PROMPT.format(directory=config.workspace_root)
     next_step_prompt: str = NEXT_STEP_PROMPT
 
     max_observe: int = 10000
@@ -55,8 +51,8 @@ class Manus(BrowserAgent):
         )
 
         if browser_in_use:
-            # Override with parent class's prompt temporarily to get browser context
-            self.next_step_prompt = BrowserAgent.next_step_prompt
+            # Override with browser-specific prompt temporarily to get browser context
+            self.next_step_prompt = BROWSER_NEXT_STEP_PROMPT
 
         # Call parent's think method
         result = await super().think()
