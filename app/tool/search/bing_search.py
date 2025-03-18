@@ -1,4 +1,3 @@
-import asyncio
 from typing import List
 import requests
 from app.logger import logger
@@ -45,13 +44,13 @@ class BingSearchEngine(WebSearchEngine):
     def _search_sync(self, query: str, num_results: int = 10) -> List[str]:
         """
         Synchronous Bing search implementation to retrieve a list of URLs matching a query.
-        
+
         Args:
             query (str): The search query to submit to Bing. Must not be empty.
             num_results (int, optional): The maximum number of URLs to return. Defaults to 10.
 
         Returns:
-            List[str]: A list of URLs from the search results, capped at `num_results`. 
+            List[str]: A list of URLs from the search results, capped at `num_results`.
                        Returns an empty list if the query is empty or no results are found.
 
         Notes:
@@ -87,11 +86,6 @@ class BingSearchEngine(WebSearchEngine):
             tuple: A tuple containing:
                 - list: A list of dictionaries with keys 'title', 'abstract', 'url', and 'rank' for each result.
                 - str or None: The URL of the next results page, or None if there is no next page.
-        Example:
-            This function is called by `execute` in the following way:
-            ```python
-            results, next_url = self._parse_html(url, rank_start=0)
-            ```
         """
         try:
             res = self.session.get(url=url)
@@ -135,19 +129,6 @@ class BingSearchEngine(WebSearchEngine):
             logger.warning(f"Error parsing HTML: {e}")
             return [], None
 
-    async def execute(self, query: str, num_results: int = 10) -> List[str]:
-        """
-        Execute a Bing search and return a list of URLs asynchronously.
-
-        Args:
-            query (str): The search query to submit to Bing.
-            num_results (int, optional): The number of search results to return. Default is 10.
-
-        Returns:
-            List[str]: A list of URLs matching the search query.
-        """
-        loop = asyncio.get_event_loop()
-        links = await loop.run_in_executor(
-            None, lambda: self._search_sync(query, num_results=num_results)
-        )
-        return links
+    def perform_search(self, query, num_results=10, *args, **kwargs):
+        """Bing search engine."""
+        return self._search_sync(query, num_results=num_results)
