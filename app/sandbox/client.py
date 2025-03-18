@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Protocol
 
-from app.config import SandboxConfig
+from app.config import SandboxSettings
 from app.sandbox.core.sandbox import DockerSandbox
 
 
@@ -53,7 +53,7 @@ class BaseSandboxClient(ABC):
     @abstractmethod
     async def create(
         self,
-        config: Optional[SandboxConfig] = None,
+        config: Optional[SandboxSettings] = None,
         volume_bindings: Optional[Dict[str, str]] = None,
     ) -> None:
         """Creates sandbox."""
@@ -92,7 +92,7 @@ class LocalSandboxClient(BaseSandboxClient):
 
     async def create(
         self,
-        config: Optional[SandboxConfig] = None,
+        config: Optional[SandboxSettings] = None,
         volume_bindings: Optional[Dict[str, str]] = None,
     ) -> None:
         """Creates a sandbox.

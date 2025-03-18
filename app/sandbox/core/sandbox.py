@@ -10,7 +10,7 @@ import docker
 from docker.errors import NotFound
 from docker.models.containers import Container
 
-from app.config import SandboxConfig
+from app.config import SandboxSettings
 from app.sandbox.core.exceptions import SandboxTimeoutError
 from app.sandbox.core.terminal import AsyncDockerizedTerminal
 
@@ -31,7 +31,7 @@ class DockerSandbox:
 
     def __init__(
         self,
-        config: Optional[SandboxConfig] = None,
+        config: Optional[SandboxSettings] = None,
         volume_bindings: Optional[Dict[str, str]] = None,
     ):
         """Initializes a sandbox instance.
@@ -40,7 +40,7 @@ class DockerSandbox:
             config: Sandbox configuration. Default configuration used if None.
             volume_bindings: Volume mappings in {host_path: container_path} format.
         """
-        self.config = config or SandboxConfig()
+        self.config = config or SandboxSettings()
         self.volume_bindings = volume_bindings or {}
         self.client = docker.from_env()
         self.container: Optional[Container] = None

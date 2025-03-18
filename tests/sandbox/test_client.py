@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 import pytest
 import pytest_asyncio
 
-from app.config import SandboxConfig
+from app.config import SandboxSettings
 from app.sandbox.client import LocalSandboxClient, create_sandbox_client
 
 
@@ -29,7 +29,7 @@ def temp_dir() -> Path:
 @pytest.mark.asyncio
 async def test_sandbox_creation(local_client: LocalSandboxClient):
     """Tests sandbox creation with specific configuration."""
-    config = SandboxConfig(
+    config = SandboxSettings(
         image="python:3.10-slim",
         work_dir="/workspace",
         memory_limit="512m",

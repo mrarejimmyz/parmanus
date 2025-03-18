@@ -6,7 +6,7 @@ from typing import Dict, Optional, Set
 import docker
 from docker.errors import APIError, ImageNotFound
 
-from app.config import SandboxConfig
+from app.config import SandboxSettings
 from app.logger import logger
 from app.sandbox.core.sandbox import DockerSandbox
 
@@ -113,7 +113,7 @@ class SandboxManager:
 
     async def create_sandbox(
         self,
-        config: Optional[SandboxConfig] = None,
+        config: Optional[SandboxSettings] = None,
         volume_bindings: Optional[Dict[str, str]] = None,
     ) -> str:
         """Creates a new sandbox instance.
@@ -134,7 +134,7 @@ class SandboxManager:
                     f"Maximum number of sandboxes ({self.max_sandboxes}) reached"
                 )
 
-            config = config or SandboxConfig()
+            config = config or SandboxSettings()
             if not await self.ensure_image(config.image):
                 raise RuntimeError(f"Failed to ensure Docker image: {config.image}")
 
