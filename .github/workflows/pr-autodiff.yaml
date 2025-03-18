@@ -86,6 +86,17 @@ jobs:
 
               ### Spelling/Offensive Content Check
               - No spelling mistakes or offensive content found in the code or comments.
+
+              ## 中文（简体）
+              - 新增了 `ABC` 类
+              - `foo` 模块中的 `f()` 行为已修复
+
+              ### 评论高亮
+              - `config.toml` 需要正确配置才能确保新功能正常运行。
+
+              ### 内容检查
+              - 没有发现代码或注释中的拼写错误或不当措辞。
+
           3. Highlight non-English comments
           4. Check for spelling/offensive content'''
 
