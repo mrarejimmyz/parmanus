@@ -418,17 +418,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 
                         # Create prompt for LLM
                         prompt_text = """
-Your task is to extract the content of the page. You will be given a page and a goal, and you should extract all relevant information around this goal from the page.
-
-Examples of extraction goals:
-- Extract all company names
-- Extract specific descriptions
-- Extract all information about a topic
-- Extract links with companies in structured format
-- Extract all links
-
-If the goal is vague, summarize the page. Respond in JSON format.
-
+Your task is to extract the content of the page. You will be given a page and a goal, and you should extract all relevant information around this goal from the page. If the goal is vague, summarize the page. Respond in json format.
 Extraction goal: {goal}
 
 Page content:
@@ -445,10 +435,54 @@ Page content:
 
                         messages = [Message.user_message(formatted_prompt)]
 
-                        # Use LLM to extract content based on the goal
-                        response = await self.llm.ask(messages)
+                        # Define extraction function for the tool
+                        extraction_function = {
+                            "type": "function",
+                            "function": {
+                                "name": "extract_content",
+                                "description": "Extract specific information from a webpage based on a goal",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "extracted_content": {
+                                            "type": "object",
+                                            "description": "The content extracted from the page according to the goal",
+                                        }
+                                    },
+                                    "required": ["extracted_content"],
+                                },
+                            },
+                        }
 
-                        msg = f"Extracted from page:\n{response}\n"
+                        # Use LLM to extract content with required function calling
+                        response = await self.llm.ask_tool(
+                            messages,
+                            tools=[extraction_function],
+                            tool_choice="required",
+                        )
+
+                        # Extract content from function call response
+                        if (
+                            response
+                            and response.tool_calls
+                            and len(response.tool_calls) > 0
+                        ):
+                            # Get the first tool call arguments
+                            tool_call = response.tool_calls[0]
+                            # Parse the JSON arguments
+                            try:
+                                args = json.loads(tool_call.function.arguments)
+                                extracted_content = args.get("extracted_content", {})
+                                # Format extracted content as JSON string
+                                content_json = json.dumps(
+                                    extracted_content, indent=2, ensure_ascii=False
+                                )
+                                msg = f"Extracted from page:\n{content_json}\n"
+                            except Exception as e:
+                                msg = f"Error parsing extraction result: {str(e)}\nRaw response: {tool_call.function.arguments}"
+                        else:
+                            msg = "No content was extracted from the page."
+
                         return ToolResult(output=msg)
                     except Exception as e:
                         # Provide a more helpful error message
