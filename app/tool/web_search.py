@@ -10,7 +10,7 @@ from app.tool.search import (
     BingSearchEngine,
     DuckDuckGoSearchEngine,
     GoogleSearchEngine,
-    WebSearchEngine
+    WebSearchEngine,
 )
 
 
