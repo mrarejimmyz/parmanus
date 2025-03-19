@@ -1,5 +1,6 @@
 from app.agent.base import BaseAgent
 from app.agent.browser import BrowserAgent
+from app.agent.mcp import MCPAgent
 from app.agent.planning import PlanningAgent
 from app.agent.react import ReActAgent
 from app.agent.swe import SWEAgent
@@ -13,4 +14,5 @@ __all__ = [
     "ReActAgent",
     "SWEAgent",
     "ToolCallAgent",
+    "MCPAgent",
 ]

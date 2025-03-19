@@ -227,5 +227,10 @@ class Config:
         """Get the workspace root directory"""
         return WORKSPACE_ROOT
 
+    @property
+    def root_path(self) -> Path:
+        """Get the root path of the application"""
+        return PROJECT_ROOT
+
 
 config = Config()
