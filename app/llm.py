@@ -10,6 +10,7 @@ from openai import (
     OpenAIError,
     RateLimitError,
 )
+from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -653,7 +654,7 @@ class LLM:
         tool_choice: TOOL_CHOICE_TYPE = ToolChoice.AUTO,  # type: ignore
         temperature: Optional[float] = None,
         **kwargs,
-    ):
+    ) -> ChatCompletionMessage | None:
         """
         Ask LLM using functions/tools and return the response.
 
@@ -731,12 +732,15 @@ class LLM:
                     temperature if temperature is not None else self.temperature
                 )
 
-            response = await self.client.chat.completions.create(**params)
+            response: ChatCompletion = await self.client.chat.completions.create(
+                **params, stream=False
+            )
 
             # Check if response is valid
             if not response.choices or not response.choices[0].message:
                 print(response)
-                raise ValueError("Invalid or empty response from LLM")
+                # raise ValueError("Invalid or empty response from LLM")
+                return None
 
             # Update token counts
             self.update_token_count(
