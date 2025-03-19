@@ -10,6 +10,7 @@ from openai import (
     OpenAIError,
     RateLimitError,
 )
+from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -421,9 +422,9 @@ class LLM:
 
             if not stream:
                 # Non-streaming request
-                params["stream"] = False
-
-                response = await self.client.chat.completions.create(**params)
+                response = await self.client.chat.completions.create(
+                    **params, stream=False
+                )
 
                 if not response.choices or not response.choices[0].message.content:
                     raise ValueError("Empty or invalid response from LLM")
@@ -438,8 +439,7 @@ class LLM:
             # Streaming request, For streaming, update estimated token count before making the request
             self.update_token_count(input_tokens)
 
-            params["stream"] = True
-            response = await self.client.chat.completions.create(**params)
+            response = await self.client.chat.completions.create(**params, stream=True)
 
             collected_messages = []
             completion_text = ""
@@ -466,11 +466,11 @@ class LLM:
         except TokenLimitExceeded:
             # Re-raise token limit errors without logging
             raise
-        except ValueError as ve:
-            logger.error(f"Validation error: {ve}")
+        except ValueError:
+            logger.exception(f"Validation error")
             raise
         except OpenAIError as oe:
-            logger.error(f"OpenAI API error: {oe}")
+            logger.exception(f"OpenAI API error")
             if isinstance(oe, AuthenticationError):
                 logger.error("Authentication failed. Check API key.")
             elif isinstance(oe, RateLimitError):
@@ -478,8 +478,8 @@ class LLM:
             elif isinstance(oe, APIError):
                 logger.error(f"API error: {oe}")
             raise
-        except Exception as e:
-            logger.error(f"Unexpected error in ask: {e}")
+        except Exception:
+            logger.exception(f"Unexpected error in ask")
             raise
 
     @retry(
@@ -654,7 +654,7 @@ class LLM:
         tool_choice: TOOL_CHOICE_TYPE = ToolChoice.AUTO,  # type: ignore
         temperature: Optional[float] = None,
         **kwargs,
-    ):
+    ) -> ChatCompletionMessage | None:
         """
         Ask LLM using functions/tools and return the response.
 
@@ -732,12 +732,15 @@ class LLM:
                     temperature if temperature is not None else self.temperature
                 )
 
-            response = await self.client.chat.completions.create(**params)
+            response: ChatCompletion = await self.client.chat.completions.create(
+                **params, stream=False
+            )
 
             # Check if response is valid
             if not response.choices or not response.choices[0].message:
                 print(response)
-                raise ValueError("Invalid or empty response from LLM")
+                # raise ValueError("Invalid or empty response from LLM")
+                return None
 
             # Update token counts
             self.update_token_count(
