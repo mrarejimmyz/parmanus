@@ -7,7 +7,7 @@ from app.logger import logger
 from app.prompt.mcp import MULTIMEDIA_RESPONSE_PROMPT, NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.schema import AgentState, Message
 from app.tool.base import ToolResult
-from app.tool.mcp import MCP
+from app.tool.mcp import MCPClients
 
 
 class MCPAgent(ToolCallAgent):
@@ -24,8 +24,8 @@ class MCPAgent(ToolCallAgent):
     next_step_prompt: str = NEXT_STEP_PROMPT
 
     # Initialize MCP tool collection
-    mcp_tools: MCP = Field(default_factory=MCP)
-    available_tools: MCP = None  # Will be set in initialize()
+    mcp_tools: MCPClients = Field(default_factory=MCPClients)
+    available_tools: MCPClients = None  # Will be set in initialize()
 
     max_steps: int = 20
     connection_type: str = "stdio"  # "stdio" or "sse"
@@ -141,7 +141,7 @@ class MCPAgent(ToolCallAgent):
 
         # Refresh tools periodically
         if self.current_step % self._refresh_tools_interval == 0:
-            added, removed = await self._refresh_tools()
+            await self._refresh_tools()
             # All tools removed indicates shutdown
             if not self.mcp_tools.tool_map:
                 logger.info("MCP service has shut down, ending interaction")

@@ -1,5 +1,5 @@
 from contextlib import AsyncExitStack
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
@@ -11,14 +11,13 @@ from app.tool.base import BaseTool, ToolResult
 from app.tool.tool_collection import ToolCollection
 
 
-class MCPServerTool(BaseTool):
-    """Represents a tool available on the MCP server."""
+class MCPClientTool(BaseTool):
+    """Represents a tool proxy that can be called on the MCP server from the client side."""
 
-    schema: Dict[str, Any] = None
     session: Optional[ClientSession] = None
 
     async def execute(self, **kwargs) -> ToolResult:
-        """Execute the tool on the MCP server."""
+        """Execute the tool by making a remote call to the MCP server."""
         if not self.session:
             return ToolResult(error="Not connected to MCP server")
 
@@ -32,12 +31,14 @@ class MCPServerTool(BaseTool):
             return ToolResult(error=f"Error executing tool: {str(e)}")
 
 
-class MCP(ToolCollection):
-    """AN MCP tool collection that connects to an MCP server and executes commands."""
+class MCPClients(ToolCollection):
+    """
+    A collection of tools that connects to an MCP server and manages available tools through the Model Context Protocol.
+    """
 
     session: Optional[ClientSession] = None
     exit_stack: AsyncExitStack = None
-    description: str = "MCP tools for server interaction"
+    description: str = "MCP client tools for server interaction"
 
     def __init__(self):
         super().__init__()  # Initialize with empty tools list
@@ -91,10 +92,10 @@ class MCP(ToolCollection):
 
         # Create proper tool objects for each server tool
         for tool in response.tools:
-            server_tool = MCPServerTool(
+            server_tool = MCPClientTool(
                 name=tool.name,
                 description=tool.description,
-                schema=tool.inputSchema,
+                parameters=tool.inputSchema,
                 session=self.session,
             )
             self.tool_map[tool.name] = server_tool
