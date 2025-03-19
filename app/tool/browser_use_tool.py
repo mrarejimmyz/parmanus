@@ -15,7 +15,6 @@ from app.llm import LLM
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
 
-
 _BROWSER_DESCRIPTION = """
 Interact with a web browser to perform various actions such as navigation, element interaction, content extraction, and tab management. This tool provides a comprehensive set of browser automation capabilities:
 
@@ -448,6 +447,22 @@ Page content:
                                         "extracted_content": {
                                             "type": "object",
                                             "description": "The content extracted from the page according to the goal",
+                                            "properties": {
+                                                "text": {
+                                                    "type": "string",
+                                                    "description": "Text content extracted from the page",
+                                                },
+                                                "metadata": {
+                                                    "type": "object",
+                                                    "description": "Additional metadata about the extracted content",
+                                                    "properties": {
+                                                        "source": {
+                                                            "type": "string",
+                                                            "description": "Source of the extracted content",
+                                                        }
+                                                    },
+                                                },
+                                            },
                                         }
                                     },
                                     "required": ["extracted_content"],
