@@ -6,7 +6,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import config
 from app.tool.base import BaseTool
 from app.tool.search import (
-    BaiduSearchEngine, 
+    BaiduSearchEngine,
     BingSearchEngine,
     DuckDuckGoSearchEngine,
     GoogleSearchEngine,
