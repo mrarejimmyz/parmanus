@@ -42,8 +42,7 @@ class FileOperator(Protocol):
 class LocalFileOperator(FileOperator):
     """File operations implementation for local filesystem."""
 
-    def __init__(self, encoding: str = "utf-8"):
-        self.encoding = encoding
+    encoding: str = "utf-8"
 
     async def read_file(self, path: PathLike) -> str:
         """Read content from a local file."""
