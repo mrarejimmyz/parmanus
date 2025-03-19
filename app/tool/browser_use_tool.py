@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from typing import Generic, Optional, TypeVar
 
@@ -552,7 +553,16 @@ Page content:
                 viewport_height = ctx.config.browser_window_size.get("height", 0)
 
             # Take a screenshot for the state
-            screenshot = await ctx.take_screenshot(full_page=True)
+            page = await ctx.get_current_page()
+
+            await page.bring_to_front()
+            await page.wait_for_load_state()
+
+            screenshot = await page.screenshot(
+                full_page=True, animations="disabled", type="jpeg", quality=100
+            )
+
+            screenshot = base64.b64encode(screenshot).decode("utf-8")
 
             # Build the state info with all required fields
             state_info = {
