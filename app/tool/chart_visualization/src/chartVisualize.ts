@@ -2,7 +2,6 @@ import Canvas from "canvas";
 import path from "path";
 import { readFileSync } from "fs";
 import VMind from "@visactor/vmind";
-import { getFieldInfoFromDataset } from "@visactor/vmind/cjs/utils/field.js";
 import VChart from "@visactor/vchart";
 import { isString } from "@visactor/vutils";
 
@@ -82,18 +81,26 @@ async function generateChart() {
   const inputData = JSON.parse(readFileSync(process.stdin.fd, "utf-8"));
   try {
     const {
-      options,
+      llm_config,
       user_prompt: userPrompt,
       dataset,
       output_type: outputType = "png",
       width,
       height,
     } = inputData;
-    const vmind = new VMind(options);
+    const { base_url: baseUrl, model, api_key: apiKey } = llm_config;
+    const vmind = new VMind({
+      url: `${baseUrl}/chat/completions`,
+      model,
+      headers: {
+        "api-key": apiKey,
+        Authorization: `Bearer ${apiKey}`,
+      },
+    });
     const jsonDataset = isString(dataset) ? JSON.parse(dataset) : dataset;
-    const { spec, error, vizSchema, cell } = await vmind.generateChart(
+    const { spec, error } = await vmind.generateChart(
       userPrompt,
-      getFieldInfoFromDataset(jsonDataset),
+      undefined,
       jsonDataset,
       {
         enableDataQuery: false,
@@ -104,14 +111,6 @@ async function generateChart() {
       console.log(
         JSON.stringify({
           error: error || "Spec of Chart was Empty!",
-          options,
-          userPrompt,
-          fieldInfo: getFieldInfoFromDataset(jsonDataset),
-          dataset: jsonDataset,
-          op: {
-            enableDataQuery: false,
-            theme: "light",
-          },
         })
       );
       return;
