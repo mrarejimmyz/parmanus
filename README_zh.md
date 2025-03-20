@@ -82,6 +82,11 @@ source .venv/bin/activate  # Unix/macOS 系统
 uv pip install -r requirements.txt
 ```
 
+### 浏览器自动化工具（可选）
+```bash
+playwright install
+```
+
 ## 配置说明
 
 OpenManus 需要配置使用的 LLM API，请按以下步骤设置：
@@ -120,7 +125,12 @@ python main.py
 
 然后通过终端输入你的创意！
 
-如需体验不稳定的开发版本，可运行：
+如需使用 MCP 工具版本，可运行：
+```bash
+python run_mcp.py
+```
+
+如需体验不稳定的多智能体版本，可运行：
 
 ```bash
 python run_flow.py
