@@ -81,6 +81,11 @@ source .venv/bin/activate  # On Unix/macOS
 uv pip install -r requirements.txt
 ```
 
+### Browser Automation Tool (Optional)
+```bash
+playwright install
+```
+
 ## Configuration
 
 OpenManus requires configuration for the LLM APIs it uses. Follow these steps to set up your configuration:
@@ -119,7 +124,12 @@ python main.py
 
 Then input your idea via terminal!
 
-For unstable version, you also can run:
+For MCP tool version, you can run:
+```bash
+python run_mcp.py
+```
+
+For unstable multi-agent version, you also can run:
 
 ```bash
 python run_flow.py
