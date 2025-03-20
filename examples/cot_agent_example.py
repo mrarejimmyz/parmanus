@@ -19,7 +19,7 @@ async def main():
     agent = CoTAgent()
 
     # Provide a problem that requires thinking
-    question = "Zhang, Li, and Wang have a total of 85 apples. Zhang has twice as many apples as Li, and Wang has 5 more apples than Li. How many apples does each person have?"
+    question = "How do you put an elephant into a refrigerator?"
 
     logger.info(f"Question: {question}")
 
