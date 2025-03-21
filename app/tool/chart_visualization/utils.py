@@ -1,8 +1,3 @@
-# utils.py
-import sys
-from io import StringIO
-
-
 def extract_executable_code(code_str: str) -> str:
     """
     Extract executable code from function call's parameters
@@ -37,27 +32,3 @@ def extract_executable_code(code_str: str) -> str:
         lines = lines[:end_idx]
 
     return "\n".join(lines)
-
-
-def run_code_in_thread(code_to_run: str, result: dict) -> None:
-    """
-    Executes the python code in sub-threading and update result
-
-    Args:
-        code_to_run (str): The Python code to execute.
-        result (dict): Contains 'output' with execution output or error message and 'success' status.
-    """
-    try:
-        safe_globals = {"__builtins__": dict(__builtins__)}
-        output_buffer = StringIO()
-        sys.stdout = output_buffer
-
-        exec(code_to_run, safe_globals, {})
-
-        sys.stdout = sys.__stdout__
-
-        result["observation"] = output_buffer.getvalue()
-
-    except Exception as e:
-        result["observation"] = str(e)
-        result["success"] = False

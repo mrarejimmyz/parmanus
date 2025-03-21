@@ -1,35 +1,28 @@
 import subprocess
 import json
-import threading
 import base64
 import pandas as pd
 import aiofiles
 import os
-from typing import Any, Dict, Hashable
+from typing import Any, Hashable
 from pydantic import Field, model_validator
 
 from app.llm import LLM
 from app.tool.base import BaseTool
-from app.tool.chart_visualization.utils import (
-    run_code_in_thread,
-    extract_executable_code,
-)
+from app.logger import logger
 
 
 class ChartVisualization(BaseTool):
     name: str = "generate_data_visualization"
-    description: str = """Visualize a statistical chart using csv data and chart description. The tool accepts code to generate csv data and description of the chart, and output a chart in png or html.
-Note: Each tool call generates a single chart.
+    description: str = """Visualize a statistical chart using csv data and chart description. The tool accepts local csv data file path and description of the chart, and output a chart in png or html.
+Note: Each tool call generates only one single chart.
 """
     parameters: dict = {
         "type": "object",
         "properties": {
-            "code": {
+            "csv_path": {
                 "type": "string",
-                "description": """Python code template EXCLUSIVELY for CSV generation. MUST CONTAIN:
-1. Data loading logic (handle dataframe/dict/file/url/json)
-2. Data processing (cleaning/transformation)
-3. CSV saving with path print (Only csv path): print(csv_path)""",
+                "description": """file path of csv data with ".csv" in the end""",
             },
             "chart_description": {
                 "type": "string",
@@ -53,23 +46,14 @@ Note: Each tool call generates a single chart.
             self.llm = LLM(config_name=self.name.lower())
         return self
 
-    async def execute(self, code: str, chart_description: str, output_type: str) -> str:
-        code_result = await self.execute_code(code=code)
-        if "success" in code_result and code_result["success"] is False:
-            return code_result
-        if code_result["observation"].startswith("Error"):
-            return {"observation": code_result["observation"], "success": False}
-
+    async def execute(
+        self, csv_path: str, chart_description: str, output_type: str
+    ) -> str:
+        logger.info(
+            f"📈 Chart Generation with data and description: {chart_description} with {csv_path} "
+        )
         try:
-            data_path = (
-                code_result["observation"].replace("\n", "").replace("\r", "").strip()
-            )
-            if not data_path.endswith(".csv"):
-                return {
-                    "observation": "Error: Code should ONLY output CSV data path",
-                    "success": False,
-                }
-            df = pd.read_csv(data_path)
+            df = pd.read_csv(csv_path)
             df = df.astype(object)
             df = df.where(pd.notnull(df), None)
             data_dict_list = df.to_json(orient="records", force_ascii=False)
@@ -81,7 +65,7 @@ Note: Each tool call generates a single chart.
                     "observation": f"Error: {result["error"]}",
                     "success": False,
                 }
-            chart_file_path = data_path.replace(".csv", f".{output_type}")
+            chart_file_path = csv_path.replace(".csv", f".{output_type}")
             while os.path.exists(chart_file_path):
                 chart_file_path = chart_file_path.replace(
                     f".{output_type}", f"_new.{output_type}"
@@ -101,38 +85,6 @@ Note: Each tool call generates a single chart.
                 "observation": f"Error: {e}",
                 "success": False,
             }
-
-    async def execute_code(
-        self,
-        code: str,
-        timeout: int = 5,
-    ) -> Dict:
-        """
-        Executes the provided Python code with a timeout.
-
-        Args:
-            code (str): The Python code to execute.
-            timeout (int): Execution timeout in seconds.
-
-        Returns:
-            Dict: Contains 'output' with execution output or error message and 'success' status.
-        """
-        result = {"observation": ""}
-        be_extracted_code = extract_executable_code(code)
-
-        thread = threading.Thread(
-            target=run_code_in_thread, args=(be_extracted_code, result)
-        )
-        thread.start()
-        thread.join(timeout)
-
-        if thread.is_alive():
-            return {
-                "observation": f"Execution timeout after {timeout} seconds",
-                "success": False,
-            }
-
-        return result
 
     async def invoke_vmind(
         self,

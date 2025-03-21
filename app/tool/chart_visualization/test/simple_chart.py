@@ -1,6 +1,6 @@
 import asyncio
 
-from app.agent.manus import Manus
+from app.agent.data_analysis import DataAnalysis
 from app.logger import logger
 
 prefix = "帮我生成图表并保存在本地./data下，具体为:"
@@ -179,7 +179,7 @@ Node C,Node 1,2""",
 async def main():
     for index, item in enumerate(tasks):
         logger.info(f"Begin task {index} / {len(tasks)}!")
-        agent = Manus()
+        agent = DataAnalysis()
         await agent.run(
             f"{prefix},chart_description:{item["prompt"]},Data:{item["data"]}"
         )

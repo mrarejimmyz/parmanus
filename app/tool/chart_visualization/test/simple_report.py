@@ -1,10 +1,13 @@
 import asyncio
 
-from app.agent.manus import Manus
+from app.agent.data_analysis import DataAnalysis
+
+# from app.agent.manus import Manus
 
 
 async def main():
-    agent = Manus()
+    agent = DataAnalysis()
+    # agent = Manus()
     await agent.run(
         """分析以下数据并生成一个图文数据报告在本地./data文件夹下，格式为html.Requriment:展示3个团队半年内的人效变化，并且将相邻两个月各团队的环比上升或者下降的比例体现出来
 Data:月份	团队A	团队B	团队C
