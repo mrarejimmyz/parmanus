@@ -33,10 +33,7 @@ class Manus(BrowserAgent):
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
-            PythonExecute(),
-            BrowserUseTool(),
-            StrReplaceEditor(),
-            Terminate(),
+            PythonExecute(), BrowserUseTool(), StrReplaceEditor(), Terminate()
         )
     )
 
