@@ -28,6 +28,7 @@ from app.schema import (
     Message,
     ToolChoice,
 )
+from app.bedrock import BedrockClient
 
 
 REASONING_MODELS = ["o1", "o3-mini"]
@@ -225,6 +226,8 @@ class LLM:
                     api_key=self.api_key,
                     api_version=self.api_version,
                 )
+            elif self.api_type == "aws":
+                self.client = BedrockClient()
             else:
                 self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
