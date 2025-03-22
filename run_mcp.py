@@ -51,9 +51,14 @@ class MCPRunner:
 
     async def run_default(self) -> None:
         """Run the agent in default mode."""
-        await self.agent.run(
-            "Hello, what tools are available to me? Terminate after you have listed the tools."
-        )
+        prompt = input("Enter your prompt: ")
+        if not prompt.strip():
+            logger.warning("Empty prompt provided.")
+            return
+
+        logger.warning("Processing your request...")
+        await self.agent.run(prompt)
+        logger.info("Request processing completed.")
 
     async def cleanup(self) -> None:
         """Clean up agent resources."""
