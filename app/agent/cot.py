@@ -1,10 +1,10 @@
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import Field
 
 from app.agent.base import BaseAgent
-from app.logger import logger
 from app.llm import LLM
+from app.logger import logger
 from app.prompt.cot import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.schema import AgentState, Message
 
@@ -33,7 +33,9 @@ class CoTAgent(BaseAgent):
         # Use system prompt and user messages
         response = await self.llm.ask(
             messages=self.messages,
-            system_msgs=[Message.system_message(self.system_prompt)] if self.system_prompt else None
+            system_msgs=[Message.system_message(self.system_prompt)]
+            if self.system_prompt
+            else None,
         )
 
         # Record assistant's response
