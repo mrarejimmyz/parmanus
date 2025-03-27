@@ -43,16 +43,16 @@ class Manus(BrowserAgent):
         original_prompt = self.next_step_prompt
 
         # Only check recent messages (last 3) for browser activity
-        # recent_messages = self.memory.messages[-3:] if self.memory.messages else []
-        # browser_in_use = any(
-        #     "browser_use" in msg.content.lower()
-        #     for msg in recent_messages
-        #     if hasattr(msg, "content") and isinstance(msg.content, str)
-        # )
+        recent_messages = self.memory.messages[-3:] if self.memory.messages else []
+        browser_in_use = any(
+            "browser_use" in msg.content.lower()
+            for msg in recent_messages
+            if hasattr(msg, "content") and isinstance(msg.content, str)
+        )
 
-        # if browser_in_use:
-        #     # Override with browser-specific prompt temporarily to get browser context
-        #     self.next_step_prompt = BROWSER_NEXT_STEP_PROMPT
+        if browser_in_use:
+            # Override with browser-specific prompt temporarily to get browser context
+            self.next_step_prompt = BROWSER_NEXT_STEP_PROMPT
 
         # Call parent's think method
         result = await super().think()
