@@ -1,9 +1,27 @@
 import Canvas from "canvas";
 import path from "path";
+import fs from "fs";
 import { readFileSync } from "fs";
-import VMind from "@visactor/vmind";
+import VMind, { ChartType } from "@visactor/vmind";
 import VChart from "@visactor/vchart";
 import { isString } from "@visactor/vutils";
+
+declare enum AlgorithmType {
+  OverallTrending = "overallTrend",
+  AbnormalTrend = "abnormalTrend",
+  PearsonCorrelation = "pearsonCorrelation",
+  SpearmanCorrelation = "spearmanCorrelation",
+  ExtremeValue = "extremeValue",
+  MajorityValue = "majorityValue",
+  StatisticsAbnormal = "statisticsAbnormal",
+  StatisticsBase = "statisticsBase",
+  DbscanOutlier = "dbscanOutlier",
+  LOFOutlier = "lofOutlier",
+  TurningPoint = "turningPoint",
+  PageHinkley = "pageHinkley",
+  DifferenceOutlier = "differenceOutlier",
+  Volatility = "volatility",
+}
 
 const getBase64 = async (spec: any, width?: number, height?: number) => {
   spec.animation = false;
@@ -77,6 +95,22 @@ async function getHtmlVChart(spec: any, width: number, height: number) {
 `;
 }
 
+function getSavedPathName(
+  directory: string,
+  fileName: string,
+  outputType: "html" | "png" | "json"
+) {
+  let newFileName = fileName;
+  while (
+    fs.existsSync(
+      path.join(directory, "visualization", `${newFileName}.${outputType}`)
+    )
+  ) {
+    newFileName += "_new";
+  }
+  return path.join(directory, "visualization", `${newFileName}.${outputType}`);
+}
+
 async function generateChart() {
   const inputData = JSON.parse(readFileSync(process.stdin.fd, "utf-8"));
   try {
@@ -87,6 +121,8 @@ async function generateChart() {
       output_type: outputType = "png",
       width,
       height,
+      file_name: fileName,
+      directory,
     } = inputData;
     const { base_url: baseUrl, model, api_key: apiKey } = llm_config;
     const vmind = new VMind({
@@ -98,7 +134,7 @@ async function generateChart() {
       },
     });
     const jsonDataset = isString(dataset) ? JSON.parse(dataset) : dataset;
-    const { spec, error } = await vmind.generateChart(
+    const { spec, error, chartType } = await vmind.generateChart(
       userPrompt,
       undefined,
       jsonDataset,
@@ -106,6 +142,43 @@ async function generateChart() {
         enableDataQuery: false,
         theme: "light",
       }
+    );
+    spec.title = {
+      text: userPrompt,
+    };
+    const insights = [];
+    if (
+      chartType &&
+      [
+        ChartType.BarChart,
+        ChartType.LineChart,
+        ChartType.AreaChart,
+        ChartType.ScatterPlot,
+        ChartType.DualAxisChart,
+      ].includes(chartType)
+    ) {
+      const { insights: vmindInsights } = await vmind.getInsights(spec, {
+        maxNum: 6,
+        algorithms: [
+          AlgorithmType.OverallTrending,
+          AlgorithmType.AbnormalTrend,
+          AlgorithmType.PearsonCorrelation,
+          AlgorithmType.SpearmanCorrelation,
+          AlgorithmType.StatisticsAbnormal,
+          AlgorithmType.LOFOutlier,
+          AlgorithmType.DbscanOutlier,
+          AlgorithmType.MajorityValue,
+          AlgorithmType.PageHinkley,
+          AlgorithmType.TurningPoint,
+          AlgorithmType.StatisticsBase,
+          AlgorithmType.Volatility,
+        ],
+        usePolish: false,
+      });
+      insights.push(...vmindInsights);
+    }
+    const insightsText = insights.map(
+      (insight) => insight.textContent?.plainText
     );
     if (error || !spec) {
       console.log(
@@ -115,15 +188,23 @@ async function generateChart() {
       );
       return;
     }
-    if (outputType === "png") {
-      console.log(
-        JSON.stringify({ res: await getBase64(spec, width, height) })
-      );
-    } else {
-      console.log(
-        JSON.stringify({ res: await getHtmlVChart(spec, width, height) })
-      );
+    spec.insights = insights;
+    if (!fs.existsSync(path.join(directory, "visualization"))) {
+      fs.mkdirSync(path.join(directory, "visualization"));
     }
+    fs.writeFileSync(
+      getSavedPathName(directory, fileName, "json"),
+      JSON.stringify(spec, null, 2)
+    );
+    const savedPath = getSavedPathName(directory, fileName, outputType);
+    if (outputType === "png") {
+      const base64 = await getBase64(spec, width, height);
+      fs.writeFileSync(savedPath, base64);
+    } else {
+      const html = await getHtmlVChart(spec, width, height);
+      fs.writeFileSync(savedPath, html, "utf-8");
+    }
+    console.log(JSON.stringify({ savedPath, insightsText }));
   } catch (error) {
     console.log(JSON.stringify({ error }));
   }

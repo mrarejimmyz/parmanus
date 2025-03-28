@@ -12,9 +12,10 @@ class NormalPythonExecute(PythonExecute):
 
     name: str = "common_python_execute"
     description: str = (
-        """Executes Python code strings. Note:
+        """Executes Python code strings to do data analysis. Note:
 1. Only outputs from print() are visible; function return values are not captured. Use print() statements to display results
-2. Applicable to scenarios **excluding data analysis and chart generation**"""
+2. Do data analysis (cleaning / transform) saved in *.csv
+3. Generate a data analysis report in *.md"""
     )
     parameters: dict = {
         "type": "object",
