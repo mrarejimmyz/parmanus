@@ -90,6 +90,14 @@ class SandboxSettings(BaseModel):
     )
 
 
+class MCPSettings(BaseModel):
+    """Configuration for MCP (Model Context Protocol)"""
+
+    server_reference: str = Field(
+        "app.mcp.server", description="Module reference for the MCP server"
+    )
+
+
 class AppConfig(BaseModel):
     llm: Dict[str, LLMSettings]
     sandbox: Optional[SandboxSettings] = Field(
@@ -101,6 +109,7 @@ class AppConfig(BaseModel):
     search_config: Optional[SearchSettings] = Field(
         None, description="Search configuration"
     )
+    mcp_config: Optional[MCPSettings] = Field(None, description="MCP configuration")
 
     class Config:
         arbitrary_types_allowed = True
@@ -203,6 +212,13 @@ class Config:
         else:
             sandbox_settings = SandboxSettings()
 
+        mcp_config = raw_config.get("mcp", {})
+        mcp_settings = None
+        if mcp_config:
+            mcp_settings = MCPSettings(**mcp_config)
+        else:
+            mcp_settings = MCPSettings()
+
         config_dict = {
             "llm": {
                 "default": default_settings,
@@ -214,6 +230,7 @@ class Config:
             "sandbox": sandbox_settings,
             "browser_config": browser_settings,
             "search_config": search_settings,
+            "mcp_config": mcp_settings,
         }
 
         self._config = AppConfig(**config_dict)
@@ -233,6 +250,11 @@ class Config:
     @property
     def search_config(self) -> Optional[SearchSettings]:
         return self._config.search_config
+
+    @property
+    def mcp_config(self) -> MCPSettings:
+        """Get the MCP configuration"""
+        return self._config.mcp_config
 
     @property
     def workspace_root(self) -> Path:
