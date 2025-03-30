@@ -79,6 +79,10 @@ temperature = 0.0                          # Controls randomness for vision mode
 #retry_delay = 60
 # Maximum number of times to retry all engines when all fail. Default is 3.
 #max_retries = 3
+# Language code for search results. Options: "en" (English), "zh" (Chinese), etc.
+#lang = "en"
+# Country code for search results. Options: "us" (United States), "cn" (China), etc.
+#country = "us"
 
 
 ## Sandbox configuration

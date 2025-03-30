@@ -1,10 +1,14 @@
+from typing import List
+
 from duckduckgo_search import DDGS
 
 from app.tool.search.base import SearchItem, WebSearchEngine
 
 
 class DuckDuckGoSearchEngine(WebSearchEngine):
-    def perform_search(self, query, num_results=10, *args, **kwargs):
+    def perform_search(
+        self, query: str, num_results: int = 10, *args, **kwargs
+    ) -> List[SearchItem]:
         """
         DuckDuckGo search engine.
 
@@ -18,14 +22,14 @@ class DuckDuckGoSearchEngine(WebSearchEngine):
                 # If it's just a URL
                 results.append(
                     SearchItem(
-                        title=f"DuckDuckGo Result {i+1}", url=item, description=None
+                        title=f"DuckDuckGo Result {i + 1}", url=item, description=None
                     )
                 )
             elif isinstance(item, dict):
                 # Extract data from the dictionary
                 results.append(
                     SearchItem(
-                        title=item.get("title", f"DuckDuckGo Result {i+1}"),
+                        title=item.get("title", f"DuckDuckGo Result {i + 1}"),
                         url=item.get("href", ""),
                         description=item.get("body", None),
                     )
@@ -35,7 +39,7 @@ class DuckDuckGoSearchEngine(WebSearchEngine):
                 try:
                     results.append(
                         SearchItem(
-                            title=getattr(item, "title", f"DuckDuckGo Result {i+1}"),
+                            title=getattr(item, "title", f"DuckDuckGo Result {i + 1}"),
                             url=getattr(item, "href", ""),
                             description=getattr(item, "body", None),
                         )
@@ -44,7 +48,7 @@ class DuckDuckGoSearchEngine(WebSearchEngine):
                     # Fallback
                     results.append(
                         SearchItem(
-                            title=f"DuckDuckGo Result {i+1}",
+                            title=f"DuckDuckGo Result {i + 1}",
                             url=str(item),
                             description=None,
                         )
