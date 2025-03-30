@@ -17,7 +17,11 @@ class SearchItem(BaseModel):
         return f"{self.title} - {self.url}"
 
 
-class WebSearchEngine(object):
+class WebSearchEngine(BaseModel):
+    """Base class for web search engines."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
     def perform_search(
         self, query: str, num_results: int = 10, *args, **kwargs
     ) -> List[SearchItem]:

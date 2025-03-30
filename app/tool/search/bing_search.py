@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
@@ -36,7 +36,7 @@ BING_SEARCH_URL = "https://www.bing.com/search?q="
 
 
 class BingSearchEngine(WebSearchEngine):
-    session: requests.Session = None
+    session: Optional[requests.Session] = None
 
     def __init__(self, **data):
         """Initialize the BingSearch tool with a requests session."""
@@ -133,7 +133,9 @@ class BingSearchEngine(WebSearchEngine):
             logger.warning(f"Error parsing HTML: {e}")
             return [], None
 
-    def perform_search(self, query, num_results=10, *args, **kwargs):
+    def perform_search(
+        self, query: str, num_results: int = 10, *args, **kwargs
+    ) -> List[SearchItem]:
         """
         Bing search engine.
 

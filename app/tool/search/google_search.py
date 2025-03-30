@@ -1,10 +1,14 @@
+from typing import List
+
 from googlesearch import search
 
 from app.tool.search.base import SearchItem, WebSearchEngine
 
 
 class GoogleSearchEngine(WebSearchEngine):
-    def perform_search(self, query, num_results=10, *args, **kwargs):
+    def perform_search(
+        self, query: str, num_results: int = 10, *args, **kwargs
+    ) -> List[SearchItem]:
         """
         Google search engine.
 

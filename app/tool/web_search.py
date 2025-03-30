@@ -207,8 +207,8 @@ class WebSearch(BaseTool):
         self,
         query: str,
         num_results: int = 5,
-        lang: str = "en",
-        country: str = "us",
+        lang: Optional[str] = None,
+        country: Optional[str] = None,
         fetch_content: bool = False,
     ) -> SearchResponse:
         """
@@ -217,14 +217,14 @@ class WebSearch(BaseTool):
         Args:
             query: The search query to submit to the search engine
             num_results: The number of search results to return (default: 5)
-            lang: Language code for search results (default: en)
-            country: Country code for search results (default: us)
+            lang: Language code for search results (default from config)
+            country: Country code for search results (default from config)
             fetch_content: Whether to fetch content from result pages (default: False)
 
         Returns:
             A structured response containing search results and metadata
         """
-        # Get retry settings from config
+        # Get settings from config
         retry_delay = (
             getattr(config.search_config, "retry_delay", 60)
             if config.search_config
@@ -235,6 +235,22 @@ class WebSearch(BaseTool):
             if config.search_config
             else 3
         )
+
+        # Use config values for lang and country if not specified
+        if lang is None:
+            lang = (
+                getattr(config.search_config, "lang", "en")
+                if config.search_config
+                else "en"
+            )
+
+        if country is None:
+            country = (
+                getattr(config.search_config, "country", "us")
+                if config.search_config
+                else "us"
+            )
+
         search_params = {"lang": lang, "country": country}
 
         # Try searching with retries when all engines fail
