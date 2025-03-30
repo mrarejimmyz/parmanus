@@ -249,3 +249,10 @@ class ToolCallAgent(ReActAgent):
                         f"🚨 Error cleaning up tool '{tool_name}': {e}", exc_info=True
                     )
         logger.info(f"✨ Cleanup complete for agent '{self.name}'.")
+
+    async def run(self, request: Optional[str] = None) -> str:
+        """Run the agent with cleanup when done."""
+        try:
+            return await super().run(request)
+        finally:
+            await self.cleanup()
