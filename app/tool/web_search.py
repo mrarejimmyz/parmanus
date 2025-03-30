@@ -16,6 +16,7 @@ from app.tool.search import (
     GoogleSearchEngine,
     WebSearchEngine,
 )
+from app.tool.search.base import SearchItem
 
 
 class SearchResult(BaseModel):
@@ -399,7 +400,7 @@ class WebSearch(BaseTool):
         query: str,
         num_results: int,
         search_params: Dict[str, Any],
-    ) -> List[Any]:
+    ) -> List[SearchItem]:
         """Execute search with the given engine and parameters."""
         return await asyncio.get_event_loop().run_in_executor(
             None,
