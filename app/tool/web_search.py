@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from bs4 import BeautifulSoup
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import config
@@ -50,14 +50,9 @@ class SearchMetadata(BaseModel):
     country: str = Field(description="Country code used for the search")
 
 
-class SearchResponse(BaseModel):
-    """Structured response from the web search tool."""
+class SearchResponse(ToolResult):
+    """Structured response from the web search tool, inheriting ToolResult."""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    status: str = Field(
-        description="Status of the search operation ('success' or 'error')"
-    )
     query: str = Field(description="The search query that was executed")
     results: List[SearchResult] = Field(
         default_factory=list, description="List of search results"
@@ -65,14 +60,12 @@ class SearchResponse(BaseModel):
     metadata: Optional[SearchMetadata] = Field(
         default=None, description="Metadata about the search"
     )
-    message: Optional[str] = Field(
-        default=None, description="Error or status message if applicable"
-    )
 
-    def to_tool_result(self) -> ToolResult:
-        """Convert search response to a ToolResult for consistent API usage."""
-        if self.status == "error":
-            return ToolResult(error=self.message or "Search failed")
+    @model_validator(mode="after")
+    def populate_output(self) -> "SearchResponse":
+        """Populate output or error fields based on search results."""
+        if self.error:
+            return self
 
         result_text = [f"Search results for '{self.query}':"]
 
@@ -106,7 +99,8 @@ class SearchResponse(BaseModel):
                 ]
             )
 
-        return ToolResult(output="\n".join(result_text))
+        self.output = "\n".join(result_text)
+        return self
 
 
 class WebContentFetcher:
@@ -288,9 +282,8 @@ class WebSearch(BaseTool):
 
         # Return an error response
         return SearchResponse(
-            status="error",
             query=query,
-            message="All search engines failed to return results",
+            error="All search engines failed to return results after multiple retries.",
             results=[],
         )
 
@@ -344,7 +337,7 @@ class WebSearch(BaseTool):
         tasks = [self._fetch_single_result_content(result) for result in results]
 
         # Type annotation to help type checker
-        fetched_results: List[SearchResult] = await asyncio.gather(*tasks)
+        fetched_results = await asyncio.gather(*tasks)
 
         # Explicit validation of return type
         return [

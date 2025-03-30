@@ -344,7 +344,7 @@ class DeepResearch(BaseTool):
         search_response = await self.search_tool.execute(
             query=query, num_results=results_count, fetch_content=True
         )
-        return [] if search_response.status == "error" else search_response.results
+        return [] if search_response.error else search_response.results
 
     async def _extract_insights(
         self,
