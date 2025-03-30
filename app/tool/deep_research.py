@@ -4,7 +4,7 @@ import re
 import time
 from typing import List, Optional, Set
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.exceptions import ToolError
 from app.llm import LLM
@@ -100,8 +100,10 @@ class ResearchContext(BaseModel):
     )
 
 
-class ResearchSummary(BaseModel):
+class ResearchSummary(ToolResult):
     """Comprehensive summary of deep research results."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     query: str = Field(description="The original research query")
     insights: List[ResearchInsight] = Field(
@@ -114,8 +116,9 @@ class ResearchSummary(BaseModel):
         default=0, description="Maximum depth of research reached", ge=0
     )
 
-    def to_tool_result(self) -> ToolResult:
-        """Convert research summary to a formatted ToolResult."""
+    @model_validator(mode="after")
+    def populate_output(self) -> "ResearchSummary":
+        """Populate the output field after validation."""
         # Group and sort insights by relevance
         grouped_insights = {
             "Key Findings": [i for i in self.insights if i.relevance_score >= 0.8],
@@ -143,7 +146,9 @@ class ResearchSummary(BaseModel):
                         ]
                     )
 
-        return ToolResult(output="\n".join(sections))
+        # Assign the formatted string to the 'output' field inherited from ToolResult
+        self.output = "\n".join(sections)
+        return self
 
 
 class DeepResearch(BaseTool):
@@ -316,17 +321,23 @@ class DeepResearch(BaseTool):
 
         # 4. Continue research with follow-up queries
         if follow_up_queries and context.current_depth < context.max_depth:
+            tasks = []  # Create a list to hold the tasks
             for follow_up in follow_up_queries[:2]:  # Limit branching factor
                 if time.time() >= deadline:
                     break
 
-                # Recursive research with reduced result count at deeper levels
-                await self._research_graph(
+                # Create a coroutine for the recursive research call
+                task = self._research_graph(
                     context=context,
                     query=follow_up,
-                    results_count=max(1, results_count - 1),
+                    results_count=max(1, results_count - 1),  # Reduce result count
                     deadline=deadline,
                 )
+                tasks.append(task)  # Add the task to the list
+
+            # Run all the created tasks concurrently
+            if tasks:
+                await asyncio.gather(*tasks)
 
     async def _search_web(self, query: str, results_count: int) -> List[SearchResult]:
         """Perform web search for the given query."""
@@ -523,4 +534,4 @@ if __name__ == "__main__":
             "What is deep learning", max_depth=1, results_per_search=2
         )
     )
-    print(result.to_tool_result().output)
+    print(result)
