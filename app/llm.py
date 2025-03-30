@@ -10,7 +10,7 @@ from openai import (
     OpenAIError,
     RateLimitError,
 )
-from openai.types.chat.chat_completion_message import ChatCompletionMessage
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from tenacity import (
     retry,
     retry_if_exception_type,
