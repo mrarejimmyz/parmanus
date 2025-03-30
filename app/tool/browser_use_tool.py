@@ -279,8 +279,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     await page.goto(url_to_navigate)
                     await page.wait_for_load_state()
 
-                    # Use the to_tool_result method to get consistent formatting
-                    return search_response.to_tool_result()
+                    return search_response
 
                 # Element interaction actions
                 elif action == "click_element":
