@@ -21,7 +21,6 @@ class NormalPythonExecute(PythonExecute):
             "code_type": {
                 "description": "code type",
                 "type": "string",
-                "default": "html",
                 "enum": ["process", "report", "others"],
             },
         },
