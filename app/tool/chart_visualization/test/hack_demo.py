@@ -10,12 +10,14 @@ from app.logger import logger
 
 async def run_flow():
     agents = {
-        "manus": Manus(),
+        # "manus": Manus(),
         "visactor": DataAnalysis(),
     }
 
     try:
-        prompt = """Here's last month's sales data from my Amazon store in './data/amazon_sales_jan2025.csv'. Could you analyze it thoroughly with visualizations and recommend specific, data-driven strategies to boost next month's sales by 10%?"""
+        prompt = """Here's last month's sales data from my Amazon store. Could you analyze it thoroughly with visualizations and recommend specific, data-driven strategies to boost next month's sales by 10%?
+File Path: workspace/amazon_sales_jan2025.csv
+"""
 
         flow = FlowFactory.create_flow(
             flow_type=FlowType.PLANNING,

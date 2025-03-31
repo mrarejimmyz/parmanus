@@ -1,12 +1,12 @@
-from app.tool.chart_visualization.normal_python_execute import NormalPythonExecute
+from app.tool.python_execute import PythonExecute
 
 
-class VisualizationPrepare(NormalPythonExecute):
+class VisualizationPrepare(PythonExecute):
     """A tool for Chart Generation Preparation"""
 
     name: str = "visualization_preparation"
     description: str = (
-        "Using Python code to Generates structured visualization datasets with metadata. Outputs: 1) Cleaned CSV data files 2) JSON info with csv path and visualization description."
+        "Using Python code to Generates metadata of data_visualization tool. Outputs: 1) Cleaned CSV data files 2) JSON info with csv path and visualization description."
     )
     parameters: dict = {
         "type": "object",
@@ -18,26 +18,14 @@ class VisualizationPrepare(NormalPythonExecute):
 2. Csv Data and chart description generate
 2.1 Csv data (The data you want to visulazation, cleaning / transform from origin data, saved in .csv)
 2.2 Chart description of csv data (The chart title or description should be concise and clear. Examples: 'Product sales distribution', 'Monthly revenue trend'.)
-3. Save information in json file.( format: {"csvFilePath": string, "chartTitle": string}[] encoding='utf-8')
-3. Json file saving with path print: print(json_path)
+3. Save information in json file.( format: {"csvFilePath": string, "chartTitle": string}[])
+4. Json file saving with path print: print(json_path)
 # Note
-You can generate one or multiple csv data with different visualization needs.
+1. You can generate one or multiple csv data with different visualization needs.
+2. Make each chart data esay, clean and different.
+3. save/read in utf-8
 """,
             },
         },
         "required": ["code"],
     }
-
-    async def execute(self, code: str, timeout=5):
-        """
-        Executes the provided Python code with a timeout.
-
-        Args:
-            code (str): The Python code to execute.
-            analysis_content (str): The analysis content of current task.
-            timeout (int): Execution timeout in seconds.
-
-        Returns:
-            Dict: Contains 'output' with execution output or error message and 'success' status.
-        """
-        return await super().execute(code, timeout)

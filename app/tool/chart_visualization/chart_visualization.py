@@ -12,10 +12,10 @@ from app.config import config
 
 
 class ChartVisualization(BaseTool):
-    name: str = "data_visualization_with_insight"
-    description: str = """Visualize statistical chart with JSON info from visualization_preparation tool. Outputs: 1) Charts (png/html) 2) Charts Insights (.md).
-Note: Each tool call generates only one single chart.
-"""
+    name: str = "data_visualization"
+    description: str = (
+        """Visualize statistical chart with JSON info from visualization_preparation tool. Outputs: 1) Charts (png/html) 2) Charts Insights (.md)(Optional)."""
+    )
     parameters: dict = {
         "type": "object",
         "properties": {
@@ -41,16 +41,29 @@ Note: Each tool call generates only one single chart.
             self.llm = LLM(config_name=self.name.lower())
         return self
 
+    def get_csv_path(self, json_info: list[dict[str, str]]) -> list[str]:
+        res = []
+        for item in json_info:
+            if os.path.exists(item["csvFilePath"]):
+                res.append(item["csvFilePath"])
+            elif os.path.exists(
+                os.path.join(f"{config.workspace_root}", item["csvFilePath"])
+            ):
+                res.append(
+                    os.path.join(f"{config.workspace_root}", item["csvFilePath"])
+                )
+            else:
+                raise Exception(f"No such file or directory: {item["csvFilePath"]}")
+        return res
+
     def success_output_template(self, result: list[dict[str, str]]) -> str:
         content = ""
+        if len(result) == 0:
+            return "Is EMPTY!"
         for item in result:
-            content += f"""## {item["title"]}
-Chart saved in: {item["savedPath"]}"""
-            if len(item["insightsText"]) > 0:
-                insight_content = ""
-                for index, text in enumerate(item["insightsText"]):
-                    insight_content += f"{index}. {text}\n"
-                content += f"""\n### Insights of Chart\n{insight_content}"""
+            content += f"""## {item["title"]}\nChart saved in: {item["chart_path"]}"""
+            if "insight_path" in item and item["insight_path"]:
+                content += f"""\nChart insights saved in {item["insight_path"]}\n"""
             else:
                 content += "\n"
         return f"Chart Generated Successful! Detail is below:\n{content}"
@@ -61,25 +74,26 @@ Chart saved in: {item["savedPath"]}"""
             with open(json_path, "r", encoding="utf-8") as file:
                 json_info = json.load(file)
             data_list = []
-            for item in json_info:
-                df = pd.read_csv(item["csvFilePath"])
+            csv_file_path = self.get_csv_path(json_info)
+            for index, item in enumerate(json_info):
+                df = pd.read_csv(csv_file_path[index], encoding="utf-8")
                 df = df.astype(object)
                 df = df.where(pd.notnull(df), None)
                 data_dict_list = df.to_json(orient="records", force_ascii=False)
 
                 data_list.append(
                     {
-                        "file_name": os.path.basename(item["csvFilePath"]).replace(
+                        "file_name": os.path.basename(csv_file_path[index]).replace(
                             ".csv", ""
                         ),
                         "dict_data": data_dict_list,
-                        "chart_description": item["chartTitle"],
+                        "chartTitle": item["chartTitle"],
                     }
                 )
             tasks = [
                 self.invoke_vmind(
                     item["dict_data"],
-                    item["chart_description"],
+                    item["chartTitle"],
                     item["file_name"],
                     output_type,
                 )
@@ -90,25 +104,23 @@ Chart saved in: {item["savedPath"]}"""
             error_list = []
             success_list = []
             for index, result in enumerate(results):
-                csv_path = json_info[index]["csvFilePath"]
-                if "error" in result:
+                csv_path = csv_file_path[index]
+                if "error" in result and "chart_path" not in result:
                     error_list.append(f"Error in {csv_path}: {result["error"]}")
                 else:
                     success_list.append(
                         {
                             **result,
-                            "title": json_info[index]["chart_description"],
+                            "title": json_info[index]["chartTitle"],
                         }
                     )
             if len(error_list) > 0:
                 return {
-                    "observation": f"# Error chart generated{'\n'.join(error_list)}\nCharts saved successful are below: \n{self.success_output_template(success_list)}",
+                    "observation": f"# Error chart generated{'\n'.join(error_list)}\n{self.success_output_template(success_list)}",
                     "success": False,
                 }
             else:
-                return {
-                    "observation": f"All charts saved successful!\n{self.success_output_template(success_list)}"
-                }
+                return {"observation": f"{self.success_output_template(success_list)}"}
         except Exception as e:
             return {
                 "observation": f"Error: {e}",
@@ -135,7 +147,6 @@ Chart saved in: {item["savedPath"]}"""
             "file_name": file_name,
             "directory": str(config.workspace_root),
         }
-        print(vmind_params)
         # build async sub process
         process = await asyncio.create_subprocess_exec(
             "npx",
@@ -146,13 +157,14 @@ Chart saved in: {item["savedPath"]}"""
             stderr=asyncio.subprocess.PIPE,
             cwd=os.path.dirname(__file__),
         )
-
-        input_json = json.dumps(vmind_params).encode("utf-8")
+        input_json = json.dumps(vmind_params, ensure_ascii=False).encode("utf-8")
         try:
             stdout, stderr = await process.communicate(input_json)
+            stdout_str = stdout.decode("utf-8")
+            stderr_str = stderr.decode("utf-8")
             if process.returncode == 0:
-                return json.loads(stdout)
+                return json.loads(stdout_str)
             else:
-                return {"error": f"Node.js Error: {stderr}"}
+                return {"error": f"Node.js Error: {stderr_str}"}
         except Exception as e:
             return {"error": f"Subprocess Error: {str(e)}"}
