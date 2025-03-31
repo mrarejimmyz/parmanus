@@ -1,17 +1,17 @@
 from pydantic import Field
 
-from app.agent.browser import BrowserAgent
+from app.agent.toolcall import ToolCallAgent
 from app.config import config
-from app.prompt.browser import NEXT_STEP_PROMPT as BROWSER_NEXT_STEP_PROMPT
 from app.prompt.visualization import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
-from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.chart_visualization.chart_visualization import ChartVisualization
-from app.tool.chart_visualization.data_analysis_python import DataAnalysisPythonExecute
 from app.tool.chart_visualization.normal_python_execute import NormalPythonExecute
+from app.tool.chart_visualization.chart_prepare import (
+    VisualizationPrepare,
+)
 
 
-class DataAnalysis(BrowserAgent):
+class DataAnalysis(ToolCallAgent):
     """
     A data analysis agent that uses planning to solve various data analysis tasks.
 
@@ -34,34 +34,8 @@ class DataAnalysis(BrowserAgent):
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
             NormalPythonExecute(),
-            DataAnalysisPythonExecute(),
+            VisualizationPrepare(),
             ChartVisualization(),
-            BrowserUseTool(),
             Terminate(),
         )
     )
-
-    async def think(self) -> bool:
-        """Process current state and decide next actions with appropriate context."""
-        # Store original prompt
-        original_prompt = self.next_step_prompt
-
-        # Only check recent messages (last 3) for browser activity
-        recent_messages = self.memory.messages[-3:] if self.memory.messages else []
-        browser_in_use = any(
-            "browser_use" in msg.content.lower()
-            for msg in recent_messages
-            if hasattr(msg, "content") and isinstance(msg.content, str)
-        )
-
-        if browser_in_use:
-            # Override with browser-specific prompt temporarily to get browser context
-            self.next_step_prompt = BROWSER_NEXT_STEP_PROMPT
-
-        # Call parent's think method
-        result = await super().think()
-
-        # Restore original prompt
-        self.next_step_prompt = original_prompt
-
-        return result
