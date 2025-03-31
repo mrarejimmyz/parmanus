@@ -7,8 +7,8 @@ from app.prompt.visualization import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.chart_visualization.chart_visualization import ChartVisualization
-from app.tool.chart_visualization.normal_python_execute import NormalPythonExecute
 from app.tool.chart_visualization.data_analysis_python import DataAnalysisPythonExecute
+from app.tool.chart_visualization.normal_python_execute import NormalPythonExecute
 
 
 class DataAnalysis(BrowserAgent):

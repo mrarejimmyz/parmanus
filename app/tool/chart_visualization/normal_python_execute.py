@@ -11,92 +11,122 @@ class NormalPythonExecute(PythonExecute):
     name: str = "common_python_execute"
     description: str = (
         """
-A tool for executing Python code with data anaylsis.
-Prefix: 帮我生成结果保存在本地./data下
+    Data Analysis Agent Protocol (Non-Visual) v2.1
 
-Data Analysis Agent Protocol (Non-Visual)
+    === Core Requirements ===
+    1. Strictly text-based outputs only
+    2. Dynamic analysis pipeline with memory
+    3. Context-aware processing
 
-=== Core Requirements ===
-1. Strictly text-based outputs only
-2. Prohibited actions:
-   - Any chart/image generation
-   - Interactive visual elements
-   - Graphical libraries import
+    === Execution Phases ===
 
-=== Execution Phases ===
+    1. CONTEXT INITIALIZATION
+    - Load historical analysis logs
+    - Build data quality baseline
+    - Detect previous processing patterns
 
-1. DATA LOADING (Auto-detect format)
-- Supported formats: CSV/Excel/JSON
-- Mandatory checks:
-  a) File existence verification
-  b) Column structure validation
-  c) Basic integrity checks
+    2. ADAPTIVE PIPELINE
+    ┌───────────────┬──────────────────────────────────────────────┐
+    │ Stage         │ Enhanced Capabilities                       │
+    ├───────────────┼──────────────────────────────────────────────┤
+    │ Data Loading  │ Auto-select source based on history         │
+    │ Cleaning      │ Context-sensitive null/impute decision      │
+    │ Transformation│ Dynamic feature engineering with validation │
+    │ Validation    │ Cross-cycle consistency checks              │
+    └───────────────┴──────────────────────────────────────────────┘
 
-2. ANALYSIS PIPELINE
-- Cleaning:
-  • Null handling (drop or impute)
-  • Deduplication
-  • Outlier treatment (IQR/Z-score)
+    3. ITERATIVE PROCESSING CONTROLLER
+    Processing Loop:
+    while not convergence():
+        current_df = apply_operations(df)
+        delta = calculate_improvement(history[-1], current_df)
+        if delta < threshold: break
+        update_strategy_based_on(delta)
+        log_iteration(current_df)
 
-- Transformation:
-  • Date parsing
-  • Derived metrics
-  • Aggregations
+    Termination Criteria:
+    - 数据质量提升率 <2% 连续3次迭代
+    - 新增特征解释力 <5%
+    - 异常值比例稳定在 ±0.5% 区间
 
-3. REPORT GENERATION
-Output 1: data_exploration.md
-┌──────────────────────┬──────────────────────────────┐
-│ Section              │ Content Requirements         │
-├──────────────────────┼──────────────────────────────┤
-│ Dataset Metadata     │ Rows/Columns/Temporal Range │
-│ Column Descriptions  │ Type/Stats/Unique Values    │
-│ Key Findings         │ 3-5 bullet points           │
-└──────────────────────┴──────────────────────────────┘
+    === Enhanced Reporting ===
 
-Output 2: preprocessing_results.md
-┌──────────────────────┬──────────────────────────────┐
-│ Section              │ Content Requirements         │
-├──────────────────────┼──────────────────────────────┤
-│ Cleaning Log         │ Rows affected by each operation │
-│ Derived Metrics      │ Formula/Summary Stats       │
-│ Anomaly Report       │ Z-score >2.5 cases          │
-└──────────────────────┴──────────────────────────────┘
+    Output 1: dynamic_analysis.md (增量更新)
+    ┌───────────────────────┬──────────────────────────────┐
+    │ Section              │ Enhanced Requirements        │
+    ├───────────────────────┼──────────────────────────────┤
+    │ Processing History   │ 记录每次迭代的操作及影响    │
+    │ Data Evolution       │ 关键指标跨周期对比          │
+    │ Adaptive Findings    │ 动态发现的模式变化          │
+    └───────────────────────┴──────────────────────────────┘
 
-=== Implementation Rules ===
-1. Code Generation Constraints:
-   - Forbidden libraries: matplotlib, seaborn, plotly
-   - Maximum column width: 120 chars
-   - Required docstrings for all functions
+    Output 2: intelligent_log.md (智能日志)
+    ┌───────────────────────┬──────────────────────────────┐
+    │ Log Type             │ Content                      │
+    ├───────────────────────┼──────────────────────────────┤
+    │ Decision Log         │ 策略调整原因及依据          │
+    │ Anomaly Evolution    │ 异常值变化轨迹              │
+    │ Feature Lifecycle    │ 衍生特征的产生/淘汰记录     │
+    └───────────────────────┴──────────────────────────────┘
 
-2. Error Handling:
-   - Skip corrupted records with logging
-   - Continue processing after non-critical errors
-   - Fail fast on structural issues
+    === Implementation Enhancements ===
 
-3. Output Validation:
-   - Markdown syntax check
-   - Statistical validity verification
-   - Cross-report consistency
+    1. Dynamic Code Generation
+    - 上下文感知的代码模板：
+    def analyze(data_path):
+        history = load_analysis_logs()
+        df = apply_historical_pipeline(data_path, history)
 
-=== Sample Invocation ===
-def analyze(data_path):
-    '''Main analysis workflow'''
-    df = load_data(data_path)          # Phase 1
-    cleaned = clean_and_transform(df)  # Phase 2
-    generate_reports(cleaned)          # Phase 3
-=== 执行约束 ===
-当检测到错误时：
-1. 分析错误类型（数据/逻辑/环境）
-2. 生成修正方案（自动重试≤3次）
-3. 严重错误时回滚中间文件
-"""
+        while not convergence_check(df, history):
+            df = context_aware_processing(df)
+            update_quality_metrics(df)
+            generate_incremental_report(df)
+
+    2. Memory Mechanism
+    历史记忆维度：
+    - 数据质量变化曲线
+    - 异常处理策略有效性
+    - 特征工程成功率
+    - 资源消耗模式
+
+    3. Intelligent Validation
+    验证增强点：
+    - 跨周期统计一致性检查
+    - 衍生特征可解释性评估
+    - 数据处理操作因果追踪
+
+    === Sample Execution Flow ===
+    def analyze(data_path):
+        '''演进式分析流程'''
+        # 阶段1：上下文加载
+        df, ctx = initialize_context(data_path)
+
+        # 阶段2：智能处理循环
+        for i in range(MAX_ITERATIONS):
+            # 动态策略选择
+            ops = select_operations_based_on(ctx)
+
+            # 执行处理
+            df = execute_ops(df, ops)
+
+            # 生成增量报告
+            append_report(f"cycle_{i}_results.md", df)
+
+            # 收敛检测
+            if ctx.convergence_flag:
+                break
+
+        # 阶段3：知识固化
+        save_processing_knowledge(ctx)
+    """
     )
     parameters: dict = {
         "type": "object",
         "properties": {
             "code": {
                 "type": "string",
-                "description": "The Python code to execute.",
+                "default": "html",
+                "enum": ["process", "report", "others"],
             },
         },
         "required": ["code"],
