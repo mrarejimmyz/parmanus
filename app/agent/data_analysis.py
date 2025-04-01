@@ -4,11 +4,9 @@ from app.agent.toolcall import ToolCallAgent
 from app.config import config
 from app.prompt.visualization import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
+from app.tool.chart_visualization.chart_prepare import VisualizationPrepare
 from app.tool.chart_visualization.chart_visualization import ChartVisualization
 from app.tool.chart_visualization.normal_python_execute import NormalPythonExecute
-from app.tool.chart_visualization.chart_prepare import (
-    VisualizationPrepare,
-)
 
 
 class DataAnalysis(ToolCallAgent):
@@ -34,8 +32,8 @@ class DataAnalysis(ToolCallAgent):
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
             NormalPythonExecute(),
-            VisualizationPrepare(),
-            ChartVisualization(),
+            # VisualizationPrepare(),
+            # ChartVisualization(),
             Terminate(),
         )
     )
