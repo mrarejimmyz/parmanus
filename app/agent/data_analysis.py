@@ -15,8 +15,8 @@ class DataAnalysis(ToolCallAgent):
     """
     A data analysis agent that uses planning to solve various data analysis tasks.
 
-    This agent extends BrowserAgent with a comprehensive set of tools and capabilities,
-    including Python execution, web browsing, chart visualization.
+    This agent extends ToolCallAgent with a comprehensive set of tools and capabilities,
+    including Data Analysis, Chart Visualization, Data Report.
     """
 
     name: str = "DataAnalysis"

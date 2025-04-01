@@ -17,7 +17,7 @@ class ChartVisualization(BaseTool):
         """Visualize statistical chart or Add insights in chart with JSON info from visualization_preparation tool.
 For each chart, you can do steps as follows:
 1. Visualize statistical chart
-2. Choose insights into chart based on step 1
+2. Choose insights into chart based on step 1 (Optional.)
 Outputs:
 1. Charts (png/html)
 2. Charts Insights (.md)(Optional)."""
