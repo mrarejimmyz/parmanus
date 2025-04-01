@@ -3,7 +3,6 @@ from app.tool.chart_visualization import ChartVisualization
 
 
 async def mock_request(delay, value):
-    print("!!!!")
     await asyncio.sleep(delay)  # 模拟异步IO操作（如网络请求）
     return value
 
@@ -23,7 +22,11 @@ async def main():
 
 async def test_chart():
     chartTool = ChartVisualization()
-    print(await chartTool.execute("./data/visualization_info.json", "html"))
+    print(
+        await chartTool.execute(
+            "workspace/insight_metadata.json", "html", "insight", "en"
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@visactor/vchart": "^1.13.7",
-    "@visactor/vmind": "^2.0.4",
+    "@visactor/vmind": "2.0.5-alpha.1",
     "canvas": "^2.11.2",
     "get-stdin": "^9.0.0"
   },

@@ -1,7 +1,7 @@
 import Canvas from "canvas";
 import path from "path";
 import fs from "fs";
-import VMind, { ChartType } from "@visactor/vmind";
+import VMind, { ChartType, DataTable } from "@visactor/vmind";
 import VChart from "@visactor/vchart";
 import { isString } from "@visactor/vutils";
 
@@ -94,13 +94,19 @@ async function getHtmlVChart(spec: any, width?: number, height?: number) {
 `;
 }
 
+/**
+ * get file path saved string
+ * @param isUpdate {boolean} default: false, update existed file when is true
+ */
 function getSavedPathName(
   directory: string,
   fileName: string,
-  outputType: "html" | "png" | "json" | "md"
+  outputType: "html" | "png" | "json" | "md",
+  isUpdate: boolean = false
 ) {
   let newFileName = fileName;
   while (
+    !isUpdate &&
     fs.existsSync(
       path.join(directory, "visualization", `${newFileName}.${outputType}`)
     )
@@ -119,6 +125,7 @@ const readStdin = (): Promise<string> => {
   });
 };
 
+/** Save insights markdown in local, and return content && path */
 const setInsightTemplate = (
   path: string,
   title: string,
@@ -133,36 +140,66 @@ const setInsightTemplate = (
   }
   if (res) {
     fs.writeFileSync(path, res, "utf-8");
-    return path;
+    return { insight_path: path, insight_md: res };
   }
-  return "";
+  return {};
 };
 
-async function generateChart() {
-  const input = await readStdin();
-  const inputData = JSON.parse(input);
-  const res: { chart_path?: string; error?: string; insight_path?: string } =
-    {};
+/** Save vmind result into local file, Return chart file path */
+async function saveChartRes(options: {
+  spec: any;
+  directory: string;
+  outputType: "png" | "html";
+  fileName: string;
+  width?: number;
+  height?: number;
+  isUpdate?: boolean;
+}) {
+  const { directory, fileName, spec, outputType, width, height, isUpdate } =
+    options;
+  const specPath = getSavedPathName(directory, fileName, "json", isUpdate);
+  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+  const savedPath = getSavedPathName(directory, fileName, outputType, isUpdate);
+  if (outputType === "png") {
+    const base64 = await getBase64(spec, width, height);
+    fs.writeFileSync(savedPath, base64);
+  } else {
+    const html = await getHtmlVChart(spec, width, height);
+    fs.writeFileSync(savedPath, html, "utf-8");
+  }
+  return savedPath;
+}
+
+async function generateChart(
+  vmind: VMind,
+  options: {
+    dataset: string | DataTable;
+    userPrompt: string;
+    directory: string;
+    outputType: "png" | "html";
+    fileName: string;
+    width?: number;
+    height?: number;
+    language?: "en" | "zh";
+  }
+) {
+  let res: {
+    chart_path?: string;
+    error?: string;
+    insight_path?: string;
+    insight_md?: string;
+  } = {};
+  const {
+    dataset,
+    userPrompt,
+    directory,
+    width,
+    height,
+    outputType,
+    fileName,
+    language,
+  } = options;
   try {
-    const {
-      llm_config,
-      user_prompt: userPrompt,
-      dataset,
-      output_type: outputType = "png",
-      width,
-      height,
-      file_name: fileName,
-      directory,
-    } = inputData;
-    const { base_url: baseUrl, model, api_key: apiKey } = llm_config;
-    const vmind = new VMind({
-      url: `${baseUrl}/chat/completions`,
-      model,
-      headers: {
-        "api-key": apiKey,
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
     // Get chart spec and save in local file
     const jsonDataset = isString(dataset) ? JSON.parse(dataset) : dataset;
     const { spec, error, chartType } = await vmind.generateChart(
@@ -175,12 +212,9 @@ async function generateChart() {
       }
     );
     if (error || !spec) {
-      console.log(
-        JSON.stringify({
-          error: error || "Spec of Chart was Empty!",
-        })
-      );
-      return;
+      return {
+        error: error || "Spec of Chart was Empty!",
+      };
     }
 
     spec.title = {
@@ -190,16 +224,14 @@ async function generateChart() {
       fs.mkdirSync(path.join(directory, "visualization"));
     }
     const specPath = getSavedPathName(directory, fileName, "json");
-    fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
-    const savedPath = getSavedPathName(directory, fileName, outputType);
-    if (outputType === "png") {
-      const base64 = await getBase64(spec, width, height);
-      fs.writeFileSync(savedPath, base64);
-    } else {
-      const html = await getHtmlVChart(spec, width, height);
-      fs.writeFileSync(savedPath, html, "utf-8");
-    }
-    res.chart_path = savedPath;
+    res.chart_path = await saveChartRes({
+      directory,
+      spec,
+      width,
+      height,
+      fileName,
+      outputType,
+    });
 
     // get chart insights and save in local
     const insights = [];
@@ -230,6 +262,7 @@ async function generateChart() {
           AlgorithmType.Volatility,
         ],
         usePolish: false,
+        language: language === "en" ? "english" : "chinese",
       });
       insights.push(...vmindInsights);
     }
@@ -238,17 +271,103 @@ async function generateChart() {
       .filter((insight) => !!insight) as string[];
     spec.insights = insights;
     fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
-    const insightRes = setInsightTemplate(
-      getSavedPathName(directory, fileName, "md"),
-      userPrompt,
-      insightsText
-    );
-    res.insight_path = insightRes;
+    res = {
+      ...res,
+      ...setInsightTemplate(
+        getSavedPathName(directory, fileName, "md"),
+        userPrompt,
+        insightsText
+      ),
+    };
   } catch (error: any) {
     res.error = error.toString();
   } finally {
-    console.log(JSON.stringify(res));
+    return res;
   }
 }
 
-generateChart();
+async function updateChartWithInsight(
+  vmind: VMind,
+  options: {
+    directory: string;
+    outputType: "png" | "html";
+    fileName: string;
+    insightsId: number[];
+  }
+) {
+  const { directory, outputType, fileName, insightsId } = options;
+  let res: { error?: string; chart_path?: string } = {};
+  try {
+    const specPath = getSavedPathName(directory, fileName, "json", true);
+    const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
+    // llm select index from 1
+    const insights = (spec.insights || []).filter(
+      (_insight: any, index: number) => insightsId.includes(index + 1)
+    );
+    const { newSpec, error } = await vmind.updateSpecByInsights(spec, insights);
+    if (error) {
+      throw error;
+    }
+    res.chart_path = await saveChartRes({
+      spec: newSpec,
+      directory,
+      outputType,
+      fileName,
+      isUpdate: true,
+    });
+  } catch (error: any) {
+    res.error = error.toString();
+  } finally {
+    return res;
+  }
+}
+
+async function executeVMind() {
+  const input = await readStdin();
+  const inputData = JSON.parse(input);
+  let res;
+  const {
+    llm_config,
+    width,
+    dataset = [],
+    height,
+    directory,
+    user_prompt: userPrompt,
+    output_type: outputType = "png",
+    file_name: fileName,
+    task_type: taskType = "visualization",
+    insights_id: insightsId = [],
+    language = "en",
+  } = inputData;
+  const { base_url: baseUrl, model, api_key: apiKey } = llm_config;
+  const vmind = new VMind({
+    url: `${baseUrl}/chat/completions`,
+    model,
+    headers: {
+      "api-key": apiKey,
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+  if (taskType === "visualization") {
+    res = await generateChart(vmind, {
+      dataset,
+      userPrompt,
+      directory,
+      outputType,
+      fileName,
+      width,
+      height,
+      language,
+    });
+  } else if (taskType === "insight" && insightsId.length) {
+    res = await updateChartWithInsight(vmind, {
+      directory,
+      fileName,
+      outputType,
+      insightsId,
+    });
+  }
+  console.log(JSON.stringify(res));
+}
+
+executeVMind();

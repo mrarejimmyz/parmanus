@@ -21,11 +21,12 @@ class NormalPythonExecute(PythonExecute):
             "code_type": {
                 "description": "code type",
                 "type": "string",
+                "default": "process",
                 "enum": ["process", "report", "others"],
             },
         },
         "required": ["code"],
     }
 
-    async def execute(self, code: str, code_type: str, timeout=5):
+    async def execute(self, code: str, code_type: str | None = None, timeout=5):
         return await super().execute(code, timeout)
