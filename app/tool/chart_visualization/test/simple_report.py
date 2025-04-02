@@ -9,7 +9,9 @@ async def main():
     agent = DataAnalysis()
     # agent = Manus()
     await agent.run(
-        """分析以下数据并生成一个图文数据报告在本地./data文件夹下，格式为html.Requriment:展示3个团队半年内的人效变化，并且将相邻两个月各团队的环比上升或者下降的比例体现出来
+        """Requriment:
+1. 分析以下数据并生成一个图文数据报告，格式为html.最终生成的产物是一个data report
+2. 图表中需要有insights
 Data:月份	团队A	团队B	团队C
 1月	1200小时	1350小时	1100小时
 2月	1250小时	1400小时	1150小时
