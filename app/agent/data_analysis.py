@@ -5,8 +5,8 @@ from app.config import config
 from app.prompt.visualization import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.tool import Terminate, ToolCollection
 from app.tool.chart_visualization.chart_prepare import VisualizationPrepare
-from app.tool.chart_visualization.chart_visualization import ChartVisualization
-from app.tool.chart_visualization.normal_python_execute import NormalPythonExecute
+from app.tool.chart_visualization.data_visualization import DataVisualization
+from app.tool.chart_visualization.python_execute import NormalPythonExecute
 
 
 class DataAnalysis(ToolCallAgent):
@@ -19,21 +19,21 @@ class DataAnalysis(ToolCallAgent):
 
     name: str = "DataAnalysis"
     description: str = (
-        "An analytical agent that utilizes multiple tools to solve diverse data tasks"
+        "An analytical agent that utilizes multiple tools to solve diverse data analysis tasks"
     )
 
     system_prompt: str = SYSTEM_PROMPT.format(directory=config.workspace_root)
     next_step_prompt: str = NEXT_STEP_PROMPT
 
-    max_observe: int = 10000
-    max_steps: int = 20
+    max_observe: int = 15000
+    max_steps: int = 30
 
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
             NormalPythonExecute(),
-            # VisualizationPrepare(),
-            # ChartVisualization(),
+            VisualizationPrepare(),
+            DataVisualization(),
             Terminate(),
         )
     )

@@ -1,5 +1,5 @@
 import asyncio
-from app.tool.chart_visualization import ChartVisualization
+from app.tool.chart_visualization import DataVisualization
 
 
 async def mock_request(delay, value):
@@ -21,7 +21,7 @@ async def main():
 
 
 async def test_chart():
-    chartTool = ChartVisualization()
+    chartTool = DataVisualization()
     print(
         await chartTool.execute(
             "workspace/insight_metadata.json", "html", "insight", "en"

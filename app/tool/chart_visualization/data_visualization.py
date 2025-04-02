@@ -11,16 +11,15 @@ from app.logger import logger
 from app.config import config
 
 
-class ChartVisualization(BaseTool):
+class DataVisualization(BaseTool):
     name: str = "data_visualization"
     description: str = (
-        """Visualize statistical chart or Add insights in chart with JSON info from visualization_preparation tool.
-For each chart, you can do steps as follows:
+        """Visualize statistical chart or Add insights in chart with JSON info from visualization_preparation tool. You can do steps as follows:
 1. Visualize statistical chart
-2. Choose insights into chart based on step 1 (Optional.)
+2. Choose insights into chart based on step 1 (Optional)
 Outputs:
 1. Charts (png/html)
-2. Charts Insights (.md)(Optional)."""
+2. Charts Insights (.md)(Optional)"""
     )
     parameters: dict = {
         "type": "object",

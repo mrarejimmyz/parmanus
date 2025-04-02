@@ -1,4 +1,4 @@
-from app.tool.chart_visualization.normal_python_execute import NormalPythonExecute
+from app.tool.chart_visualization.python_execute import NormalPythonExecute
 
 
 class VisualizationPrepare(NormalPythonExecute):
