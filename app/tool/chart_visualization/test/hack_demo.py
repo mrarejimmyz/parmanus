@@ -2,16 +2,13 @@ import asyncio
 import time
 
 from app.agent.manus import Manus
-from app.agent.data_analysis import DataAnalysis
-from app.flow.base import FlowType
-from app.flow.flow_factory import FlowFactory
+from app.flow.flow_factory import FlowFactory, FlowType
 from app.logger import logger
 
 
 async def run_flow():
     agents = {
-        # "manus": Manus(),
-        "visactor": DataAnalysis(),
+        "manus": Manus(),
     }
 
     try:
