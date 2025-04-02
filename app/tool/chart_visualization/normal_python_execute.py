@@ -6,26 +6,19 @@ class NormalPythonExecute(PythonExecute):
 
     name: str = "common_python_execute"
     description: str = (
-        """Executes Python code strings to tasks such as data process and data report"""
+        "Execute Python code for in-depth data analysis without direct visualization. "
+        "The code should generate a comprehensive text-based report containing dataset overview, "
+        "column details, basic statistics, derived metrics, day-of-week comparisons, outliers, and key insights. "
+        "Use print() for all outputs so the analysis (including sections like 'Dataset Overview' or 'Preprocessing Results') "
+        "is clearly visible, and save any final report or processed files to config.workspace. "
+        "Include try-except blocks for error handling, and provide the code as a single string with '\\n' for line breaks."
     )
     parameters: dict = {
         "type": "object",
         "properties": {
             "code": {
                 "type": "string",
-                "description": """The Python code to execute. Note:
-1. Only outputs from print() are visible; function return values are not captured. Use print() statements to display results
-2. Do data process (cleaning / transform) saved in *.csv
-3. Generate a data analysis report in html""",
-            },
-            "code_type": {
-                "description": "code type",
-                "type": "string",
-                "enum": ["process", "report", "others"],
             },
         },
         "required": ["code"],
     }
-
-    async def execute(self, code: str, code_type: str, timeout=5):
-        return await super().execute(code, timeout)
