@@ -28,7 +28,7 @@ class VisualizationPrepare(NormalPythonExecute):
 3. Save information in json file.( format: {"csvFilePath": string, "chartTitle": string}[])
 ## Insight Type
 1. Select the insights from the data_visualization results that you want to add to the chart.
-2. Save information in json file.( format: {"chartPath": string, "insights_id": number[]}[]) (chartPath is output by data_visualization tool)
+2. Save information in json file.( format: {"chartPath": string, "insights_id": number[]}[])
 # Note
 1. You can generate one or multiple csv data with different visualization needs.
 2. Make each chart data esay, clean and different.

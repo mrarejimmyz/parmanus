@@ -140,10 +140,7 @@ const setInsightTemplate = (
   }
   if (res) {
     fs.writeFileSync(path, res, "utf-8");
-    return {
-      insight_path: path,
-      insight_md: res + "\n ## Next Step\nConsider add insights into chart",
-    };
+    return { insight_path: path, insight_md: res };
   }
   return {};
 };
@@ -194,7 +191,7 @@ async function generateChart(
   } = {};
   const {
     dataset,
-    userPrompt = "",
+    userPrompt,
     directory,
     width,
     height,
@@ -202,12 +199,11 @@ async function generateChart(
     fileName,
     language,
   } = options;
-  const chartTitle = userPrompt.trim();
   try {
     // Get chart spec and save in local file
     const jsonDataset = isString(dataset) ? JSON.parse(dataset) : dataset;
     const { spec, error, chartType } = await vmind.generateChart(
-      chartTitle,
+      userPrompt,
       undefined,
       jsonDataset,
       {
@@ -222,18 +218,18 @@ async function generateChart(
     }
 
     spec.title = {
-      text: chartTitle,
+      text: userPrompt,
     };
     if (!fs.existsSync(path.join(directory, "visualization"))) {
       fs.mkdirSync(path.join(directory, "visualization"));
     }
-    const specPath = getSavedPathName(directory, chartTitle, "json");
+    const specPath = getSavedPathName(directory, fileName, "json");
     res.chart_path = await saveChartRes({
       directory,
       spec,
       width,
       height,
-      fileName: chartTitle,
+      fileName,
       outputType,
     });
 
@@ -278,7 +274,7 @@ async function generateChart(
     res = {
       ...res,
       ...setInsightTemplate(
-        getSavedPathName(directory, chartTitle, "md"),
+        getSavedPathName(directory, fileName, "md"),
         userPrompt,
         insightsText
       ),

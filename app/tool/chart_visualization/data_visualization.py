@@ -195,11 +195,7 @@ Outputs:
             return {"observation": f"{success_template}"}
 
     async def execute(
-        self,
-        json_path: str,
-        output_type: str | None = "html",
-        tool_type: str | None = "visualization",
-        language: str | None = "en",
+        self, json_path: str, output_type: str, tool_type: str, language: str
     ) -> str:
         try:
             logger.info(f"📈 data_visualization with {json_path} in: {tool_type} ")
