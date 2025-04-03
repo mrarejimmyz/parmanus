@@ -58,7 +58,7 @@ async function getHtmlVChart(spec: any, width?: number, height?: number) {
 <html>
 <head>
     <title>VChart 示例</title>
-    <script src="https://unpkg.com/@visactor/vchart@1.13.8/build/index.min.js"></script>
+    <script src="https://unpkg.com/@visactor/vchart/build/index.min.js"></script>
 </head>
 <body>
     <div id="chart-container" style="width: ${
