@@ -36,7 +36,7 @@ const getBase64 = async (spec: any, width?: number, height?: number) => {
   await cs.renderAsync();
 
   const buffer = await cs.getImageBuffer();
-  return Buffer.from(buffer, "utf8").toString("base64");
+  return buffer;
 };
 
 const serializeSpec = (spec: any) => {
