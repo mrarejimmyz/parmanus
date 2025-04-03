@@ -142,7 +142,7 @@ const setInsightTemplate = (
     fs.writeFileSync(path, res, "utf-8");
     return {
       insight_path: path,
-      insight_md: res,
+      insight_md: res + "\n ## Next Step\nConsider add insights into chart",
     };
   }
   return {};
