@@ -3,7 +3,7 @@ import asyncio
 from app.agent.data_analysis import DataAnalysis
 from app.logger import logger
 
-prefix = "帮我生成图表并保存在本地./data下，具体为:"
+prefix = "帮我生成图表并保存在本地，具体为:"
 tasks = [
     {
         "prompt": "帮我展示不同区域各商品销售额",

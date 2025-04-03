@@ -8,6 +8,9 @@ data/
 # Workspace
 workspace/
 
+# not hack demo
+!workspace/amazon_sales_jan.csv
+
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/

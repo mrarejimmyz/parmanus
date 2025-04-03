@@ -13,7 +13,7 @@ async def run_flow():
 
     try:
         prompt = """Here's January sales data from my Amazon store. Could you analyze it thoroughly with visualizations and recommend specific, data-driven strategies to boost next month's sales by 10%?
-File Path: workspace/amazon_sales_jan2025.csv
+data_file_path = "workspace/amazon_sales_jan.csv"
 """
 
         flow = FlowFactory.create_flow(

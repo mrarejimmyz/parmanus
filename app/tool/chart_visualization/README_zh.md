@@ -18,21 +18,68 @@ nvm install --lts
 cd app/tool/chart_visualization
 npm install
 ```
+## Tool
+### python_execute
 
-## 工具参数
+用python代码执行数据分析（除数据可视化以外）中需要的部分，包括数据处理，数据总结摘要，报告生成以及一些通用python脚本代码
+
+#### 输入
 ```typescript
 {
-  // 用于生产数据处理的python代码，最终得到csv文件
+  // 代码类型：数据处理/数据报告/其他通用任务
+  code_type: "process" | "report" | "others"
+  // 最终执行代码
   code: string;
-  // 解析用户意图，得到图表描述
-  chart_description: string;
+}
+```
+
+#### 输出
+python执行结果，带有中间文件的保存和print输出结果
+
+### visualization_preparation
+
+数据可视化前置工具，有两种用途，
+
+#### Data -〉 Chart
+用于从数据中提取需要分析的数据(.csv)和对应可视化的描述，最终输出一份json配置文件。
+
+#### Chart + Insight -> Chart
+选取已有的图表和对应的数据洞察，挑选数据洞察以数据标注的形式增加到图表中，最终生成一份json配置文件。
+
+#### 输入
+```typescript
+{
+  // 代码类型：数据可视化 或者 数据洞察添加
+  code_type: "visualization" | "insight"
+  // 用于生产最终json文件的python代码
+  code: string;
+}
+```
+
+#### 输出
+数据可视化的配置文件，用于`data_visualization tool`
+
+
+## data_visualization
+
+根据`visualization_preparation`的内容，生成具体的数据可视化
+
+### 输入
+```typescript
+{
+  // 配置文件路径
+  json_path: string;
+  // 当前用途，数据可视化或者洞察标注添加
+  tool_type: "visualization" | "insight";
   // 最终产物png或者html;html下支持vchart渲染和交互
   output_type: 'png' | 'html'
+  // 语言,目前支持中文和英文
+  language: "zh" | "en"
 }
 ```
 
 ## 输出
-最终以'png'或者'html'的形式保存在本地，供后续agent使用
+最终以'png'或者'html'的形式保存在本地，输出保存的图表路径以及图表中发现的数据洞察
 
 ## VMind配置
 
@@ -55,7 +102,7 @@ VMind本身也需要通过调用大模型得到智能图表生成结果，目前
 
 ## 测试
 
-当前设置了两种不能难度的任务用于测试
+当前设置了三种不同难度的任务用于测试
 
 ### 简单图表生成任务
 
@@ -63,7 +110,7 @@ VMind本身也需要通过调用大模型得到智能图表生成结果，目前
 ```bash
 python -m app.tool.chart_visualization.test.simple_chart
 ```
-结果应位于`./data`下，涉及到9种不同的图表结果
+结果应位于`worksapce`下，涉及到9种不同的图表结果
 
 ### 简单数据报表任务
 
@@ -71,4 +118,13 @@ python -m app.tool.chart_visualization.test.simple_chart
 ```bash
 python -m app.tool.chart_visualization.test.simple_report
 ```
-结果同样位于`./data`下
+结果同样位于`worksapce`下
+
+### Manus 在线商店运营分析复刻
+
+复刻[manus结果](https://manus.im/share/c3onakN6Iajcm1Vt1xAVG7?replay=1)，执行命令如下：
+
+```
+python -m app.tool.chart_visualization.test.hack_demo
+```
+结果同样位于`worksapce`下

@@ -21,20 +21,64 @@ cd app/tool/chart_visualization
 npm install
 ```
 
-## Tool Parameters
+## Tool
+### python_execute
+
+Execute the necessary parts of data analysis (excluding data visualization) using Python code, including data processing, data summary, report generation, and some general Python script code.
+
+#### Input
 ```typescript
 {
-  // Generates Python code for data processing to produce a CSV file
+  // Code type: data processing/data report/other general tasks
+  code_type: "process" | "report" | "others"
+  // Final execution code
   code: string;
-  // Parses user intent to generate chart description
-  chart_description: string;
-  // Final output type (png/html). HTML supports VChart rendering and interaction
-  output_type: 'png' | 'html'
 }
 ```
 
-## Output
-The final results will be saved locally in `png` or `html` format for subsequent use by agents.
+#### Output
+Python execution results, including the saving of intermediate files and print output results.
+
+### visualization_preparation
+
+A pre-tool for data visualization with two purposes,
+
+#### Data -> Chart
+Used to extract the data needed for analysis (.csv) and the corresponding visualization description from the data, ultimately outputting a JSON configuration file.
+
+#### Chart + Insight -> Chart
+Select existing charts and corresponding data insights, choose data insights to add to the chart in the form of data annotations, and finally generate a JSON configuration file.
+
+#### Input
+```typescript
+{
+  // Code type: data visualization or data insight addition
+  code_type: "visualization" | "insight"
+  // Python code used to produce the final JSON file
+  code: string;
+}
+```
+
+#### Output
+A configuration file for data visualization, used for the `data_visualization tool`.
+
+## data_visualization
+
+Generate specific data visualizations based on the content of `visualization_preparation`.
+
+### Input
+```typescript
+{
+  // Configuration file path
+  json_path: string;
+  // Current purpose, data visualization or insight annotation addition
+  tool_type: "visualization" | "insight";
+  // Final product png or html; html supports vchart rendering and interaction
+  output_type: 'png' | 'html'
+  // Language, currently supports Chinese and English
+  language: "zh" | "en"
+}
+```
 
 ## VMind Configuration
 
@@ -54,22 +98,31 @@ Default dimensions are unspecified. For HTML output, charts fill the entire page
 ### Theme
 Default theme: `'light'`. VChart supports multiple themes. See [Themes](https://www.visactor.io/vchart/guide/tutorial_docs/Theme/Theme_Extension).
 
-## Testing
+## Test
 
-Two test tasks with different difficulty levels are provided:
+Currently, three tasks of different difficulty levels are set for testing.
 
-### Basic Chart Generation Task
+### Simple Chart Generation Task
 
-Generates charts from given data and specific requirements. Execute with:
+Provide data and specific chart generation requirements, test results, execute the command:
 ```bash
 python -m app.tool.chart_visualization.test.simple_chart
 ```
-Results will be saved in `./data`, containing 9 different chart types.
+The results should be located under `workspace`, involving 9 different chart results.
 
 ### Simple Data Report Task
 
-Processes raw data with basic analysis requirements. Execute with:
+Provide simple raw data analysis requirements, requiring simple processing of the data, execute the command:
 ```bash
 python -m app.tool.chart_visualization.test.simple_report
 ```
-Results will also be saved in `./data`.
+The results are also located under `workspace`.
+
+### Manus Online Store Operation Analysis Replication
+
+Replicate the [Manus result](https://manus.im/share/c3onakN6Iajcm1Vt1xAVG7?replay=1), execute the command as follows:
+
+```
+python -m app.tool.chart_visualization.test.hack_demo
+```
+The results are also located under `workspace`.
