@@ -1,3 +1,4 @@
+import json
 import threading
 import tomllib
 from pathlib import Path
@@ -123,16 +124,13 @@ class MCPSettings(BaseModel):
     def load_server_config(cls) -> Dict[str, MCPServerConfig]:
         """Load MCP server configuration from JSON file"""
         config_path = PROJECT_ROOT / "config" / "mcp.json"
-        example_path = PROJECT_ROOT / "config" / "mcp.example.json"
 
         try:
-            config_file = config_path if config_path.exists() else example_path
-            if not config_file.exists():
+            config_file = config_path if config_path.exists() else None
+            if not config_file:
                 return {}
 
             with config_file.open() as f:
-                import json
-
                 data = json.load(f)
                 servers = {}
 
