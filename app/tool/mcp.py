@@ -131,18 +131,8 @@ class MCPClients(ToolCollection):
             if server_id in self.sessions:
                 try:
                     exit_stack = self.exit_stacks.get(server_id)
-                    session = self.sessions.get(server_id)
 
-                    # First close the session if it exists
-                    if session:
-                        try:
-                            await session.close()
-                        except Exception as e:
-                            logger.warning(
-                                f"Error closing session for {server_id}: {e}"
-                            )
-
-                    # Then close the exit stack
+                    # Close the exit stack which will handle session cleanup
                     if exit_stack:
                         try:
                             await exit_stack.aclose()
