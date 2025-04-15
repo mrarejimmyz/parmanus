@@ -54,6 +54,7 @@ class MCPClients(ToolCollection):
 
         server_id = server_id or server_url
 
+        # Always ensure clean disconnection before new connection
         if server_id in self.sessions:
             await self.disconnect(server_id)
 
@@ -76,6 +77,7 @@ class MCPClients(ToolCollection):
 
         server_id = server_id or command
 
+        # Always ensure clean disconnection before new connection
         if server_id in self.sessions:
             await self.disconnect(server_id)
 
@@ -104,16 +106,18 @@ class MCPClients(ToolCollection):
         # Create proper tool objects for each server tool
         for tool in response.tools:
             original_name = tool.name
-            tool.name = f"mcp_{server_id}_{tool.name}" if server_id else original_name
+            # Always prefix with server_id to ensure uniqueness
+            tool_name = f"mcp_{server_id}_{original_name}"
+
             server_tool = MCPClientTool(
-                name=tool.name,
+                name=tool_name,
                 description=tool.description,
                 parameters=tool.inputSchema,
                 session=session,
                 server_id=server_id,
                 original_name=original_name,
             )
-            self.tool_map[server_tool.name] = server_tool
+            self.tool_map[tool_name] = server_tool
 
         # Update tools tuple
         self.tools = tuple(self.tool_map.values())
@@ -125,15 +129,38 @@ class MCPClients(ToolCollection):
         """Disconnect from a specific MCP server or all servers if no server_id provided."""
         if server_id:
             if server_id in self.sessions:
-                await self.exit_stacks[server_id].aclose()
-                del self.sessions[server_id]
-                del self.exit_stacks[server_id]
-                # Remove tools associated with this server
-                self.tool_map = {
-                    k: v for k, v in self.tool_map.items() if v.server_id != server_id
-                }
-                self.tools = tuple(self.tool_map.values())
-                logger.info(f"Disconnected from MCP server {server_id}")
+                try:
+                    exit_stack = self.exit_stacks[server_id]
+
+                    try:
+                        # Close the exit stack which will cleanup all resources
+                        if exit_stack:
+                            await exit_stack.aclose()
+                    except RuntimeError as e:
+                        # If we hit a cancel scope error, just log it and continue with cleanup
+                        if "cancel scope" in str(e).lower():
+                            logger.warning(
+                                f"Cancel scope error during disconnect from {server_id}, continuing with cleanup: {e}"
+                            )
+                        else:
+                            raise
+
+                    # Clean up references even if exit stack close failed
+                    if server_id in self.sessions:
+                        del self.sessions[server_id]
+                    if server_id in self.exit_stacks:
+                        del self.exit_stacks[server_id]
+
+                    # Remove tools associated with this server
+                    self.tool_map = {
+                        k: v
+                        for k, v in self.tool_map.items()
+                        if v.server_id != server_id
+                    }
+                    self.tools = tuple(self.tool_map.values())
+                    logger.info(f"Disconnected from MCP server {server_id}")
+                except Exception as e:
+                    logger.error(f"Error disconnecting from server {server_id}: {e}")
         else:
             # Disconnect from all servers
             for sid in list(self.sessions.keys()):
