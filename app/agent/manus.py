@@ -100,8 +100,11 @@ class Manus(ToolCallAgent):
             await self.mcp_clients.connect_sse(server_url, server_id)
             self.connected_servers[server_id or server_url] = server_url
 
-        # Update available tools with new MCP tools
-        self.available_tools.add_tools(*self.mcp_clients.tools)
+        # Update available tools with only the new tools from this server
+        new_tools = [
+            tool for tool in self.mcp_clients.tools if tool.server_id == server_id
+        ]
+        self.available_tools.add_tools(*new_tools)
 
     async def disconnect_mcp_server(self, server_id: str = "") -> None:
         """Disconnect from an MCP server and remove its tools."""
