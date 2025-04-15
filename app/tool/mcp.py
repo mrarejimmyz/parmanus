@@ -130,26 +130,33 @@ class MCPClients(ToolCollection):
         if server_id:
             if server_id in self.sessions:
                 try:
-                    exit_stack = self.exit_stacks[server_id]
+                    exit_stack = self.exit_stacks.get(server_id)
+                    session = self.sessions.get(server_id)
 
-                    try:
-                        # Close the exit stack which will cleanup all resources
-                        if exit_stack:
-                            await exit_stack.aclose()
-                    except RuntimeError as e:
-                        # If we hit a cancel scope error, just log it and continue with cleanup
-                        if "cancel scope" in str(e).lower():
+                    # First close the session if it exists
+                    if session:
+                        try:
+                            await session.close()
+                        except Exception as e:
                             logger.warning(
-                                f"Cancel scope error during disconnect from {server_id}, continuing with cleanup: {e}"
+                                f"Error closing session for {server_id}: {e}"
                             )
-                        else:
-                            raise
 
-                    # Clean up references even if exit stack close failed
-                    if server_id in self.sessions:
-                        del self.sessions[server_id]
-                    if server_id in self.exit_stacks:
-                        del self.exit_stacks[server_id]
+                    # Then close the exit stack
+                    if exit_stack:
+                        try:
+                            await exit_stack.aclose()
+                        except RuntimeError as e:
+                            if "cancel scope" in str(e).lower():
+                                logger.warning(
+                                    f"Cancel scope error during disconnect from {server_id}, continuing with cleanup: {e}"
+                                )
+                            else:
+                                raise
+
+                    # Clean up references
+                    self.sessions.pop(server_id, None)
+                    self.exit_stacks.pop(server_id, None)
 
                     # Remove tools associated with this server
                     self.tool_map = {
@@ -162,8 +169,8 @@ class MCPClients(ToolCollection):
                 except Exception as e:
                     logger.error(f"Error disconnecting from server {server_id}: {e}")
         else:
-            # Disconnect from all servers
-            for sid in list(self.sessions.keys()):
+            # Disconnect from all servers in a deterministic order
+            for sid in sorted(list(self.sessions.keys())):
                 await self.disconnect(sid)
             self.tool_map = {}
             self.tools = tuple()
