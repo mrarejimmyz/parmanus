@@ -11,8 +11,6 @@ async def main():
     await agent.run(
         """Requirement:
 1. Analyze the following data and generate a graphical data report in HTML format. The final product should be a data report.
-2. The chart should include insights.
-
 Data:
 Month | Team A | Team B | Team C
 January | 1200 hours | 1350 hours | 1100 hours

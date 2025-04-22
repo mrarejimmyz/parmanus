@@ -80,7 +80,7 @@ async function getHtmlVChart(spec: any, width?: number, height?: number) {
           return v;
         });
       }
-      const spec = parseSpec('${serializeSpec(spec)}');
+      const spec = parseSpec(\`${serializeSpec(spec)}\`);
       const chart = new VChart.VChart(spec, {
           dom: 'chart-container'
       });

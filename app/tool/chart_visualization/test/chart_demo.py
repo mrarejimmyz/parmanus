@@ -115,22 +115,22 @@ Descendants of the Sun,200""",
     {
         "prompt": "Help me compare the performance of different electric vehicle brands using a scatter plot",
         "data": """Range,Charging Time,Brand Name,Average Price
-2904,46,品牌1,2350
-1231,146,品牌2,1027
-5675,324,品牌3,1242
-543,57,品牌4,6754
-326,234,品牌5,215
-1124,67,品牌6,654
-3426,81,品牌7,159
-2134,24,品牌8,28
-1234,52,品牌9,345
-2345,27,品牌10,654
-526,145,品牌11,2100
-234,93,品牌12,1679
-567,94,品牌13,1476
-789,45,品牌14,830
-469,75,品牌15,532
-5689,54,品牌16,498
+2904,46,Brand1,2350
+1231,146,Brand2,1027
+5675,324,Brand3,1242
+543,57,Brand4,6754
+326,234,Brand5,215
+1124,67,Brand6,654
+3426,81,Brand7,159
+2134,24,Brand8,28
+1234,52,Brand9,345
+2345,27,Brand10,654
+526,145,Brand11,2100
+234,93,Brand12,1679
+567,94,Brand13,1476
+789,45,Brand14,830
+469,75,Brand15,532
+5689,54,Brand16,498
 """,
     },
     {
@@ -144,13 +144,13 @@ Step4,40,1""",
     {
         "prompt": "Show the difference in breakfast consumption between men and women",
         "data": """Day,Men-Breakfast,Women-Breakfast
-周一,15,22
-周二,12,10
-周三,15,20
-周四,10,12
-周五,13,15
-周六,10,15
-周日,12,14""",
+Monday,15,22
+Tuesday,12,10
+Wednesday,15,20
+Thursday,10,12
+Friday,13,15
+Saturday,10,15
+Sunday,12,14""",
     },
     {
         "prompt": "Help me show this person's performance in different aspects, is he a hexagonal warrior",
