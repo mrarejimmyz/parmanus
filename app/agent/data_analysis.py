@@ -26,7 +26,7 @@ class DataAnalysis(ToolCallAgent):
     next_step_prompt: str = NEXT_STEP_PROMPT
 
     max_observe: int = 15000
-    max_steps: int = 30
+    max_steps: int = 20
 
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
