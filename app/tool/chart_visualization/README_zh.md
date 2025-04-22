@@ -110,7 +110,7 @@ VMind本身也需要通过调用大模型得到智能图表生成结果，目前
 ```bash
 python -m app.tool.chart_visualization.test.simple_chart
 ```
-结果应位于`worksapce`下，涉及到9种不同的图表结果
+结果应位于`worksapce\visualization`下，涉及到9种不同的图表结果
 
 ### 简单数据报表任务
 
@@ -118,13 +118,5 @@ python -m app.tool.chart_visualization.test.simple_chart
 ```bash
 python -m app.tool.chart_visualization.test.simple_report
 ```
-结果同样位于`worksapce`下
+结果同样位于`worksapce\visualization`下
 
-### Manus 在线商店运营分析复刻
-
-复刻[manus结果](https://manus.im/share/c3onakN6Iajcm1Vt1xAVG7?replay=1)，执行命令如下：
-
-```
-python -m app.tool.chart_visualization.test.hack_demo
-```
-结果同样位于`worksapce`下

@@ -106,23 +106,14 @@ Currently, three tasks of different difficulty levels are set for testing.
 
 Provide data and specific chart generation requirements, test results, execute the command:
 ```bash
-python -m app.tool.chart_visualization.test.simple_chart
+python -m app.tool.chart_visualization.test.chart_demo
 ```
-The results should be located under `workspace`, involving 9 different chart results.
+The results should be located under `workspace\visualization`, involving 9 different chart results.
 
 ### Simple Data Report Task
 
 Provide simple raw data analysis requirements, requiring simple processing of the data, execute the command:
 ```bash
-python -m app.tool.chart_visualization.test.simple_report
+python -m app.tool.chart_visualization.test.report_demo
 ```
-The results are also located under `workspace`.
-
-### Manus Online Store Operation Analysis Replication
-
-Replicate the [Manus result](https://manus.im/share/c3onakN6Iajcm1Vt1xAVG7?replay=1), execute the command as follows:
-
-```
-python -m app.tool.chart_visualization.test.hack_demo
-```
-The results are also located under `workspace`.
+The results are also located under `workspace\visualization`.
