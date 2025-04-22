@@ -1,26 +1,25 @@
-import json
 import asyncio
-import pandas as pd
+import json
 import os
 from typing import Any, Hashable
+
+import pandas as pd
 from pydantic import Field, model_validator
 
-from app.llm import LLM
-from app.tool.base import BaseTool
-from app.logger import logger
 from app.config import config
+from app.llm import LLM
+from app.logger import logger
+from app.tool.base import BaseTool
 
 
 class DataVisualization(BaseTool):
     name: str = "data_visualization"
-    description: str = (
-        """Visualize statistical chart or Add insights in chart with JSON info from visualization_preparation tool. You can do steps as follows:
+    description: str = """Visualize statistical chart or Add insights in chart with JSON info from visualization_preparation tool. You can do steps as follows:
 1. Visualize statistical chart
 2. Choose insights into chart based on step 1 (Optional)
 Outputs:
 1. Charts (png/html)
 2. Charts Insights (.md)(Optional)"""
-    )
     parameters: dict = {
         "type": "object",
         "properties": {
@@ -85,7 +84,7 @@ Outputs:
         if len(result) == 0:
             return "Is EMPTY!"
         for item in result:
-            content += f"""## {item["title"]}\nChart saved in: {item["chart_path"]}"""
+            content += f"""## {item['title']}\nChart saved in: {item['chart_path']}"""
             if "insight_path" in item and item["insight_path"] and "insight_md" in item:
                 content += "\n" + item["insight_md"]
             else:
@@ -130,7 +129,7 @@ Outputs:
         for index, result in enumerate(results):
             csv_path = csv_file_path[index]
             if "error" in result and "chart_path" not in result:
-                error_list.append(f"Error in {csv_path}: {result["error"]}")
+                error_list.append(f"Error in {csv_path}: {result['error']}")
             else:
                 success_list.append(
                     {
@@ -178,11 +177,11 @@ Outputs:
         for index, result in enumerate(results):
             chart_path = chart_file_path[index]
             if "error" in result and "chart_path" not in result:
-                error_list.append(f"Error in {chart_path}: {result["error"]}")
+                error_list.append(f"Error in {chart_path}: {result['error']}")
             else:
                 success_list.append(chart_path)
         success_template = (
-            f"# Charts Update with Insights\n{",".join(success_list)}"
+            f"# Charts Update with Insights\n{','.join(success_list)}"
             if len(success_list) > 0
             else ""
         )

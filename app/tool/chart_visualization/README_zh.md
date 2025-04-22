@@ -119,4 +119,3 @@ python -m app.tool.chart_visualization.test.simple_chart
 python -m app.tool.chart_visualization.test.simple_report
 ```
 结果同样位于`worksapce\visualization`下
-

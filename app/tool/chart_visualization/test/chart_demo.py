@@ -3,6 +3,7 @@ import asyncio
 from app.agent.data_analysis import DataAnalysis
 from app.logger import logger
 
+
 prefix = "Help me generate charts and save them locally, specifically:"
 tasks = [
     {
@@ -181,9 +182,9 @@ async def main():
         logger.info(f"Begin task {index} / {len(tasks)}!")
         agent = DataAnalysis()
         await agent.run(
-            f"{prefix},chart_description:{item["prompt"]},Data:{item["data"]}"
+            f"{prefix},chart_description:{item['prompt']},Data:{item['data']}"
         )
-        logger.info(f"Finish with {item["prompt"]}")
+        logger.info(f"Finish with {item['prompt']}")
 
 
 if __name__ == "__main__":
