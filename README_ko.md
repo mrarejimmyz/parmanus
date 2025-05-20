@@ -4,6 +4,8 @@
 
 [English](README.md) | [中文](README_zh.md) | 한국어 | [日本語](README_ja.md)
 
+> **중요 안내:** 이 버전은 OpenManus 프로젝트의 초기 완전판이며 핵심 개념을 포함하고 있습니다. 최신 업데이트는 https://github.com/FoundationAgents/OpenManus 에서 확인하실 수 있습니다.
+
 [![GitHub stars](https://img.shields.io/github/stars/mannaandpoem/OpenManus?style=social)](https://github.com/mannaandpoem/OpenManus/stargazers)
 &ensp;
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) &ensp;
