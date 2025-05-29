@@ -86,6 +86,7 @@ class Config(BaseModel):
     search: Optional[SearchSettings] = None
     sandbox: Optional[SandboxSettings] = None
     mcp: Optional[MCPSettings] = None
+    workspace_root: str = Field(default=str(WORKSPACE_ROOT), description="Workspace root directory")
 
 # Thread-local storage for config
 _thread_local = threading.local()
@@ -115,6 +116,10 @@ def load_config(config_path: Optional[str] = None) -> Config:
             }
             config_dict["llm"]["vision"] = vision_config
         
+        # Ensure workspace_root is set
+        if "workspace_root" not in config_dict:
+            config_dict["workspace_root"] = str(WORKSPACE_ROOT)
+        
         return Config(**config_dict)
     except Exception as e:
         # If config file doesn't exist or is invalid, create a default config
@@ -134,7 +139,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
                     "max_tokens": 4096,
                     "temperature": 0.0
                 }
-            }
+            },
+            "workspace_root": str(WORKSPACE_ROOT)
         }
         
         return Config(**default_config)
