@@ -10,13 +10,15 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
-      # Persistent storage for models to enable caching
-      - model-data:/models
+      # Persistent storage for models
+      - ollama-models:/root/.ollama
       # Optional: Mount your application code for development
       # - ./:/app/OpenManus
     ports:
-      # Adjust ports as needed for your application
+      # Default port for OpenManus (adjust as needed)
       - "8000:8000"
+      # Ollama API port (if you want to access it from host)
+      - "11434:11434"
     deploy:
       resources:
         reservations:
@@ -26,6 +28,6 @@ services:
               capabilities: [gpu]
 
 volumes:
-  model-data:
-    # Named volume for persistent model storage
+  ollama-models:
+    # Named volume for persistent Ollama model storage
     # Models will be downloaded once and cached for future container runs
