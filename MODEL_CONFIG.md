@@ -4,24 +4,24 @@ This document explains the local model configuration implemented in the Dockerfi
 
 ## Overview
 
-The configuration has been updated to use local models via Ollama without requiring API keys:
+The configuration has been updated to use specific GGUF models without requiring API keys:
 
-1. The Dockerfile installs Ollama for local model inference
-2. A startup script automatically pulls required models if they don't exist
+1. The Dockerfile downloads the specific models directly from HuggingFace
+2. Models are stored in a persistent volume for caching
 3. The Docker Compose file sets up a named volume for persistent model storage
 4. Models are downloaded once and cached for future container runs
 
 ## Models
 
-The following models are used through Ollama:
+The following models are used:
 
-1. **llama3.2**: Used as the main LLM model
-   - Automatically pulled during container startup
-   - Used for text generation and reasoning
+1. **Llama-3.1-8B-Instruct**: Downloaded from HuggingFace (grimjim/Llama-3.1-8B-Instruct-abliterated_via_adapter-GGUF)
+   - Format: GGUF (Q5_K_M quantization)
+   - Stored as: `/models/llama-jb.gguf`
 
-2. **llama3.2-vision**: Used as the vision model
-   - Automatically pulled during container startup
-   - Used for image understanding and multimodal tasks
+2. **Qwen-VL-7B-AWQ**: Downloaded from HuggingFace (Qwen/Qwen-VL-7B-AWQ)
+   - Format: GGUF (AWQ quantization)
+   - Stored as: `/models/qwen-vl-7b-awq.gguf`
 
 ## Usage
 
@@ -35,11 +35,6 @@ The first run will download the models if they don't exist. Subsequent runs will
 
 ## Configuration Details
 
-- Models are stored in a named volume `ollama-models` mounted at `/root/.ollama`
-- The entrypoint script starts Ollama and pulls models if needed
+- Models are stored in a named volume `model-data` mounted at `/models`
 - NVIDIA GPU support is configured for optimal performance
 - No API keys are required for model usage
-
-## Customization
-
-To use different models, you can modify the config.toml file and the entrypoint.sh script to specify different Ollama models.
