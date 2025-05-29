@@ -8,10 +8,6 @@ ENV PYTHON_VERSION=3.11
 RUN sed -i 's|http://archive.ubuntu.com|http://mirror.kakao.com|g' /etc/apt/sources.list && \
     sed -i 's|http://security.ubuntu.com|http://mirror.kakao.com|g' /etc/apt/sources.list
 
-# Alternative: Use US mirrors if kakao doesn't work
-# RUN sed -i 's|http://archive.ubuntu.com|http://us.archive.ubuntu.com|g' /etc/apt/sources.list && \
-#     sed -i 's|http://security.ubuntu.com|http://security.ubuntu.com|g' /etc/apt/sources.list
-
 # Install system packages in stages to isolate failures
 RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
     software-properties-common \
@@ -68,6 +64,11 @@ RUN apt-get install -y --no-install-recommends \
     x11vnc \
     fluxbox \
     wmctrl \
+    # Build dependencies for llama-cpp-python
+    build-essential \
+    cmake \
+    gcc \
+    g++ \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
