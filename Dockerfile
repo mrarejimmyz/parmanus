@@ -128,8 +128,14 @@ COPY . .
 ENV DISPLAY=:99
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Create startup script for Xvfb (virtual display)
-RUN echo '#!/bin/bash\nXvfb :99 -screen 0 1920x1080x24 &\nexec "$@"' > /entrypoint.sh && \
+# Create startup script for Xvfb (virtual display) with lock file cleanup
+RUN echo '#!/bin/bash\n\
+# Clean up any existing X lock files\n\
+rm -f /tmp/.X*-lock\n\
+rm -f /tmp/.X11-unix/X*\n\
+# Start Xvfb\n\
+Xvfb :99 -screen 0 1920x1080x24 &\n\
+exec "$@"' > /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 # Set default command

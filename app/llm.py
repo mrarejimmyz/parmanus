@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, AsyncIterator
 import base64
 from io import BytesIO
 import asyncio
@@ -649,6 +649,3 @@ class LLM:
         except Exception as e:
             logger.error(f"Unexpected error in ask: {e}")
             raise
-
-# Async iterator type hint
-from typing import AsyncIterator
