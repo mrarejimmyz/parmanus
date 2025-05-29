@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  openmanus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openmanus
+    restart: unless-stopped
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      # Persistent storage for models to enable caching
+      - model-data:/models
+      # Optional: Mount your application code for development
+      # - ./:/app/OpenManus
+    ports:
+      # Adjust ports as needed for your application
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  model-data:
+    # Named volume for persistent model storage
+    # Models will be downloaded once and cached for future container runs
