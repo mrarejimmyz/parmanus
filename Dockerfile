@@ -100,26 +100,26 @@ RUN mkdir -p /models
 
 # Download models with better error handling
 RUN curl -L --retry 3 --retry-delay 5 \
-        "https://huggingface.co/grimjim/Llama-3.1-8B-Instruct-abliterated_via_adapter-GGUF/resolve/main/Llama-3.1-8B-Instruct-abliterated_via_adapter.Q5_K_M.gguf" \
-        -o /models/llama-jb.gguf && \
+    "https://huggingface.co/grimjim/Llama-3.1-8B-Instruct-abliterated_via_adapter-GGUF/resolve/main/Llama-3.1-8B-Instruct-abliterated_via_adapter.Q5_K_M.gguf" \
+    -o /models/llama-jb.gguf && \
     curl -L --retry 3 --retry-delay 5 \
-        "https://huggingface.co/Qwen/Qwen-VL-7B-AWQ/resolve/main/model-awq.gguf" \
-        -o /models/qwen-vl-7b-awq.gguf
+    "https://huggingface.co/Qwen/Qwen-VL-7B-AWQ/resolve/main/model-awq.gguf" \
+    -o /models/qwen-vl-7b-awq.gguf
 
 # Create default config for local models
 RUN mkdir -p /app/OpenManus/config && \
     echo '# Global LLM configuration\n\
-[llm]\n\
-model = "llama-jb"\n\
-model_path = "/models/llama-jb.gguf"\n\
-max_tokens = 4096\n\
-temperature = 0.0\n\
-\n\
-[llm.vision]\n\
-model = "qwen-vl-7b"\n\
-model_path = "/models/qwen-vl-7b-awq.gguf"\n\
-max_tokens = 4096\n\
-temperature = 0.0' > /app/OpenManus/config/config.toml
+    [llm]\n\
+    model = "llama-jb"\n\
+    model_path = "/models/llama-jb.gguf"\n\
+    max_tokens = 4096\n\
+    temperature = 0.0\n\
+    \n\
+    [llm.vision]\n\
+    model = "qwen-vl-7b"\n\
+    model_path = "/models/qwen-vl-7b-awq.gguf"\n\
+    max_tokens = 4096\n\
+    temperature = 0.0' > /app/OpenManus/config/config.toml
 
 # Copy rest of the code
 COPY . .
@@ -130,12 +130,12 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Create startup script for Xvfb (virtual display) with lock file cleanup
 RUN echo '#!/bin/bash\n\
-# Clean up any existing X lock files\n\
-rm -f /tmp/.X*-lock\n\
-rm -f /tmp/.X11-unix/X*\n\
-# Start Xvfb\n\
-Xvfb :99 -screen 0 1920x1080x24 &\n\
-exec "$@"' > /entrypoint.sh && \
+    # Clean up any existing X lock files\n\
+    rm -f /tmp/.X*-lock\n\
+    rm -f /tmp/.X11-unix/X*\n\
+    # Start Xvfb\n\
+    Xvfb :99 -screen 0 1920x1080x24 &\n\
+    exec "$@"' > /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 # Set default command
