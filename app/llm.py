@@ -59,25 +59,34 @@ class LLM:
     LLM class for handling interactions with local GGUF models using llama-cpp-python.
     """
 
-    def __init__(self, settings: LLMSettings):
+    def __init__(self, settings: Optional[LLMSettings] = None, config_name: str = None):
         """
         Initialize the LLM with settings.
         Args:
             settings: LLM configuration settings
+            config_name: Optional name for config lookup
         """
+        # Ensure settings is an LLMSettings instance
+        if settings is None:
+            settings = config.llm
+
+        # Double-check that settings is an LLMSettings instance
+        if not isinstance(settings, LLMSettings):
+            raise TypeError(f"Expected LLMSettings instance, got {type(settings)}")
+
         self.model = settings.model
         self.model_path = settings.model_path
         self.max_tokens = settings.max_tokens
         self.temperature = settings.temperature
         self.token_counter = TokenCounter()
-        
+
         # Initialize model instances as None, will be loaded on demand
         self._text_model = None
         self._vision_model = None
-        
+
         # Vision model settings
         self.vision_settings = settings.vision
-        
+
         logger.info(f"Initialized LLM with model: {self.model}, path: {self.model_path}")
 
     @property
@@ -91,7 +100,7 @@ class LLM:
                 n_gpu_layers=-1  # Use all GPU layers
             )
         return self._text_model
-    
+
     @property
     def vision_model(self):
         """Lazy-load the vision model"""
@@ -120,7 +129,7 @@ class LLM:
                 msg_dict = msg.model_dump()
             else:
                 msg_dict = msg.copy()
-            
+
             # Handle image content if model supports it
             if supports_images and isinstance(msg_dict.get("content"), list):
                 content_list = []
@@ -159,9 +168,9 @@ class LLM:
                         # Text or other content
                         content_list.append(item)
                 msg_dict["content"] = content_list
-            
+
             formatted_messages.append(msg_dict)
-        
+
         return formatted_messages
 
     def count_tokens(self, text: str) -> int:
@@ -187,7 +196,7 @@ class LLM:
         for msg in messages:
             # Count role tokens
             token_count += TokenCounter.BASE_MESSAGE_TOKENS
-            
+
             # Count content tokens
             content = msg.get("content", "")
             if isinstance(content, str):
@@ -200,13 +209,13 @@ class LLM:
                         elif item.get("type") == "image_url":
                             # Approximate token count for images
                             token_count += TokenCounter.LOW_DETAIL_IMAGE_TOKENS
-            
+
             # Count function/tool tokens if present
             if "function_call" in msg:
                 token_count += self.count_tokens(str(msg["function_call"]))
             if "tool_calls" in msg:
                 token_count += self.count_tokens(str(msg["tool_calls"]))
-        
+
         return token_count
 
     def check_token_limit(self, input_tokens: int) -> bool:
@@ -251,7 +260,7 @@ class LLM:
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            
+
             if role == "system":
                 prompt += f"<|system|>\n{content}\n"
             elif role == "user":
@@ -261,7 +270,7 @@ class LLM:
             else:
                 # Handle other roles as user
                 prompt += f"<|user|>\n{content}\n"
-        
+
         # Add final assistant marker for completion
         prompt += "<|assistant|>\n"
         return prompt
@@ -278,7 +287,7 @@ class LLM:
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            
+
             if role == "system":
                 prompt += f"<|system|>\n{content}\n"
             elif role == "user":
@@ -299,7 +308,7 @@ class LLM:
                                     prompt += f"[IMAGE: {image_url}]\n"
             elif role == "assistant":
                 prompt += f"<|assistant|>\n{content}\n"
-        
+
         # Add final assistant marker for completion
         prompt += "<|assistant|>\n"
         return prompt
@@ -313,17 +322,17 @@ class LLM:
             List of extracted tool calls
         """
         tool_calls = []
-        
+
         # Simple parsing for function calls in the format:
         # ```json
         # {"name": "function_name", "arguments": {"arg1": "value1"}}
         # ```
         import re
         import json
-        
+
         # Find all JSON blocks
         json_blocks = re.findall(r'```(?:json)?\s*({.*?})\s*```', completion_text, re.DOTALL)
-        
+
         for i, block in enumerate(json_blocks):
             try:
                 data = json.loads(block)
@@ -338,7 +347,7 @@ class LLM:
                     })
             except json.JSONDecodeError:
                 logger.warning(f"Failed to parse JSON block: {block}")
-        
+
         return tool_calls
 
     @retry(
@@ -377,39 +386,39 @@ class LLM:
             # Validate tool_choice
             if tool_choice not in TOOL_CHOICE_VALUES:
                 raise ValueError(f"Invalid tool_choice: {tool_choice}")
-            
+
             # Check if the model supports images
             supports_images = self.model in MULTIMODAL_MODELS
-            
+
             # Format messages
             if system_msgs:
                 system_msgs = self.format_messages(system_msgs, supports_images)
                 messages = system_msgs + self.format_messages(messages, supports_images)
             else:
                 messages = self.format_messages(messages, supports_images)
-            
+
             # Calculate input token count
             input_tokens = self.count_message_tokens(messages)
-            
+
             # If there are tools, calculate token count for tool descriptions
             tools_tokens = 0
             if tools:
                 for tool in tools:
                     tools_tokens += self.count_tokens(str(tool))
             input_tokens += tools_tokens
-            
+
             # Check if token limits are exceeded
             if not self.check_token_limit(input_tokens):
                 error_message = self.get_limit_error_message(input_tokens)
                 # Raise a special exception that won't be retried
                 raise TokenLimitExceeded(error_message)
-            
+
             # Validate tools if provided
             if tools:
                 for tool in tools:
                     if not isinstance(tool, dict) or "type" not in tool:
                         raise ValueError("Each tool must be a dict with 'type' field")
-            
+
             # Prepare tool instructions if needed
             tool_instructions = ""
             if tools:
@@ -417,12 +426,12 @@ class LLM:
                 tool_instructions = "You have access to the following tools:\n"
                 for tool in tools:
                     tool_instructions += json.dumps(tool, indent=2) + "\n\n"
-                
+
                 if tool_choice == ToolChoice.REQUIRED:
                     tool_instructions += "You MUST use one of these tools in your response.\n"
                 elif tool_choice == ToolChoice.AUTO:
                     tool_instructions += "Use these tools if needed to complete the task.\n"
-            
+
             # Add tool instructions to system message if present
             if tool_instructions:
                 has_system = False
@@ -431,10 +440,10 @@ class LLM:
                         msg["content"] = msg.get("content", "") + "\n\n" + tool_instructions
                         has_system = True
                         break
-                
+
                 if not has_system:
                     messages.insert(0, {"role": "system", "content": tool_instructions})
-            
+
             # Process with appropriate model based on content
             has_images = False
             for msg in messages:
@@ -444,7 +453,7 @@ class LLM:
                         if isinstance(item, dict) and item.get("type") == "image_url":
                             has_images = True
                             break
-            
+
             # Use vision model if content has images and vision model is available
             if has_images and supports_images and self.vision_model:
                 logger.info("Using vision model for image content")
@@ -453,10 +462,10 @@ class LLM:
             else:
                 prompt = self._format_prompt_for_llama(messages)
                 model = self.text_model
-            
+
             # Set temperature
             temp = temperature if temperature is not None else self.temperature
-            
+
             # Create a task for model completion with timeout
             completion_task = asyncio.create_task(
                 asyncio.to_thread(
@@ -468,38 +477,38 @@ class LLM:
                     **kwargs
                 )
             )
-            
+
             try:
                 # Wait for completion with timeout
                 completion = await asyncio.wait_for(completion_task, timeout=timeout)
             except asyncio.TimeoutError:
                 logger.error(f"Model completion timed out after {timeout} seconds")
                 raise Exception(f"Model completion timed out after {timeout} seconds")
-            
+
             # Extract completion text
             completion_text = completion.get("choices", [{}])[0].get("text", "").strip()
-            
+
             # Estimate token counts
             prompt_tokens = self.count_tokens(prompt)
             completion_tokens = self.count_tokens(completion_text)
-            
+
             # Update token counter
             self.update_token_count(prompt_tokens, completion_tokens)
-            
+
             # Check for tool calls in the response
             tool_calls = None
             if tools and completion_text:
                 tool_calls = self._extract_tool_calls(completion_text)
-            
+
             # Create response message
             response = ChatCompletionMessage(
                 role="assistant",
                 content=completion_text if not tool_calls else None,
                 tool_calls=tool_calls
             )
-            
+
             return response
-            
+
         except TokenLimitExceeded:
             # Re-raise token limit errors without logging
             raise
@@ -542,23 +551,23 @@ class LLM:
         try:
             # Check if the model supports images
             supports_images = self.model in MULTIMODAL_MODELS
-            
+
             # Format messages
             if system_msgs:
                 system_msgs = self.format_messages(system_msgs, supports_images)
                 messages = system_msgs + self.format_messages(messages, supports_images)
             else:
                 messages = self.format_messages(messages, supports_images)
-            
+
             # Calculate input token count
             input_tokens = self.count_message_tokens(messages)
-            
+
             # Check if token limits are exceeded
             if not self.check_token_limit(input_tokens):
                 error_message = self.get_limit_error_message(input_tokens)
                 # Raise a special exception that won't be retried
                 raise TokenLimitExceeded(error_message)
-            
+
             # Process with appropriate model based on content
             has_images = False
             for msg in messages:
@@ -568,7 +577,7 @@ class LLM:
                         if isinstance(item, dict) and item.get("type") == "image_url":
                             has_images = True
                             break
-            
+
             # Use vision model if content has images and vision model is available
             if has_images and supports_images and self.vision_model:
                 logger.info("Using vision model for image content")
@@ -577,10 +586,10 @@ class LLM:
             else:
                 prompt = self._format_prompt_for_llama(messages)
                 model = self.text_model
-            
+
             # Set temperature
             temp = temperature if temperature is not None else self.temperature
-            
+
             if stream:
                 # Create streaming response
                 async def response_stream():
@@ -594,22 +603,22 @@ class LLM:
                             stream=True,
                             **kwargs
                         )
-                        
+
                         total_text = ""
                         for chunk in completion_generator:
                             chunk_text = chunk.get("choices", [{}])[0].get("text", "")
                             total_text += chunk_text
                             yield chunk_text
-                        
+
                         # Update token counts after streaming completes
                         prompt_tokens = self.count_tokens(prompt)
                         completion_tokens = self.count_tokens(total_text)
                         self.update_token_count(prompt_tokens, completion_tokens)
-                        
+
                     except Exception as e:
                         logger.error(f"Error in streaming response: {e}")
                         raise
-                
+
                 return response_stream()
             else:
                 # Create a task for model completion with timeout
@@ -623,26 +632,26 @@ class LLM:
                         **kwargs
                     )
                 )
-                
+
                 try:
                     # Wait for completion with timeout
                     completion = await asyncio.wait_for(completion_task, timeout=timeout)
                 except asyncio.TimeoutError:
                     logger.error(f"Model completion timed out after {timeout} seconds")
                     raise Exception(f"Model completion timed out after {timeout} seconds")
-                
+
                 # Extract completion text
                 completion_text = completion.get("choices", [{}])[0].get("text", "").strip()
-                
+
                 # Estimate token counts
                 prompt_tokens = self.count_tokens(prompt)
                 completion_tokens = self.count_tokens(completion_text)
-                
+
                 # Update token counter
                 self.update_token_count(prompt_tokens, completion_tokens)
-                
+
                 return completion_text
-                
+
         except TokenLimitExceeded:
             # Re-raise token limit errors without logging
             raise
