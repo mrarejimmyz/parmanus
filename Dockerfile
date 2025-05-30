@@ -92,9 +92,27 @@ WORKDIR /app/OpenManus
 ENV CMAKE_ARGS="-DGGML_CUDA=on"
 ENV FORCE_CMAKE=1
 
-# Copy requirements and install Python dependencies
+# Add CUDA library paths to environment variables to fix linking issues
+ENV CUDA_HOME="/usr/local/cuda"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+
+# Create symlink for libcuda.so using the stub library
+RUN ln -sf ${CUDA_HOME}/lib64/stubs/libcuda.so ${CUDA_HOME}/lib64/stubs/libcuda.so.1 && \
+    echo "${CUDA_HOME}/lib64/stubs" > /etc/ld.so.conf.d/cuda-stubs.conf && \
+    ldconfig
+
+# Set LD_LIBRARY_PATH to include the stubs directory
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:${LD_LIBRARY_PATH}"
+
+# Install llama-cpp-python separately with specific build flags and explicit CUDA library path
+RUN LIBRARY_PATH=${CUDA_HOME}/lib64/stubs:${LIBRARY_PATH} \
+    pip install --no-cache-dir llama-cpp-python>=0.2.56 --verbose
+
+# Copy requirements and install remaining Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN grep -v "llama-cpp-python" requirements.txt > requirements_no_llama.txt && \
+    pip install --no-cache-dir -r requirements_no_llama.txt
 
 # Install browser-use and Playwright browsers
 RUN pip install --no-cache-dir "browser-use[memory]" && \
