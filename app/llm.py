@@ -59,6 +59,10 @@ class LLM:
     LLM class for handling interactions with local GGUF models using llama-cpp-python.
     """
 
+    # Define the context window sizes as class variables
+    TEXT_MODEL_CONTEXT_SIZE = 16384  # Increased from 8192
+    VISION_MODEL_CONTEXT_SIZE = 8192  # Increased from 4096
+
     def __init__(self, settings: Optional[LLMSettings] = None, config_name: str = None):
         """
         Initialize the LLM with settings.
@@ -96,7 +100,7 @@ class LLM:
             logger.info(f"Loading text model from {self.model_path}")
             self._text_model = Llama(
                 model_path=self.model_path,
-                n_ctx=4096,  # Context window
+                n_ctx=self.TEXT_MODEL_CONTEXT_SIZE,  # Use the class variable
                 n_gpu_layers=-1  # Use all GPU layers
             )
         return self._text_model
@@ -108,11 +112,23 @@ class LLM:
             logger.info(f"Loading vision model from {self.vision_settings.model_path}")
             self._vision_model = Llama(
                 model_path=self.vision_settings.model_path,
-                n_ctx=4096,
+                n_ctx=self.VISION_MODEL_CONTEXT_SIZE,  # Use the class variable
                 n_gpu_layers=-1,
                 verbose=False
             )
         return self._vision_model
+
+    def get_current_context_size(self, has_images: bool = False) -> int:
+        """
+        Get the current context size based on whether images are being processed.
+        Args:
+            has_images: Whether the request contains images
+        Returns:
+            Current context window size
+        """
+        if has_images and self.model in MULTIMODAL_MODELS:
+            return self.VISION_MODEL_CONTEXT_SIZE
+        return self.TEXT_MODEL_CONTEXT_SIZE
 
     def format_messages(self, messages: List[Union[dict, Message]], supports_images: bool = False) -> List[dict]:
         """
@@ -218,27 +234,29 @@ class LLM:
 
         return token_count
 
-    def check_token_limit(self, input_tokens: int) -> bool:
+    def check_token_limit(self, input_tokens: int, has_images: bool = False) -> bool:
         """
         Check if input tokens are within limits.
         Args:
             input_tokens: Number of input tokens
+            has_images: Whether the request contains images
         Returns:
             True if within limits, False otherwise
         """
-        # Allow for max_tokens output with increased context window
-        # Increased from 4096 to 8192 to handle larger inputs
-        return input_tokens + self.max_tokens <= 8192  # Expanded context window
+        context_size = self.get_current_context_size(has_images)
+        return input_tokens + self.max_tokens <= context_size
 
-    def get_limit_error_message(self, input_tokens: int) -> str:
+    def get_limit_error_message(self, input_tokens: int, has_images: bool = False) -> str:
         """
         Get error message for token limit exceeded.
         Args:
             input_tokens: Number of input tokens
+            has_images: Whether the request contains images
         Returns:
             Error message
         """
-        return f"Token limit exceeded: {input_tokens} input tokens + {self.max_tokens} max output tokens > 8192 context window"
+        context_size = self.get_current_context_size(has_images)
+        return f"Token limit exceeded: {input_tokens} input tokens + {self.max_tokens} max output tokens > {context_size} context window"
 
     def update_token_count(self, prompt_tokens: int, completion_tokens: int):
         """
@@ -325,14 +343,14 @@ class LLM:
         tool_calls = []
 
         # Simple parsing for function calls in the format:
-        # ```json
+        # ```
         # {"name": "function_name", "arguments": {"arg1": "value1"}}
         # ```
         import re
         import json
 
         # Find all JSON blocks
-        json_blocks = re.findall(r'```(?:json)?\s*({.*?})\s*```', completion_text, re.DOTALL)
+        json_blocks = re.findall(r'``````', completion_text, re.DOTALL)
 
         for i, block in enumerate(json_blocks):
             try:
@@ -398,6 +416,16 @@ class LLM:
             else:
                 messages = self.format_messages(messages, supports_images)
 
+            # Check for images in messages
+            has_images = False
+            for msg in messages:
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "image_url":
+                            has_images = True
+                            break
+
             # Calculate input token count
             input_tokens = self.count_message_tokens(messages)
 
@@ -409,8 +437,8 @@ class LLM:
             input_tokens += tools_tokens
 
             # Check if token limits are exceeded
-            if not self.check_token_limit(input_tokens):
-                error_message = self.get_limit_error_message(input_tokens)
+            if not self.check_token_limit(input_tokens, has_images):
+                error_message = self.get_limit_error_message(input_tokens, has_images)
                 # Raise a special exception that won't be retried
                 raise TokenLimitExceeded(error_message)
 
@@ -444,16 +472,6 @@ class LLM:
 
                 if not has_system:
                     messages.insert(0, {"role": "system", "content": tool_instructions})
-
-            # Process with appropriate model based on content
-            has_images = False
-            for msg in messages:
-                content = msg.get("content", "")
-                if isinstance(content, list):
-                    for item in content:
-                        if isinstance(item, dict) and item.get("type") == "image_url":
-                            has_images = True
-                            break
 
             # Use vision model if content has images and vision model is available
             if has_images and supports_images and self.vision_model:
@@ -560,16 +578,7 @@ class LLM:
             else:
                 messages = self.format_messages(messages, supports_images)
 
-            # Calculate input token count
-            input_tokens = self.count_message_tokens(messages)
-
-            # Check if token limits are exceeded
-            if not self.check_token_limit(input_tokens):
-                error_message = self.get_limit_error_message(input_tokens)
-                # Raise a special exception that won't be retried
-                raise TokenLimitExceeded(error_message)
-
-            # Process with appropriate model based on content
+            # Check for images in messages
             has_images = False
             for msg in messages:
                 content = msg.get("content", "")
@@ -578,6 +587,15 @@ class LLM:
                         if isinstance(item, dict) and item.get("type") == "image_url":
                             has_images = True
                             break
+
+            # Calculate input token count
+            input_tokens = self.count_message_tokens(messages)
+
+            # Check if token limits are exceeded
+            if not self.check_token_limit(input_tokens, has_images):
+                error_message = self.get_limit_error_message(input_tokens, has_images)
+                # Raise a special exception that won't be retried
+                raise TokenLimitExceeded(error_message)
 
             # Use vision model if content has images and vision model is available
             if has_images and supports_images and self.vision_model:
