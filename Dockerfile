@@ -125,13 +125,13 @@ RUN mkdir -p /app/OpenManus/config && \
     [llm]\n\
     model = "llama-jb"\n\
     model_path = "/models/llama-jb.gguf"\n\
-    max_tokens = 4096\n\
+    max_tokens = 2048\n\
     temperature = 0.0\n\
     \n\
     [llm.vision]\n\
     model = "qwen-vl-7b"\n\
     model_path = "/models/qwen-vl-7b-awq.gguf"\n\
-    max_tokens = 4096\n\
+    max_tokens = 2048\n\
     temperature = 0.0' > /app/OpenManus/config/config.toml
 
 # Copy rest of the code
