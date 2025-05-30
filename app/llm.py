@@ -226,8 +226,9 @@ class LLM:
         Returns:
             True if within limits, False otherwise
         """
-        # Allow for max_tokens output
-        return input_tokens + self.max_tokens <= 4096  # Typical context window
+        # Allow for max_tokens output with increased context window
+        # Increased from 4096 to 8192 to handle larger inputs
+        return input_tokens + self.max_tokens <= 8192  # Expanded context window
 
     def get_limit_error_message(self, input_tokens: int) -> str:
         """
@@ -237,7 +238,7 @@ class LLM:
         Returns:
             Error message
         """
-        return f"Token limit exceeded: {input_tokens} input tokens + {self.max_tokens} max output tokens > 4096 context window"
+        return f"Token limit exceeded: {input_tokens} input tokens + {self.max_tokens} max output tokens > 8192 context window"
 
     def update_token_count(self, prompt_tokens: int, completion_tokens: int):
         """
