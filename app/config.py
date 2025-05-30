@@ -15,7 +15,7 @@ WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
 class LLMSettings(BaseModel):
     model: str = Field(..., description="Model name")
     model_path: str = Field("/models/llama-jb.gguf", description="Path to the model file")
-    max_tokens: int = Field(4096, description="Maximum number of tokens per request")
+    max_tokens: int = Field(2048, description="Maximum number of tokens per request")  # Updated from 4096 to 2048
     max_input_tokens: Optional[int] = Field(
         None,
         description="Maximum input tokens to use across all requests (None for unlimited)",
@@ -155,14 +155,14 @@ def load_config(config_path: Optional[str] = None) -> Config:
         vision_settings = LLMSettings(
             model="qwen-vl-7b",
             model_path="/models/qwen-vl-7b-awq.gguf",
-            max_tokens=4096,
+            max_tokens=2048,  # Updated from 4096 to 2048
             temperature=0.0
         )
 
         llm_settings = LLMSettings(
             model="llama-jb",
             model_path="/models/llama-jb.gguf",
-            max_tokens=4096,
+            max_tokens=2048,  # Updated from 4096 to 2048
             temperature=0.0,
             vision=vision_settings
         )

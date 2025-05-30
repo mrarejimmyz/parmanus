@@ -62,6 +62,9 @@ class LLM:
     # Define the context window sizes as class variables
     TEXT_MODEL_CONTEXT_SIZE = 16384  # Increased from 8192
     VISION_MODEL_CONTEXT_SIZE = 8192  # Increased from 4096
+    
+    # Define maximum allowed output tokens to prevent token limit errors
+    MAX_ALLOWED_OUTPUT_TOKENS = 8192
 
     def __init__(self, settings: Optional[LLMSettings] = None, config_name: str = None):
         """
@@ -244,7 +247,9 @@ class LLM:
             True if within limits, False otherwise
         """
         context_size = self.get_current_context_size(has_images)
-        return input_tokens + self.max_tokens <= context_size
+        # Use the safe max tokens value that respects MAX_ALLOWED_OUTPUT_TOKENS
+        safe_max_tokens = min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
+        return input_tokens + safe_max_tokens <= context_size
 
     def get_limit_error_message(self, input_tokens: int, has_images: bool = False) -> str:
         """
@@ -256,7 +261,9 @@ class LLM:
             Error message
         """
         context_size = self.get_current_context_size(has_images)
-        return f"Token limit exceeded: {input_tokens} input tokens + {self.max_tokens} max output tokens > {context_size} context window"
+        # Use the safe max tokens value that respects MAX_ALLOWED_OUTPUT_TOKENS
+        safe_max_tokens = min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
+        return f"Token limit exceeded: {input_tokens} input tokens + {safe_max_tokens} max output tokens > {context_size} context window"
 
     def update_token_count(self, prompt_tokens: int, completion_tokens: int):
         """
@@ -429,49 +436,11 @@ class LLM:
             # Calculate input token count
             input_tokens = self.count_message_tokens(messages)
 
-            # If there are tools, calculate token count for tool descriptions
-            tools_tokens = 0
-            if tools:
-                for tool in tools:
-                    tools_tokens += self.count_tokens(str(tool))
-            input_tokens += tools_tokens
-
             # Check if token limits are exceeded
             if not self.check_token_limit(input_tokens, has_images):
                 error_message = self.get_limit_error_message(input_tokens, has_images)
                 # Raise a special exception that won't be retried
                 raise TokenLimitExceeded(error_message)
-
-            # Validate tools if provided
-            if tools:
-                for tool in tools:
-                    if not isinstance(tool, dict) or "type" not in tool:
-                        raise ValueError("Each tool must be a dict with 'type' field")
-
-            # Prepare tool instructions if needed
-            tool_instructions = ""
-            if tools:
-                import json
-                tool_instructions = "You have access to the following tools:\n"
-                for tool in tools:
-                    tool_instructions += json.dumps(tool, indent=2) + "\n\n"
-
-                if tool_choice == ToolChoice.REQUIRED:
-                    tool_instructions += "You MUST use one of these tools in your response.\n"
-                elif tool_choice == ToolChoice.AUTO:
-                    tool_instructions += "Use these tools if needed to complete the task.\n"
-
-            # Add tool instructions to system message if present
-            if tool_instructions:
-                has_system = False
-                for msg in messages:
-                    if msg.get("role") == "system":
-                        msg["content"] = msg.get("content", "") + "\n\n" + tool_instructions
-                        has_system = True
-                        break
-
-                if not has_system:
-                    messages.insert(0, {"role": "system", "content": tool_instructions})
 
             # Use vision model if content has images and vision model is available
             if has_images and supports_images and self.vision_model:
@@ -485,12 +454,15 @@ class LLM:
             # Set temperature
             temp = temperature if temperature is not None else self.temperature
 
+            # Apply safe max tokens limit
+            safe_max_tokens = min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
+
             # Create a task for model completion with timeout
             completion_task = asyncio.create_task(
                 asyncio.to_thread(
                     model.create_completion,
                     prompt=prompt,
-                    max_tokens=self.max_tokens,
+                    max_tokens=safe_max_tokens,  # Use safe max tokens
                     temperature=temp,
                     stop=["<|user|>", "<|system|>"],
                     **kwargs
@@ -608,6 +580,9 @@ class LLM:
 
             # Set temperature
             temp = temperature if temperature is not None else self.temperature
+            
+            # Apply safe max tokens limit
+            safe_max_tokens = min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
 
             if stream:
                 # Create streaming response
@@ -616,7 +591,7 @@ class LLM:
                         # Create a generator that yields completion chunks
                         completion_generator = model.create_completion(
                             prompt=prompt,
-                            max_tokens=self.max_tokens,
+                            max_tokens=safe_max_tokens,  # Use safe max tokens
                             temperature=temp,
                             stop=["<|user|>", "<|system|>"],
                             stream=True,
@@ -645,7 +620,7 @@ class LLM:
                     asyncio.to_thread(
                         model.create_completion,
                         prompt=prompt,
-                        max_tokens=self.max_tokens,
+                        max_tokens=safe_max_tokens,  # Use safe max tokens
                         temperature=temp,
                         stop=["<|user|>", "<|system|>"],
                         **kwargs
