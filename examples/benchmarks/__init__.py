@@ -1,3 +1,3 @@
 """
-OpenManus benchmark system for standardized agent evaluation.
+ParManus benchmark system for standardized agent evaluation.
 """

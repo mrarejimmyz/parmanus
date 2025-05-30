@@ -1,4 +1,4 @@
-# OpenManus Local Model Configuration
+# ParManus Local Model Configuration
 
 This document explains the local model configuration implemented in the Dockerfile and docker-compose.yml.
 

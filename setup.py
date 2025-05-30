@@ -7,12 +7,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="openmanus",
     version="0.1.0",
-    author="mannaandpoem and OpenManus Team",
+    author="mannaandpoem and ParManus Team",
     author_email="mannaandpoem@gmail.com",
     description="A versatile agent that can solve various tasks using multiple tools",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/mannaandpoem/OpenManus",
+    url="https://github.com/mannaandpoem/ParManus",
     packages=find_packages(),
     install_requires=[
         "pydantic~=2.10.4",
