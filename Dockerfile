@@ -87,6 +87,10 @@ RUN pip install --no-cache-dir torch==2.3.1 torchvision==0.18.1 --index-url http
 # Set working directory
 WORKDIR /app/OpenManus
 
+# Set environment variables for CUDA support in llama-cpp-python
+ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+ENV FORCE_CMAKE=1
+
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

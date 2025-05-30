@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: openmanus
     restart: unless-stopped
+    runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
@@ -23,7 +24,7 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
+              capabilities: [ gpu ]
 
 volumes:
   model-data:
