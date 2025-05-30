@@ -4,26 +4,26 @@
 
 [English](README.md) | [中文](README_zh.md) | [한국어](README_ko.md) | 日本語
 
-> **重要なお知らせ：** このバージョンはOpenManusプロジェクトの初期の完全版であり、その中心的な概念が含まれています。最新の更新情報については、https://github.com/FoundationAgents/OpenManus をご覧ください。
+> **重要なお知らせ：** このバージョンはParManusプロジェクトの初期の完全版であり、その中心的な概念が含まれています。最新の更新情報については、https://github.com/FoundationAgents/ParManus をご覧ください。
 
-[![GitHub stars](https://img.shields.io/github/stars/mannaandpoem/OpenManus?style=social)](https://github.com/mannaandpoem/OpenManus/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/mannaandpoem/ParManus?style=social)](https://github.com/mannaandpoem/ParManus/stargazers)
 &ensp;
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) &ensp;
 [![Discord Follow](https://dcbadge.vercel.app/api/server/DYn29wFk9z?style=flat)](https://discord.gg/DYn29wFk9z)
-[![Demo](https://img.shields.io/badge/Demo-Hugging%20Face-yellow)](https://huggingface.co/spaces/lyh-917/OpenManusDemo)
+[![Demo](https://img.shields.io/badge/Demo-Hugging%20Face-yellow)](https://huggingface.co/spaces/lyh-917/ParManusDemo)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15186407.svg)](https://doi.org/10.5281/zenodo.15186407)
 
-# 👋 OpenManus
+# 👋 ParManus
 
-Manusは素晴らしいですが、OpenManusは*招待コード*なしでどんなアイデアも実現できます！🛫
+Manusは素晴らしいですが、ParManusは*招待コード*なしでどんなアイデアも実現できます！🛫
 
 私たちのチームメンバー [@Xinbin Liang](https://github.com/mannaandpoem) と [@Jinyu Xiang](https://github.com/XiangJinyu)（主要開発者）、そして [@Zhaoyang Yu](https://github.com/MoshiQAQ)、[@Jiayi Zhang](https://github.com/didiforgithub)、[@Sirui Hong](https://github.com/stellaHSR) は [@MetaGPT](https://github.com/geekan/MetaGPT) から来ました。プロトタイプは3時間以内に立ち上げられ、継続的に開発を進めています！
 
 これはシンプルな実装ですので、どんな提案、貢献、フィードバックも歓迎します！
 
-OpenManusで自分だけのエージェントを楽しみましょう！
+ParManusで自分だけのエージェントを楽しみましょう！
 
-また、UIUCとOpenManusの研究者が共同開発した[OpenManus-RL](https://github.com/OpenManus/OpenManus-RL)をご紹介できることを嬉しく思います。これは強化学習（RL）ベース（GRPOなど）のLLMエージェントチューニング手法に特化したオープンソースプロジェクトです。
+また、UIUCとParManusの研究者が共同開発した[ParManus-RL](https://github.com/ParManus/ParManus-RL)をご紹介できることを嬉しく思います。これは強化学習（RL）ベース（GRPOなど）のLLMエージェントチューニング手法に特化したオープンソースプロジェクトです。
 
 ## プロジェクトデモ
 
@@ -45,8 +45,8 @@ conda activate open_manus
 2. リポジトリをクローンします：
 
 ```bash
-git clone https://github.com/mannaandpoem/OpenManus.git
-cd OpenManus
+git clone https://github.com/mannaandpoem/ParManus.git
+cd ParManus
 ```
 
 3. 依存関係をインストールします：
@@ -66,8 +66,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 2. リポジトリをクローンします：
 
 ```bash
-git clone https://github.com/mannaandpoem/OpenManus.git
-cd OpenManus
+git clone https://github.com/mannaandpoem/ParManus.git
+cd ParManus
 ```
 
 3. 新しい仮想環境を作成してアクティベートします：
@@ -92,7 +92,7 @@ playwright install
 
 ## 設定
 
-OpenManusを使用するには、LLM APIの設定が必要です。以下の手順に従って設定してください：
+ParManusを使用するには、LLM APIの設定が必要です。以下の手順に従って設定してください：
 
 1. `config`ディレクトリに`config.toml`ファイルを作成します（サンプルからコピーできます）：
 
@@ -120,7 +120,7 @@ api_key = "sk-..."  # 実際のAPIキーに置き換えてください
 
 ## クイックスタート
 
-OpenManusを実行する一行コマンド：
+ParManusを実行する一行コマンド：
 
 ```bash
 python main.py
@@ -151,12 +151,12 @@ python run_flow.py
 Feishuのネットワーキンググループに参加して、他の開発者と経験を共有しましょう！
 
 <div align="center" style="display: flex; gap: 20px;">
-    <img src="assets/community_group.jpg" alt="OpenManus 交流群" width="300" />
+    <img src="assets/community_group.jpg" alt="ParManus 交流群" width="300" />
 </div>
 
 ## スター履歴
 
-[![Star History Chart](https://api.star-history.com/svg?repos=mannaandpoem/OpenManus&type=Date)](https://star-history.com/#mannaandpoem/OpenManus&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=mannaandpoem/ParManus&type=Date)](https://star-history.com/#mannaandpoem/ParManus&Date)
 
 ## 謝辞
 
@@ -167,13 +167,13 @@ Feishuのネットワーキンググループに参加して、他の開発者�
 
 また、Hugging Face デモスペースをサポートしてくださった阶跃星辰 (stepfun)にも感謝いたします。
 
-OpenManusはMetaGPTのコントリビューターによって構築されました。このエージェントコミュニティに大きな感謝を！
+ParManusはMetaGPTのコントリビューターによって構築されました。このエージェントコミュニティに大きな感謝を！
 
 ## 引用
 ```bibtex
 @misc{openmanus2025,
   author = {Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong and Sheng Fan and Xiao Tang},
-  title = {OpenManus: An open-source framework for building general AI agents},
+  title = {ParManus: An open-source framework for building general AI agents},
   year = {2025},
   publisher = {Zenodo},
   doi = {10.5281/zenodo.15186407},
