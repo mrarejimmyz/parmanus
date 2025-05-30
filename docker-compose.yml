@@ -7,16 +7,14 @@ services:
       dockerfile: Dockerfile
     container_name: openmanus
     restart: unless-stopped
-    runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
-      # Persistent storage for models
       - model-data:/models
       # Optional: Mount your application code for development
       # - ./:/app/OpenManus
     ports:
-      # Default port for OpenManus (adjust as needed)
       - "8000:8000"
     deploy:
       resources:
@@ -28,5 +26,3 @@ services:
 
 volumes:
   model-data:
-    # Named volume for persistent model storage
-    # Models will be downloaded once and cached for future container runs

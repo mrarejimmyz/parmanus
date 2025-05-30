@@ -4,10 +4,6 @@ FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHON_VERSION=3.11
 
-# Fix repository connectivity issues by using different mirrors and retries
-RUN sed -i 's|http://archive.ubuntu.com|http://mirror.kakao.com|g' /etc/apt/sources.list && \
-    sed -i 's|http://security.ubuntu.com|http://mirror.kakao.com|g' /etc/apt/sources.list
-
 # Install system packages in stages to isolate failures
 RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
     software-properties-common \
@@ -81,33 +77,27 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
 # Activate virtual environment for all subsequent commands
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install PyTorch with CUDA 12.1 (compatible with Python 3.11)
-RUN pip install --no-cache-dir torch==2.3.1 torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
-
 # Set working directory
 WORKDIR /app/OpenManus
 
-# Set environment variables for CUDA support in llama-cpp-python
-# Updated to use GGML_CUDA instead of deprecated LLAMA_CUBLAS
-ENV CMAKE_ARGS="-DGGML_CUDA=on"
-ENV FORCE_CMAKE=1
-
-# Add CUDA library paths to environment variables to fix linking issues
+# Set CUDA environment variables properly
 ENV CUDA_HOME="/usr/local/cuda"
-ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+ENV CUDACXX="/usr/local/cuda/bin/nvcc"
 ENV PATH="${CUDA_HOME}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
 
-# Create symlink for libcuda.so using the stub library
-RUN ln -sf ${CUDA_HOME}/lib64/stubs/libcuda.so ${CUDA_HOME}/lib64/stubs/libcuda.so.1 && \
-    echo "${CUDA_HOME}/lib64/stubs" > /etc/ld.so.conf.d/cuda-stubs.conf && \
-    ldconfig
+# Install PyTorch with CUDA 12.2 support (matching your CUDA version)
+RUN pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
 
-# Set LD_LIBRARY_PATH to include the stubs directory
-ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64/stubs:${LD_LIBRARY_PATH}"
+# Option 1: Use pre-built wheel (RECOMMENDED - fastest and most reliable)
+RUN pip install --no-cache-dir llama-cpp-python \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
 
-# Install llama-cpp-python separately with specific build flags and explicit CUDA library path
-RUN LIBRARY_PATH=${CUDA_HOME}/lib64/stubs:${LIBRARY_PATH} \
-    pip install --no-cache-dir llama-cpp-python>=0.2.56 --verbose
+# Option 2: Build from source (ALTERNATIVE - uncomment if pre-built wheel doesn't work)
+# RUN CUDACXX=/usr/local/cuda/bin/nvcc \
+#     CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89;90" \
+#     FORCE_CMAKE=1 \
+#     pip install --no-cache-dir llama-cpp-python>=0.2.56 --verbose --force-reinstall
 
 # Copy requirements and install remaining Python dependencies
 COPY requirements.txt .
