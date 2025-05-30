@@ -90,14 +90,14 @@ ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
 RUN pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
 
 # Option 1: Use pre-built wheel (RECOMMENDED - fastest and most reliable)
-RUN pip install --no-cache-dir llama-cpp-python \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
+# RUN pip install --no-cache-dir llama-cpp-python \
+#    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
 
 # Option 2: Build from source (ALTERNATIVE - uncomment if pre-built wheel doesn't work)
-# RUN CUDACXX=/usr/local/cuda/bin/nvcc \
-#     CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89;90" \
-#     FORCE_CMAKE=1 \
-#     pip install --no-cache-dir llama-cpp-python>=0.2.56 --verbose --force-reinstall
+RUN CUDACXX=/usr/local/cuda/bin/nvcc \
+    CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=75;80;86;89;90" \
+    FORCE_CMAKE=1 \
+    pip install --no-cache-dir llama-cpp-python>=0.2.56 --verbose --force-reinstall
 
 # Copy requirements and install remaining Python dependencies
 COPY requirements.txt .
