@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.2.2-base-ubuntu22.04
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
 
 # Environment setup
 ENV DEBIAN_FRONTEND=noninteractive
@@ -88,7 +88,8 @@ RUN pip install --no-cache-dir torch==2.3.1 torchvision==0.18.1 --index-url http
 WORKDIR /app/OpenManus
 
 # Set environment variables for CUDA support in llama-cpp-python
-ENV CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+# Updated to use GGML_CUDA instead of deprecated LLAMA_CUBLAS
+ENV CMAKE_ARGS="-DGGML_CUDA=on"
 ENV FORCE_CMAKE=1
 
 # Copy requirements and install Python dependencies
