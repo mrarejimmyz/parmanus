@@ -1,18 +1,27 @@
 # 👋 ParManus
 
-Manus is incredible, but ParManus can achieve any idea without an *Invite Code* 🛫!
+[![GitHub stars](https://img.shields.io/github/stars/mrarejimmyz/parmanus?style=social)](https://github.com/mrarejimmyz/parmanus/stargazers)
+[![Demo](https://img.shields.io/badge/Demo-Hugging%20Face-yellow)](https://huggingface.co/spaces/lyh-917/ParManusDemo)
 
-Our team members [@Xinbin Liang](https://github.com/mannaandpoem) and [@Jinyu Xiang](https://github.com/XiangJinyu) (core authors), along with [@Zhaoyang Yu](https://github.com/MoshiQAQ), [@Jiayi Zhang](https://github.com/didiforgithub), and [@Sirui Hong](https://github.com/stellaHSR), we are from [@MetaGPT](https://github.com/geekan/MetaGPT). The prototype is launched within 3 hours and we are keeping building!
+> **ParManus: Optimized Local LLM Agent Framework**
+>
+> ParManus is an optimized fork of the original OpenManus project, featuring significant performance improvements and enhanced tool-calling capabilities.
 
-It's a simple implementation, so we welcome any suggestions, contributions, and feedback!
+Manus is amazing, but ParManus can realize any idea *without invitation code*! 🛫
 
-Enjoy your own agent with ParManus!
+Enjoy your agent journey with ParManus!
 
-We're also excited to introduce [ParManus-RL](https://github.com/ParManus/ParManus-RL), an open-source project dedicated to reinforcement learning (RL)- based (such as GRPO) tuning methods for LLM agents, developed collaboratively by researchers from UIUC and ParManus.
+## ✨ Optimized Features
 
-## Project Demo
+ParManus includes several key optimizations over the original framework:
 
-<video src="https://private-user-images.githubusercontent.com/61239030/420168772-6dcfd0d2-9142-45d9-b74e-d10aa75073c6.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDEzMTgwNTksIm5iZiI6MTc0MTMxNzc1OSwicGF0aCI6Ii82MTIzOTAzMC80MjAxNjg3NzItNmRjZmQwZDItOTE0Mi00NWQ5LWI3NGUtZDEwYWE3NTA3M2M2Lm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMDclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzA3VDAzMjIzOVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTdiZjFkNjlmYWNjMmEzOTliM2Y3M2VlYjgyNDRlZDJmOWE3NWZhZjE1MzhiZWY4YmQ3NjdkNTYwYTU5ZDA2MzYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.UuHQCgWYkh0OQq9qsUWqGsUbhG3i9jcZDAMeHjLt5T4" data-canonical-src="https://private-user-images.githubusercontent.com/61239030/420168772-6dcfd0d2-9142-45d9-b74e-d10aa75073c6.mp4?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDEzMTgwNTksIm5iZiI6MTc0MTMxNzc1OSwicGF0aCI6Ii82MTIzOTAzMC80MjAxNjg3NzItNmRjZmQwZDItOTE0Mi00NWQ5LWI3NGUtZDEwYWE3NTA3M2M2Lm1wND9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTAzMDclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUwMzA3VDAzMjIzOVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTdiZjFkNjlmYWNjMmEzOTliM2Y3M2VlYjgyNDRlZDJmOWE3NWZhZjE1MzhiZWY4YmQ3NjdkNTYwYTU5ZDA2MzYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.UuHQCgWYkh0OQq9qsUWqGsUbhG3i9jcZDAMeHjLt5T4" controls="controls" muted="muted" class="d-block rounded-bottom-2 border-top width-fit" style="max-height:640px; min-height: 200px"></video>
+- **Persistent Model Caching**: Eliminates 9-10 second loading time on subsequent runs
+- **Enhanced Tool-Calling**: Fixed critical issues with tool execution
+- **Improved Timeout Handling**: Returns partial results when possible
+- **Resource Management**: Proper cleanup procedures and memory optimization
+- **Interrupt Handling**: Graceful shutdown with proper resource cleanup
+
+<video src="https://private-user-images.githubusercontent.com/61239030/420168772-6dcfd0d2-9142-45d9-b74e-d10aa75073c6.mp4" controls="controls" muted="muted" class="d-block rounded-bottom-2 border-top width-fit" style="max-height:640px; min-height: 200px"></video>
 
 ## Installation
 
@@ -21,21 +30,18 @@ We provide two installation methods. Method 2 (using uv) is recommended for fast
 ### Method 1: Using conda
 
 1. Create a new conda environment:
-
 ```bash
-conda create -n open_manus python=3.12
-conda activate open_manus
+conda create -n parmanus python=3.12
+conda activate parmanus
 ```
 
 2. Clone the repository:
-
 ```bash
-git clone https://github.com/mannaandpoem/ParManus.git
-cd ParManus
+git clone https://github.com/mrarejimmyz/parmanus.git
+cd parmanus
 ```
 
 3. Install dependencies:
-
 ```bash
 pip install -r requirements.txt
 ```
@@ -43,20 +49,17 @@ pip install -r requirements.txt
 ### Method 2: Using uv (Recommended)
 
 1. Install uv (A fast Python package installer and resolver):
-
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 2. Clone the repository:
-
 ```bash
-git clone https://github.com/mannaandpoem/ParManus.git
-cd ParManus
+git clone https://github.com/mrarejimmyz/parmanus.git
+cd parmanus
 ```
 
 3. Create a new virtual environment and activate it:
-
 ```bash
 uv venv --python 3.12
 source .venv/bin/activate  # On Unix/macOS
@@ -65,7 +68,6 @@ source .venv/bin/activate  # On Unix/macOS
 ```
 
 4. Install dependencies:
-
 ```bash
 uv pip install -r requirements.txt
 ```
@@ -80,13 +82,11 @@ playwright install
 ParManus requires configuration for the LLM APIs it uses. Follow these steps to set up your configuration:
 
 1. Create a `config.toml` file in the `config` directory (you can copy from the example):
-
 ```bash
 cp config/config.example.toml config/config.toml
 ```
 
 2. Edit `config/config.toml` to add your API keys and customize settings:
-
 ```toml
 # Global LLM configuration
 [llm]
@@ -106,7 +106,6 @@ api_key = "sk-..."  # Replace with your actual API key
 ## Quick Start
 
 One line for run ParManus:
-
 ```bash
 python main.py
 ```
@@ -119,7 +118,6 @@ python run_mcp.py
 ```
 
 For unstable multi-agent version, you also can run:
-
 ```bash
 python run_flow.py
 ```
@@ -128,45 +126,49 @@ python run_flow.py
 
 We welcome any friendly suggestions and helpful contributions! Just create issues or submit pull requests.
 
-Or contact @mannaandpoem via 📧email: mannaandpoem@gmail.com
+Or contact @mrarejimmyz via GitHub issues.
 
 **Note**: Before submitting a pull request, please use the pre-commit tool to check your changes. Run `pre-commit run --all-files` to execute the checks.
 
 ## Community Group
+
 Join our networking group on Feishu and share your experience with other developers!
 
 <div align="center" style="display: flex; gap: 20px;">
-    <img src="assets/community_group.jpg" alt="ParManus 交流群" width="300" />
+    <img src="assets/community_group.jpg" alt="ParManus Community Group" width="300" />
 </div>
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=mannaandpoem/ParManus&type=Date)](https://star-history.com/#mannaandpoem/ParManus&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=mrarejimmyz/parmanus&type=Date)](https://star-history.com/#mrarejimmyz/parmanus&Date)
 
 ## Sponsors
-Thanks to [PPIO](https://ppinfra.com/user/register?invited_by=OCPKCN&utm_source=github_openmanus&utm_medium=github_readme&utm_campaign=link) for computing source support.
-> PPIO: The most affordable and easily-integrated MaaS and GPU cloud solution.
 
+Thanks to [PPIO](https://ppinfra.com/user/register?invited_by=OCPKCN&utm_source=github_parmanus&utm_medium=github_readme&utm_campaign=link) for computing source support.
+
+> PPIO: The most affordable and easily-integrated MaaS and GPU cloud solution.
 
 ## Acknowledgement
 
-Thanks to [anthropic-computer-use](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)
+ParManus is maintained by [@mrarejimmyz](https://github.com/mrarejimmyz) with significant performance optimizations and tool-calling enhancements.
+
+Thanks to all previous contributors from the original OpenManus project, including contributors from MetaGPT.
+
+Additional thanks to [anthropic-computer-use](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)
 and [browser-use](https://github.com/browser-use/browser-use) for providing basic support for this project!
 
-Additionally, we are grateful to [AAAJ](https://github.com/metauto-ai/agent-as-a-judge), [MetaGPT](https://github.com/geekan/MetaGPT), [OpenHands](https://github.com/All-Hands-AI/OpenHands) and [SWE-agent](https://github.com/SWE-agent/SWE-agent).
+We are also grateful to [AAAJ](https://github.com/metauto-ai/agent-as-a-judge), [MetaGPT](https://github.com/geekan/MetaGPT), [OpenHands](https://github.com/All-Hands-AI/OpenHands) and [SWE-agent](https://github.com/SWE-agent/SWE-agent).
 
 We also thank stepfun(阶跃星辰) for supporting our Hugging Face demo space.
 
-ParManus is built by contributors from MetaGPT. Huge thanks to this agent community!
-
 ## Cite
+
 ```bibtex
-@misc{openmanus2025,
-  author = {Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong and Sheng Fan and Xiao Tang},
-  title = {ParManus: An open-source framework for building general AI agents},
+@misc{parmanus2025,
+  author = {Jimmy Zhang and Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong and Sheng Fan and Xiao Tang},
+  title = {ParManus: An optimized framework for building general AI agents},
   year = {2025},
-  publisher = {Zenodo},
-  doi = {10.5281/zenodo.15186407},
-  url = {https://doi.org/10.5281/zenodo.15186407},
+  publisher = {GitHub},
+  url = {https://github.com/mrarejimmyz/parmanus},
 }
 ```
