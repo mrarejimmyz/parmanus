@@ -9,6 +9,11 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Add explicit CUDA environment variables
+      - CUDA_HOME=/usr/local/cuda
+      - CUDACXX=/usr/local/cuda/bin/nvcc
+      # Set n_gpu_layers to -1 to use all available GPU layers
+      - PARMANUS_GPU_LAYERS=-1
     volumes:
       - model-data:/models
       # Optional: Mount your application code for development
