@@ -99,9 +99,11 @@ RUN curl -L --retry 3 --retry-delay 5 \
     -o /models/llama-jb.gguf && \
     python -c "import struct; f=open('/models/llama-jb.gguf','rb'); magic=f.read(4); f.close(); assert magic==b'GGUF', f'Invalid magic in llama-jb.gguf: {magic}'; print('Verified llama-jb.gguf is a valid GGUF file')"
 
-# Create a dummy vision model file that will be replaced at runtime
-# This allows the Docker build to complete without requiring the vision model
-RUN echo "# This is a placeholder file. The actual model will be downloaded at runtime." > /models/qwen-vl-7b-awq.gguf
+# Download LLaVA vision model (open source alternative to Qwen-VL)
+RUN curl -L --retry 3 --retry-delay 5 \
+    "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/ggml-model-q4_k.gguf" \
+    -o /models/llava-vision.gguf && \
+    python -c "import struct; f=open('/models/llava-vision.gguf','rb'); magic=f.read(4); f.close(); assert magic==b'GGUF', f'Invalid magic in llava-vision.gguf: {magic}'; print('Verified llava-vision.gguf is a valid GGUF file')"
 
 # Create default config for local models
 RUN mkdir -p /app/ParManus/config && \
@@ -113,26 +115,26 @@ RUN mkdir -p /app/ParManus/config && \
     temperature = 0.0\n\
     \n\
     [llm.vision]\n\
-    model = "qwen-vl-7b"\n\
-    model_path = "/models/qwen-vl-7b-awq.gguf"\n\
+    model = "llava-v1.5-7b"\n\
+    model_path = "/models/llava-vision.gguf"\n\
     max_tokens = 2048\n\
     temperature = 0.0' > /app/ParManus/config/config.toml
 
 # Copy rest of the code
 COPY . .
 
-# Create model download script
+# Create fallback model download script in case the build-time download fails
 RUN echo '#!/bin/bash\n\
-echo "Downloading Qwen-VL model..."\n\
+echo "Downloading LLaVA vision model..."\n\
 curl -L --retry 5 --retry-delay 10 \
-  "https://huggingface.co/TheBloke/Qwen-VL-Chat-GGUF/resolve/main/qwen-vl-chat.Q5_K_M.gguf" \
-  -o /models/qwen-vl-7b-awq.gguf.tmp\n\
+  "https://huggingface.co/mys/ggml_llava-v1.5-7b/resolve/main/ggml-model-q4_k.gguf" \
+  -o /models/llava-vision.gguf.tmp\n\
 \n\
 # Verify the downloaded file\n\
-python -c "import struct; f=open(\"/models/qwen-vl-7b-awq.gguf.tmp\",\"rb\"); magic=f.read(4); f.close(); assert magic==b\"GGUF\", f\"Invalid magic: {magic}\"; print(\"Verified model is a valid GGUF file\")"\n\
+python -c "import struct; f=open(\"/models/llava-vision.gguf.tmp\",\"rb\"); magic=f.read(4); f.close(); assert magic==b\"GGUF\", f\"Invalid magic: {magic}\"; print(\"Verified model is a valid GGUF file\")"\n\
 \n\
 if [ $? -eq 0 ]; then\n\
-  mv /models/qwen-vl-7b-awq.gguf.tmp /models/qwen-vl-7b-awq.gguf\n\
+  mv /models/llava-vision.gguf.tmp /models/llava-vision.gguf\n\
   echo "Model downloaded and verified successfully."\n\
 else\n\
   echo "Failed to download a valid model. Please download manually."\n\
@@ -140,19 +142,19 @@ else\n\
 fi' > /app/ParManus/download_vision_model.sh && \
     chmod +x /app/ParManus/download_vision_model.sh
 
-# Create startup script for Xvfb (virtual display) with lock file cleanup and model download
+# Create startup script for Xvfb (virtual display) with lock file cleanup and model verification
 RUN echo '#!/bin/bash\n\
 # Clean up any existing X lock files\n\
 rm -f /tmp/.X*-lock\n\
 rm -f /tmp/.X11-unix/X*\n\
 \n\
-# Download vision model if needed\n\
-if [ ! -s /models/qwen-vl-7b-awq.gguf ] || [ "$(head -c 4 /models/qwen-vl-7b-awq.gguf)" != "GGUF" ]; then\n\
+# Verify vision model if needed\n\
+if [ ! -s /models/llava-vision.gguf ] || [ "$(head -c 4 /models/llava-vision.gguf)" != "GGUF" ]; then\n\
   echo "Vision model not found or invalid. Downloading..."\n\
   /app/ParManus/download_vision_model.sh\n\
   if [ $? -ne 0 ]; then\n\
     echo "WARNING: Vision model download failed. Vision features will not work."\n\
-    echo "Please download the model manually and mount it to /models/qwen-vl-7b-awq.gguf"\n\
+    echo "Please download the model manually and mount it to /models/llava-vision.gguf"\n\
   fi\n\
 fi\n\
 \n\
