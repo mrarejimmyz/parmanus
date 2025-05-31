@@ -165,7 +165,7 @@ We also thank stepfun(阶跃星辰) for supporting our Hugging Face demo space.
 
 ```bibtex
 @misc{parmanus2025,
-  author = {Jimmy Zhang and Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong and Sheng Fan and Xiao Tang},
+  author = {MrareJimmy, Jimmy Zhang and Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong and Sheng Fan and Xiao Tang},
   title = {ParManus: An optimized framework for building general AI agents},
   year = {2025},
   publisher = {GitHub},
