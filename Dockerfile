@@ -92,16 +92,16 @@ RUN pip install --no-cache-dir "browser-use[memory]" && \
     playwright install chromium --with-deps
 # Create models directory
 RUN mkdir -p /models
-# Download models with better error handling and verification
+
+# Download Llama model with verification
 RUN curl -L --retry 3 --retry-delay 5 \
     "https://huggingface.co/grimjim/Llama-3.1-8B-Instruct-abliterated_via_adapter-GGUF/resolve/main/Llama-3.1-8B-Instruct-abliterated_via_adapter.Q5_K_M.gguf" \
     -o /models/llama-jb.gguf && \
-    curl -L --retry 3 --retry-delay 5 \
-    "https://huggingface.co/TheBloke/Qwen-VL-Chat-GGUF/resolve/main/qwen-vl-chat.Q5_K_M.gguf" \
-    -o /models/qwen-vl-7b-awq.gguf
+    python -c "import struct; f=open('/models/llama-jb.gguf','rb'); magic=f.read(4); f.close(); assert magic==b'GGUF', f'Invalid magic in llama-jb.gguf: {magic}'; print('Verified llama-jb.gguf is a valid GGUF file')"
 
-# Verify the downloaded files are valid GGUF files (fixed one-liner)
-RUN python -c "import struct; f1=open('/models/llama-jb.gguf','rb'); magic1=f1.read(4); f1.close(); f2=open('/models/qwen-vl-7b-awq.gguf','rb'); magic2=f2.read(4); f2.close(); assert magic1==b'GGUF', f'Invalid magic in llama-jb.gguf: {magic1}'; assert magic2==b'GGUF', f'Invalid magic in qwen-vl-7b-awq.gguf: {magic2}'; print('Verified both model files are valid GGUF files')"
+# Create a dummy vision model file that will be replaced at runtime
+# This allows the Docker build to complete without requiring the vision model
+RUN echo "# This is a placeholder file. The actual model will be downloaded at runtime." > /models/qwen-vl-7b-awq.gguf
 
 # Create default config for local models
 RUN mkdir -p /app/ParManus/config && \
@@ -117,20 +117,54 @@ RUN mkdir -p /app/ParManus/config && \
     model_path = "/models/qwen-vl-7b-awq.gguf"\n\
     max_tokens = 2048\n\
     temperature = 0.0' > /app/ParManus/config/config.toml
+
 # Copy rest of the code
 COPY . .
+
+# Create model download script
+RUN echo '#!/bin/bash\n\
+echo "Downloading Qwen-VL model..."\n\
+curl -L --retry 5 --retry-delay 10 \
+  "https://huggingface.co/TheBloke/Qwen-VL-Chat-GGUF/resolve/main/qwen-vl-chat.Q5_K_M.gguf" \
+  -o /models/qwen-vl-7b-awq.gguf.tmp\n\
+\n\
+# Verify the downloaded file\n\
+python -c "import struct; f=open(\"/models/qwen-vl-7b-awq.gguf.tmp\",\"rb\"); magic=f.read(4); f.close(); assert magic==b\"GGUF\", f\"Invalid magic: {magic}\"; print(\"Verified model is a valid GGUF file\")"\n\
+\n\
+if [ $? -eq 0 ]; then\n\
+  mv /models/qwen-vl-7b-awq.gguf.tmp /models/qwen-vl-7b-awq.gguf\n\
+  echo "Model downloaded and verified successfully."\n\
+else\n\
+  echo "Failed to download a valid model. Please download manually."\n\
+  exit 1\n\
+fi' > /app/ParManus/download_vision_model.sh && \
+    chmod +x /app/ParManus/download_vision_model.sh
+
+# Create startup script for Xvfb (virtual display) with lock file cleanup and model download
+RUN echo '#!/bin/bash\n\
+# Clean up any existing X lock files\n\
+rm -f /tmp/.X*-lock\n\
+rm -f /tmp/.X11-unix/X*\n\
+\n\
+# Download vision model if needed\n\
+if [ ! -s /models/qwen-vl-7b-awq.gguf ] || [ "$(head -c 4 /models/qwen-vl-7b-awq.gguf)" != "GGUF" ]; then\n\
+  echo "Vision model not found or invalid. Downloading..."\n\
+  /app/ParManus/download_vision_model.sh\n\
+  if [ $? -ne 0 ]; then\n\
+    echo "WARNING: Vision model download failed. Vision features will not work."\n\
+    echo "Please download the model manually and mount it to /models/qwen-vl-7b-awq.gguf"\n\
+  fi\n\
+fi\n\
+\n\
+# Start Xvfb\n\
+Xvfb :99 -screen 0 1920x1080x24 &\n\
+exec "$@"' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
 # Set environment variables for headless browser operation
 ENV DISPLAY=:99
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-# Create startup script for Xvfb (virtual display) with lock file cleanup
-RUN echo '#!/bin/bash\n\
-    # Clean up any existing X lock files\n\
-    rm -f /tmp/.X*-lock\n\
-    rm -f /tmp/.X11-unix/X*\n\
-    # Start Xvfb\n\
-    Xvfb :99 -screen 0 1920x1080x24 &\n\
-    exec "$@"' > /entrypoint.sh && \
-    chmod +x /entrypoint.sh
+
 # Set default command to use main.py (which now imports the patch module)
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "main.py"]
