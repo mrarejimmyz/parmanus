@@ -1,11 +1,10 @@
 version: '3.8'
-
 services:
-  openmanus:
+  parmanus:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: openmanus
+    container_name: parmanus
     restart: unless-stopped
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
@@ -13,7 +12,7 @@ services:
     volumes:
       - model-data:/models
       # Optional: Mount your application code for development
-      # - ./:/app/OpenManus
+      # - ./:/app/ParManus
     ports:
       - "8000:8000"
     deploy:
@@ -23,6 +22,5 @@ services:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
-
 volumes:
   model-data:
