@@ -96,17 +96,12 @@ RUN mkdir -p /models
 RUN curl -L --retry 3 --retry-delay 5 \
     "https://huggingface.co/grimjim/Llama-3.1-8B-Instruct-abliterated_via_adapter-GGUF/resolve/main/Llama-3.1-8B-Instruct-abliterated_via_adapter.Q5_K_M.gguf" \
     -o /models/llama-jb.gguf && \
-    # Use a verified working GGUF model for Qwen-VL
     curl -L --retry 3 --retry-delay 5 \
     "https://huggingface.co/TheBloke/Qwen-VL-Chat-GGUF/resolve/main/qwen-vl-chat.Q5_K_M.gguf" \
-    -o /models/qwen-vl-7b-awq.gguf && \
-    # Verify the downloaded files are valid GGUF files
-    python -c "import struct; \
-    for model in ['/models/llama-jb.gguf', '/models/qwen-vl-7b-awq.gguf']: \
-        with open(model, 'rb') as f: \
-            magic = f.read(4); \
-            assert magic == b'GGUF', f'Invalid magic in {model}: {magic}'; \
-            print(f'Verified {model} is a valid GGUF file')"
+    -o /models/qwen-vl-7b-awq.gguf
+
+# Verify the downloaded files are valid GGUF files (fixed one-liner)
+RUN python -c "import struct; f1=open('/models/llama-jb.gguf','rb'); magic1=f1.read(4); f1.close(); f2=open('/models/qwen-vl-7b-awq.gguf','rb'); magic2=f2.read(4); f2.close(); assert magic1==b'GGUF', f'Invalid magic in llama-jb.gguf: {magic1}'; assert magic2==b'GGUF', f'Invalid magic in qwen-vl-7b-awq.gguf: {magic2}'; print('Verified both model files are valid GGUF files')"
 
 # Create default config for local models
 RUN mkdir -p /app/ParManus/config && \
