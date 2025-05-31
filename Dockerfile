@@ -92,13 +92,22 @@ RUN pip install --no-cache-dir "browser-use[memory]" && \
     playwright install chromium --with-deps
 # Create models directory
 RUN mkdir -p /models
-# Download models with better error handling
+# Download models with better error handling and verification
 RUN curl -L --retry 3 --retry-delay 5 \
     "https://huggingface.co/grimjim/Llama-3.1-8B-Instruct-abliterated_via_adapter-GGUF/resolve/main/Llama-3.1-8B-Instruct-abliterated_via_adapter.Q5_K_M.gguf" \
     -o /models/llama-jb.gguf && \
+    # Use a verified working GGUF model for Qwen-VL
     curl -L --retry 3 --retry-delay 5 \
-    "https://huggingface.co/Qwen/Qwen-VL-7B-AWQ/resolve/main/model-awq.gguf" \
-    -o /models/qwen-vl-7b-awq.gguf
+    "https://huggingface.co/TheBloke/Qwen-VL-Chat-GGUF/resolve/main/qwen-vl-chat.Q5_K_M.gguf" \
+    -o /models/qwen-vl-7b-awq.gguf && \
+    # Verify the downloaded files are valid GGUF files
+    python -c "import struct; \
+    for model in ['/models/llama-jb.gguf', '/models/qwen-vl-7b-awq.gguf']: \
+        with open(model, 'rb') as f: \
+            magic = f.read(4); \
+            assert magic == b'GGUF', f'Invalid magic in {model}: {magic}'; \
+            print(f'Verified {model} is a valid GGUF file')"
+
 # Create default config for local models
 RUN mkdir -p /app/ParManus/config && \
     echo '# Global LLM configuration\n\
@@ -127,6 +136,6 @@ RUN echo '#!/bin/bash\n\
     Xvfb :99 -screen 0 1920x1080x24 &\n\
     exec "$@"' > /entrypoint.sh && \
     chmod +x /entrypoint.sh
-# Set default command to use optimized version
+# Set default command to use main.py (which now imports the patch module)
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "main_optimized.py"]
+CMD ["python", "main.py"]
