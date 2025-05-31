@@ -1,62 +1,39 @@
 import asyncio
 import json
-from typing import Any, Dict, List, Optional, Union
+import logging
+import re
+from typing import Dict, List, Any, Optional
 
-from app.config import config
-from app.exceptions import TokenLimitExceeded
-from app.logger import logger
-from app.schema import Message, ToolCall, ToolChoice
+logger = logging.getLogger(__name__)
 
-async def ask_tool(self, 
-                  messages: List[Union[Message, Dict[str, Any]]],
-                  system_msgs: Optional[List[Union[Message, Dict[str, Any]]]] = None,
-                  tools: Optional[List[Dict[str, Any]]] = None,
-                  tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-                  temperature: Optional[float] = None,
-                  timeout: int = 120,
-                  **kwargs) -> Dict[str, Any]:
+class TokenLimitExceeded(Exception):
+    """Exception raised when token limit is exceeded."""
+    pass
+
+async def ask_tool(
+    self,
+    prompt: str,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_choice: str = "auto",
+    temp: float = 0.0,
+    timeout: int = 60,
+    **kwargs
+) -> Dict[str, Any]:
     """
-    Send a request to the model with tool definitions and get a response with tool calls.
+    Ask the model to use tools based on the prompt.
     
     Args:
-        messages: List of messages to send to the model
-        system_msgs: Optional system messages to prepend
+        prompt: The prompt to send to the model
         tools: List of tool definitions
-        tool_choice: Tool choice configuration (auto, required, or specific tool)
-        temperature: Temperature for sampling (0.0 to 1.0)
-        timeout: Timeout in seconds for the request
+        tool_choice: Whether tool use is "auto", "required", or "none"
+        temp: Temperature for sampling
+        timeout: Timeout in seconds
         **kwargs: Additional arguments to pass to the model
         
     Returns:
-        The model's response with tool calls
-        
-    Raises:
-        TokenLimitExceeded: If the input exceeds the model's token limit
-        Exception: For other unexpected errors
+        Dictionary containing the model's response and any tool calls
     """
     try:
-        # Format messages
-        if system_msgs:
-            system_msgs = self.format_messages(system_msgs)
-            messages = system_msgs + self.format_messages(messages)
-        else:
-            messages = self.format_messages(messages)
-        
-        # Calculate input token count
-        input_tokens = self.count_message_tokens(messages)
-        
-        # Check if token limits are exceeded
-        if not self.check_token_limit(input_tokens):
-            error_message = self.get_limit_error_message(input_tokens)
-            # Raise a special exception that won't be retried
-            raise TokenLimitExceeded(error_message)
-        
-        # Format prompt for tool calling
-        prompt = self._format_prompt_for_llama(messages)
-        
-        # Set temperature
-        temp = temperature if temperature is not None else self.temperature
-        
         # Apply safe max tokens limit
         safe_max_tokens = min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
         
@@ -67,9 +44,19 @@ async def ask_tool(self,
             if tools:
                 tool_definitions = "Available tools:\n"
                 for tool in tools:
-                    tool_definitions += f"- {tool['name']}: {tool['description']}\n"
+                    # Safely access tool properties with fallbacks
+                    tool_name = tool.get('name', 'unnamed_tool')
+                    tool_description = tool.get('description', 'No description available')
+                    tool_definitions += f"- {tool_name}: {tool_description}\n"
+                    
+                    # Safely handle parameters if present
                     if 'parameters' in tool:
-                        tool_definitions += f"  Parameters: {json.dumps(tool['parameters'])}\n"
+                        try:
+                            params_json = json.dumps(tool['parameters'])
+                            tool_definitions += f"  Parameters: {params_json}\n"
+                        except (TypeError, ValueError) as e:
+                            logger.warning(f"Failed to serialize parameters for tool {tool_name}: {e}")
+                            tool_definitions += f"  Parameters: [Error: Could not serialize parameters]\n"
                 tool_definitions += "\n"
             
             # Add tool instructions based on tool_choice
@@ -154,42 +141,46 @@ def _parse_tool_calls(self, text: str) -> List[Dict[str, Any]]:
     """
     tool_calls = []
     
-    # Look for tool call patterns in the text
-    # Pattern 1: Function-style calls
-    function_pattern = r"(?:function|tool):\s*(\w+)\s*\(\s*([\s\S]*?)\s*\)"
-    function_matches = re.findall(function_pattern, text, re.IGNORECASE)
-    
-    for name, args_str in function_matches:
-        try:
-            # Try to parse arguments as JSON
-            args = json.loads(f"{{{args_str}}}")
-            tool_calls.append({
-                "name": name,
-                "arguments": args
-            })
-        except json.JSONDecodeError:
-            # If JSON parsing fails, use raw string
-            tool_calls.append({
-                "name": name,
-                "arguments": args_str
-            })
-    
-    # Pattern 2: JSON-style tool calls
-    json_pattern = r"```json\s*([\s\S]*?)\s*```"
-    json_matches = re.findall(json_pattern, text)
-    
-    for json_str in json_matches:
-        try:
-            data = json.loads(json_str)
-            if isinstance(data, dict) and "name" in data and "arguments" in data:
-                tool_calls.append(data)
-            elif isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict) and "name" in item and "arguments" in item:
-                        tool_calls.append(item)
-        except json.JSONDecodeError:
-            pass
-    
+    try:
+        # Look for tool call patterns in the text
+        # Pattern 1: Function-style calls
+        function_pattern = r"(?:function|tool):\s*(\w+)\s*\(\s*([\s\S]*?)\s*\)"
+        function_matches = re.findall(function_pattern, text, re.IGNORECASE)
+        
+        for name, args_str in function_matches:
+            try:
+                # Try to parse arguments as JSON
+                args = json.loads(f"{{{args_str}}}")
+                tool_calls.append({
+                    "name": name,
+                    "arguments": args
+                })
+            except json.JSONDecodeError:
+                # If JSON parsing fails, use raw string
+                tool_calls.append({
+                    "name": name,
+                    "arguments": args_str
+                })
+        
+        # Pattern 2: JSON-style tool calls
+        json_pattern = r"```json\s*([\s\S]*?)\s*```"
+        json_matches = re.findall(json_pattern, text)
+        
+        for json_str in json_matches:
+            try:
+                data = json.loads(json_str)
+                if isinstance(data, dict) and "name" in data and "arguments" in data:
+                    tool_calls.append(data)
+                elif isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and "name" in item and "arguments" in item:
+                            tool_calls.append(item)
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        logger.error(f"Error parsing tool calls: {e}")
+        # Return empty list on parsing error
+        
     return tool_calls
 
 # Monkey patch the LLM class to add the ask_tool method
