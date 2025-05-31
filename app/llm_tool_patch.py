@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import types
 from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -10,7 +11,7 @@ class TokenLimitExceeded(Exception):
     """Exception raised when token limit is exceeded."""
     pass
 
-async def ask_tool(
+def ask_tool(
     self,
     prompt: str,
     tools: Optional[List[Dict[str, Any]]] = None,
@@ -183,10 +184,31 @@ def _parse_tool_calls(self, text: str) -> List[Dict[str, Any]]:
         
     return tool_calls
 
-# Monkey patch the LLM class to add the ask_tool method
-from app.llm import LLM
-import re
+def patch_llm_class():
+    """
+    Properly patch the LLM class with bound methods.
+    This ensures methods are bound to instances and receive 'self' automatically.
+    """
+    from app.llm import LLM
+    
+    # Use types.MethodType to properly bind methods to the class
+    # This ensures 'self' is passed correctly when methods are called
+    
+    # First, check if methods are already patched to avoid duplicate patching
+    if not hasattr(LLM, 'ask_tool') or not isinstance(LLM.ask_tool, types.FunctionType):
+        LLM.ask_tool = ask_tool
+        logger.info("Added ask_tool method to LLM class")
+    
+    if not hasattr(LLM, '_parse_tool_calls') or not isinstance(LLM._parse_tool_calls, types.FunctionType):
+        LLM._parse_tool_calls = _parse_tool_calls
+        logger.info("Added _parse_tool_calls method to LLM class")
+    
+    # Verify the patch was applied correctly
+    logger.info(f"LLM class now has ask_tool: {hasattr(LLM, 'ask_tool')}")
+    logger.info(f"LLM class now has _parse_tool_calls: {hasattr(LLM, '_parse_tool_calls')}")
 
-# Add the methods to the LLM class
-LLM.ask_tool = ask_tool
-LLM._parse_tool_calls = _parse_tool_calls
+# Make the patch_llm_class function available for import
+__all__ = ['patch_llm_class', 'ask_tool', '_parse_tool_calls']
+
+# Execute the patch immediately when this module is imported
+patch_llm_class()
