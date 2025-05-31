@@ -11,7 +11,6 @@ from app.prompt.toolcall import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.schema import TOOL_CHOICE_TYPE, AgentState, Message, ToolCall, ToolChoice
 from app.tool import CreateChatCompletion, Terminate, ToolCollection
 
-
 TOOL_CALL_REQUIRED = "Tool calls required but none provided"
 
 
@@ -73,9 +72,19 @@ class ToolCallAgent(ReActAgent):
             raise
 
         self.tool_calls = tool_calls = (
-            response.tool_calls if response and response.tool_calls else []
+            response.get("tool_calls")
+            if response and isinstance(response, dict)
+            else (
+                response.tool_calls
+                if response and hasattr(response, "tool_calls")
+                else []
+            )
         )
-        content = response.content if response and response.content else ""
+        content = (
+            response.get("content")
+            if response and isinstance(response, dict)
+            else response.content if response and hasattr(response, "content") else ""
+        )
 
         # Log response info
         logger.info(f"✨ {self.name}'s thoughts: {content}")
