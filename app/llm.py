@@ -767,6 +767,42 @@ You can also provide regular text responses. If you need to use a tool, include 
                 except json.JSONDecodeError:
                     continue
             
+            # Also look for function call syntax: tool_name(param="value", param2="value2")
+            if not tool_calls:
+                func_call_pattern = r'(\w+)\((.*?)\)'
+                func_matches = re.findall(func_call_pattern, response_text)
+                
+                for func_name, args_str in func_matches:
+                    # Check if this is a known tool
+                    if tools and any(tool.get('function', {}).get('name') == func_name for tool in tools):
+                        try:
+                            # Parse arguments from the function call
+                            arguments = {}
+                            # Simple parsing for key="value" pairs
+                            arg_pattern = r'(\w+)="([^"]*)"'
+                            arg_matches = re.findall(arg_pattern, args_str)
+                            for key, value in arg_matches:
+                                arguments[key] = value
+                            
+                            # Create tool call
+                            tool_call = ToolCall(
+                                id=str(uuid.uuid4()),
+                                type="function",
+                                function=Function(
+                                    name=func_name,
+                                    arguments=json.dumps(arguments)
+                                )
+                            )
+                            tool_calls.append(tool_call)
+                            
+                            # Remove the function call from content
+                            full_call = f"{func_name}({args_str})"
+                            content = content.replace(full_call, '').strip()
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to parse function call {func_name}: {e}")
+                            continue
+            
             return {
                 'content': content,
                 'tool_calls': tool_calls
