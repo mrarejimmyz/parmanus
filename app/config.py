@@ -170,6 +170,9 @@ def load_config(config_path: Optional[str] = None) -> Config:
     if config_path is None:
         config_path = PROJECT_ROOT / "config" / "config.toml"
 
+    # Initialize MCP config outside try block to ensure it's always available
+    mcp_config = MCPConfig(server_reference="app.mcp.server")
+
     try:
         with open(config_path, "rb") as f:
             config_dict = tomllib.load(f)
@@ -187,7 +190,6 @@ def load_config(config_path: Optional[str] = None) -> Config:
             config_dict["llm"] = LLMSettings(**llm_dict)
 
         # Handle MCP configuration
-        mcp_config = MCPConfig(server_reference="app.mcp.server")
         if "mcp" in config_dict:
             if isinstance(config_dict["mcp"], dict):
                 if "server_reference" in config_dict["mcp"]:
