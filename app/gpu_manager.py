@@ -562,8 +562,21 @@ class CUDAGPUManager:
     def start_monitoring(self):
         """Start background memory monitoring."""
         # Check if monitoring is disabled in config
-        if hasattr(self, 'config') and self.config and hasattr(self.config, 'gpu'):
-            if hasattr(self.config.gpu, 'enable_monitoring') and not self.config.gpu.enable_monitoring:
+        if hasattr(self, 'config') and self.config:
+            # Check multiple possible config paths for monitoring disable
+            monitoring_disabled = False
+            
+            # Check gpu.enable_monitoring
+            if hasattr(self.config, 'gpu') and hasattr(self.config.gpu, 'enable_monitoring'):
+                if not self.config.gpu.enable_monitoring:
+                    monitoring_disabled = True
+            
+            # Check monitoring.gpu_monitoring  
+            if hasattr(self.config, 'monitoring') and hasattr(self.config.monitoring, 'gpu_monitoring'):
+                if not self.config.monitoring.gpu_monitoring:
+                    monitoring_disabled = True
+                    
+            if monitoring_disabled:
                 logger.info("GPU memory monitoring disabled by configuration")
                 return
         
