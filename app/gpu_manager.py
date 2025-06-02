@@ -61,7 +61,8 @@ class CUDAGPUManager:
     def __init__(self, 
                  memory_threshold: float = 0.8,
                  cleanup_threshold: float = 0.9,
-                 monitoring_interval: float = 5.0):
+                 monitoring_interval: float = 5.0,
+                 force_cuda: bool = False):
         """
         Initialize GPU manager.
         
@@ -69,13 +70,21 @@ class CUDAGPUManager:
             memory_threshold: Memory usage threshold for warnings (0-1)
             cleanup_threshold: Memory usage threshold for automatic cleanup (0-1)
             monitoring_interval: Monitoring interval in seconds
+            force_cuda: Force CUDA usage even if detection fails
         """
         self.memory_threshold = memory_threshold
         self.cleanup_threshold = cleanup_threshold
         self.monitoring_interval = monitoring_interval
+        self.force_cuda = force_cuda
         
         # CUDA availability check
         self.cuda_available = self._check_cuda_availability()
+        
+        # Override CUDA detection if forced
+        if force_cuda and not self.cuda_available:
+            logger.warning("Force CUDA enabled - overriding CUDA detection failure")
+            self.cuda_available = True
+        
         self.device_count = self._get_device_count()
         self.primary_device = 0
         
@@ -104,19 +113,67 @@ class CUDAGPUManager:
             self.start_monitoring()
     
     def _check_cuda_availability(self) -> bool:
-        """Check if CUDA is available and functional."""
+        """Check if CUDA is available and functional through llama-cpp-python."""
         try:
-            import torch
-            if torch.cuda.is_available():
-                # Test basic CUDA operations
-                torch.cuda.synchronize()
-                return True
+            # First try PyTorch if available (preferred method)
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                    logger.info("CUDA detected via PyTorch")
+                    return True
+            except ImportError:
+                logger.info("PyTorch not available, checking llama-cpp-python CUDA support")
+            except Exception as e:
+                logger.warning(f"PyTorch CUDA check failed: {e}, trying llama-cpp-python")
+            
+            # Fallback: Test CUDA through llama-cpp-python
+            from llama_cpp import Llama
+            
+            # Method 1: Check if n_gpu_layers parameter is available
+            try:
+                import inspect
+                init_signature = inspect.signature(Llama.__init__)
+                if 'n_gpu_layers' not in init_signature.parameters:
+                    logger.warning("llama-cpp-python compiled without CUDA support (no n_gpu_layers parameter)")
+                    return False
+            except Exception:
+                pass
+            
+            # Method 2: Try to detect CUDA through nvidia-smi
+            try:
+                import subprocess
+                result = subprocess.run(['nvidia-smi'], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    logger.info("CUDA detected via nvidia-smi")
+                    return True
+            except Exception:
+                pass
+            
+            # Method 3: Check for CUDA libraries
+            try:
+                import ctypes
+                try:
+                    # Try to load CUDA runtime library
+                    ctypes.CDLL('libcudart.so')
+                    logger.info("CUDA runtime library detected")
+                    return True
+                except OSError:
+                    try:
+                        # Windows CUDA library
+                        ctypes.CDLL('cudart64_110.dll')
+                        logger.info("CUDA runtime library detected (Windows)")
+                        return True
+                    except OSError:
+                        pass
+            except Exception:
+                pass
+            
+            logger.warning("CUDA not detected through any method")
             return False
-        except ImportError:
-            logger.warning("PyTorch not available, CUDA support disabled")
-            return False
+                
         except Exception as e:
-            logger.warning(f"CUDA check failed: {e}")
+            logger.error(f"CUDA availability check failed: {e}")
             return False
     
     def _get_device_count(self) -> int:
@@ -125,8 +182,25 @@ class CUDAGPUManager:
             return 0
         
         try:
+            # Try PyTorch first
             import torch
             return torch.cuda.device_count()
+        except ImportError:
+            # Fallback: Try to detect devices through other means
+            try:
+                import subprocess
+                result = subprocess.run(['nvidia-smi', '-L'], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    # Count GPU lines
+                    gpu_count = len([line for line in result.stdout.split('\n') if line.startswith('GPU')])
+                    logger.info(f"Detected {gpu_count} CUDA devices via nvidia-smi")
+                    return gpu_count
+            except Exception:
+                pass
+            
+            # Default to 1 if CUDA is available but we can't count devices
+            logger.warning("CUDA available but device count unknown, assuming 1 device")
+            return 1
         except Exception:
             return 0
     
