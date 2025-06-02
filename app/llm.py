@@ -481,6 +481,264 @@ class LLMOptimized:
             }
         }
 
+    def update_token_count(self, prompt_tokens: int, completion_tokens: int) -> None:
+        """Update the token counter with the latest usage."""
+        self.token_counter.update(prompt_tokens, completion_tokens)
+
+    def check_token_limit(self, input_tokens: int, has_images: bool = False) -> bool:
+        """Check if the input tokens exceed the model's context window."""
+        # Adjust context size based on whether we're using vision model
+        context_size = (
+            self.VISION_MODEL_CONTEXT_SIZE
+            if has_images
+            else self.TEXT_MODEL_CONTEXT_SIZE
+        )
+        # Reserve space for completion tokens
+        available_tokens = context_size - self.max_tokens
+        return input_tokens <= available_tokens
+
+    def get_limit_error_message(self, input_tokens: int, has_images: bool = False) -> str:
+        """Get error message for token limit exceeded."""
+        context_size = (
+            self.VISION_MODEL_CONTEXT_SIZE
+            if has_images
+            else self.TEXT_MODEL_CONTEXT_SIZE
+        )
+        available_tokens = context_size - self.max_tokens
+        return (
+            f"Input tokens ({input_tokens}) exceed available context "
+            f"({available_tokens} tokens available, {context_size} total context, "
+            f"{self.max_tokens} reserved for completion)"
+        )
+
+    def format_messages(
+        self,
+        messages: List[Union[Message, Dict[str, Any]]],
+        supports_images: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Format messages for the model."""
+        formatted_messages = []
+        for message in messages:
+            if isinstance(message, Message):
+                message_dict = message.model_dump()
+            else:
+                message_dict = message.copy()
+
+            # Ensure role is valid
+            if "role" not in message_dict or message_dict["role"] not in ROLE_VALUES:
+                message_dict["role"] = "user"
+
+            formatted_messages.append(message_dict)
+
+        return formatted_messages
+
+    def _format_prompt_for_llama(self, messages: List[Dict[str, Any]]) -> str:
+        """Format messages into a prompt string for Llama models."""
+        prompt = ""
+        for message in messages:
+            role = message["role"]
+            content = message.get("content", "")
+
+            if role == "system":
+                prompt += f"<|system|>\n{content}\n"
+            elif role == "user":
+                prompt += f"<|user|>\n{content}\n"
+            elif role == "assistant":
+                prompt += f"<|assistant|>\n{content}\n"
+            else:
+                # Default to user for unknown roles
+                prompt += f"<|user|>\n{content}\n"
+
+        # Add the final assistant prefix to prompt the model to respond
+        prompt += "<|assistant|>\n"
+        return prompt
+
+    def _format_vision_prompt(self, messages: List[Dict[str, Any]]) -> str:
+        """Format messages for vision models, handling image content."""
+        prompt = ""
+        for message in messages:
+            role = message["role"]
+            content = message.get("content", "")
+
+            if role == "system":
+                prompt += f"<|system|>\n{content}\n"
+            elif role == "user":
+                if isinstance(content, str):
+                    prompt += f"<|user|>\n{content}\n"
+                elif isinstance(content, list):
+                    prompt += "<|user|>\n"
+                    for item in content:
+                        if isinstance(item, dict):
+                            if item.get("type") == "text":
+                                prompt += f"{item.get('text', '')}\n"
+                            elif item.get("type") == "image_url":
+                                # For now, just indicate an image was here
+                                # Vision handling will need to be model-specific
+                                prompt += "[IMAGE]\n"
+            elif role == "assistant":
+                prompt += f"<|assistant|>\n{content}\n"
+            else:
+                # Default to user for unknown roles
+                prompt += f"<|user|>\n{content}\n"
+
+        # Add the final assistant prefix to prompt the model to respond
+        prompt += "<|assistant|>\n"
+        return prompt
+
+    def count_message_tokens(self, messages: List[Dict[str, Any]]) -> int:
+        """
+        Count the number of tokens in a list of messages.
+        This is an estimate and may not match the exact tokenization of the model.
+        """
+        total_tokens = 0
+        for message in messages:
+            content = message.get("content", "")
+            if isinstance(content, str):
+                total_tokens += self.count_tokens(content)
+            elif isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict):
+                        if item.get("type") == "text":
+                            total_tokens += self.count_tokens(item.get("text", ""))
+                        elif item.get("type") == "image_url":
+                            # Add token estimate for images
+                            total_tokens += TokenCounter.LOW_DETAIL_IMAGE_TOKENS
+        return total_tokens
+
+    async def ask(
+        self,
+        messages: List[Union[Message, Dict[str, Any]]],
+        system_msgs: Optional[List[Union[Message, Dict[str, Any]]]] = None,
+        temperature: Optional[float] = None,
+        stream: bool = False,
+        timeout: int = 120,
+        **kwargs,
+    ) -> Union[str, Generator[str, None, None]]:
+        """
+        Send a request to the model and get a response.
+
+        Args:
+            messages: List of messages to send to the model
+            system_msgs: Optional system messages to prepend
+            temperature: Temperature for sampling (0.0 to 1.0)
+            stream: Whether to stream the response
+            timeout: Timeout in seconds for the request
+            **kwargs: Additional arguments to pass to the model
+
+        Returns:
+            The model's response as a string or a generator of strings if streaming
+
+        Raises:
+            TokenLimitExceeded: If the input exceeds the model's token limit
+            Exception: For other unexpected errors
+        """
+        try:
+            # Check if the model supports images
+            supports_images = self.model in MULTIMODAL_MODELS
+
+            # Format messages
+            if system_msgs:
+                system_msgs = self.format_messages(system_msgs, supports_images)
+                messages = system_msgs + self.format_messages(messages, supports_images)
+            else:
+                messages = self.format_messages(messages, supports_images)
+
+            # Check for images in messages
+            has_images = False
+            for msg in messages:
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "image_url":
+                            has_images = True
+                            break
+
+            # Calculate input token count
+            input_tokens = self.count_message_tokens(messages)
+
+            # Check if token limits are exceeded
+            if not self.check_token_limit(input_tokens, has_images):
+                error_message = self.get_limit_error_message(input_tokens, has_images)
+                # Raise a special exception that won't be retried
+                raise TokenLimitExceeded(error_message)
+
+            # Use vision model if content has images and vision model is available
+            if has_images and supports_images and self.vision_enabled:
+                logger.info("Using vision model for image content")
+                prompt = self._format_vision_prompt(messages)
+                model = self.vision_model
+            else:
+                prompt = self._format_prompt_for_llama(messages)
+                model = self.text_model
+
+            # Set temperature
+            temp = temperature if temperature is not None else self.temperature
+
+            # Apply safe max tokens limit
+            safe_max_tokens = min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
+
+            if stream:
+                # Create streaming response
+                def generate_stream():
+                    try:
+                        for chunk in model.create_completion(
+                            prompt=prompt,
+                            max_tokens=safe_max_tokens,
+                            temperature=temp,
+                            stream=True,
+                            stop=["<|user|>", "<|system|>"],
+                            **kwargs,
+                        ):
+                            yield chunk["choices"][0]["text"]
+                    except Exception as e:
+                        logger.error(f"Error in streaming completion: {e}")
+                        yield f"[Error: {str(e)}]"
+
+                return generate_stream()
+            else:
+                # Create single response
+                try:
+                    # Run model inference in thread pool to avoid blocking the event loop
+                    completion = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(
+                            self._executor,
+                            lambda: model.create_completion(
+                                prompt=prompt,
+                                max_tokens=safe_max_tokens,
+                                temperature=temp,
+                                stop=["<|user|>", "<|system|>"],
+                                **kwargs,
+                            ),
+                        ),
+                        timeout=timeout,
+                    )
+
+                    # Extract completion text
+                    completion_text = completion["choices"][0]["text"]
+
+                    # Estimate token counts
+                    prompt_tokens = self.count_tokens(prompt)
+                    completion_tokens = self.count_tokens(completion_text)
+
+                    # Update token counter
+                    self.update_token_count(prompt_tokens, completion_tokens)
+
+                    return completion_text
+                except asyncio.TimeoutError:
+                    logger.error(f"Model completion timed out after {timeout} seconds")
+                    return (
+                        f"[Response incomplete due to timeout after {timeout} seconds]"
+                    )
+                except Exception as e:
+                    logger.error(f"Error in model completion: {e}")
+                    raise
+        except TokenLimitExceeded:
+            # Re-raise token limit errors without logging
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in ask: {e}")
+            raise
+
 
 # Alias for backward compatibility
 LLM = LLMOptimized
