@@ -1,7 +1,8 @@
 import asyncio
 import base64
 import json
-from typing import Generic, Optional, TypeVar
+import re
+from typing import Dict, Generic, List, Optional, TypeVar
 
 from browser_use import Browser as BrowserUseBrowser
 from browser_use import BrowserConfig
@@ -12,9 +13,9 @@ from pydantic_core.core_schema import ValidationInfo
 
 from app.config import config
 from app.llm import LLM
+from app.logger import logger
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
-
 
 _BROWSER_DESCRIPTION = """\
 A powerful browser automation tool that allows interaction with web pages through various actions.
@@ -34,6 +35,65 @@ Note: When using element indices, refer to the numbered elements shown in the cu
 """
 
 Context = TypeVar("Context")
+
+
+# Track selector usage to prevent hallucination loops
+class SelectorTracker:
+    def __init__(self, max_retries: int = 3):
+        self.selector_counts: Dict[str, int] = {}
+        self.max_retries = max_retries
+        self.recent_selectors: List[str] = []
+        self.max_recent = 10
+
+    def track_selector(self, selector: str) -> bool:
+        """
+        Track a selector usage and determine if it's being used too many times
+        Returns True if the selector should be allowed, False if it's being used too much
+        """
+        # Add to recent selectors list
+        self.recent_selectors.append(selector)
+        if len(self.recent_selectors) > self.max_recent:
+            self.recent_selectors.pop(0)
+
+        # Check for repetitive pattern
+        if len(self.recent_selectors) >= 3:
+            last_three = self.recent_selectors[-3:]
+            if len(set(last_three)) == 1:  # All three are the same
+                return False
+
+        # Track individual selector usage
+        if selector in self.selector_counts:
+            self.selector_counts[selector] += 1
+        else:
+            self.selector_counts[selector] = 1
+
+        return self.selector_counts[selector] <= self.max_retries
+
+    def is_valid_selector(self, selector: str) -> bool:
+        """
+        Validate if a selector is properly formatted
+        """
+        # Basic validation for CSS selectors
+        if not selector or not isinstance(selector, str):
+            return False
+
+        # Check for common hallucinated patterns (random strings of letters/numbers)
+        if re.match(r"^\.?[a-z0-9]{10,}$", selector):
+            return False
+
+        # Check for obviously invalid selectors
+        invalid_patterns = [
+            r"\.rhp\d+[a-z]+",  # Matches patterns like .rhp90mdlnikmevrp
+            r"\.random",
+            r"\.undefined",
+            r"\.null",
+        ]
+
+        for pattern in invalid_patterns:
+            if re.match(pattern, selector):
+                return False
+
+        return True
 
 
 class BrowserUseTool(BaseTool, Generic[Context]):
@@ -100,6 +160,10 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                 "type": "integer",
                 "description": "Seconds to wait for 'wait' action",
             },
+            "selector": {
+                "type": "string",
+                "description": "CSS selector for element targeting (optional, use with caution)",
+            },
         },
         "required": ["action"],
         "dependencies": {
@@ -126,6 +190,11 @@ class BrowserUseTool(BaseTool, Generic[Context]):
     context: Optional[BrowserContext] = Field(default=None, exclude=True)
     dom_service: Optional[DomService] = Field(default=None, exclude=True)
     web_search_tool: WebSearch = Field(default_factory=WebSearch, exclude=True)
+
+    # Add selector tracker to prevent hallucination loops
+    selector_tracker: SelectorTracker = Field(
+        default_factory=SelectorTracker, exclude=True
+    )
 
     # Context for generic functionality
     tool_context: Optional[Context] = Field(default=None, exclude=True)
@@ -199,6 +268,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         goal: Optional[str] = None,
         keys: Optional[str] = None,
         seconds: Optional[int] = None,
+        selector: Optional[str] = None,
         **kwargs,
     ) -> ToolResult:
         """
@@ -215,6 +285,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
             goal: Extraction goal for content extraction
             keys: Keys to send for keyboard actions
             seconds: Seconds to wait
+            selector: CSS selector (optional)
             **kwargs: Additional arguments
 
         Returns:
@@ -222,6 +293,18 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         """
         async with self.lock:
             try:
+                # Validate selector if provided to prevent hallucination loops
+                if selector:
+                    if not self.selector_tracker.is_valid_selector(selector):
+                        return ToolResult(
+                            error=f"Invalid selector format: '{selector}'. Please use valid CSS selectors."
+                        )
+
+                    if not self.selector_tracker.track_selector(selector):
+                        return ToolResult(
+                            error=f"Selector '{selector}' has been used too many times. Please try a different approach."
+                        )
+
                 context = await self._ensure_browser_initialized()
 
                 # Get max content length from config
@@ -378,52 +461,65 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                             error="Goal is required for 'extract_content' action"
                         )
 
+                    # Check if a selector was provided and validate it
+                    if selector:
+                        if not self.selector_tracker.is_valid_selector(selector):
+                            return ToolResult(
+                                error=f"Invalid selector format: '{selector}'. Please use valid CSS selectors."
+                            )
+
+                        if not self.selector_tracker.track_selector(selector):
+                            return ToolResult(
+                                error=f"Selector '{selector}' has been used too many times. Please try a different approach."
+                            )
+
+                    # Get current page state
                     page = await context.get_current_page()
-                    import markdownify
+                    page_content = await page.content()
+                    page_url = page.url
+                    page_title = await page.title()
 
-                    content = markdownify.markdownify(await page.content())
+                    # Prepare messages for LLM
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": "You are a helpful assistant that extracts content from web pages based on specific goals.",
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Extract content from this page based on the goal: {goal}\n\nPage URL: {page_url}\nPage Title: {page_title}\n\nPage Content: {page_content[:max_content_length]}...",
+                        },
+                    ]
 
-                    prompt = f"""\
-Your task is to extract the content of the page. You will be given a page and a goal, and you should extract all relevant information around this goal from the page. If the goal is vague, summarize the page. Respond in json format.
-Extraction goal: {goal}
-
-Page content:
-{content[:max_content_length]}
-"""
-                    messages = [{"role": "system", "content": prompt}]
-
-                    # Define extraction function schema
+                    # Define extraction function
                     extraction_function = {
-                        "type": "function",
-                        "function": {
-                            "name": "extract_content",
-                            "description": "Extract specific information from a webpage based on a goal",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "extracted_content": {
-                                        "type": "object",
-                                        "description": "The content extracted from the page according to the goal",
-                                        "properties": {
-                                            "text": {
-                                                "type": "string",
-                                                "description": "Text content extracted from the page",
-                                            },
-                                            "metadata": {
-                                                "type": "object",
-                                                "description": "Additional metadata about the extracted content",
-                                                "properties": {
-                                                    "source": {
-                                                        "type": "string",
-                                                        "description": "Source of the extracted content",
-                                                    }
+                        "name": "extract_content",
+                        "description": "Extract content from a web page based on a specific goal",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "extracted_content": {
+                                    "type": "object",
+                                    "description": "The content extracted from the page according to the goal",
+                                    "properties": {
+                                        "text": {
+                                            "type": "string",
+                                            "description": "Text content extracted from the page",
+                                        },
+                                        "metadata": {
+                                            "type": "object",
+                                            "description": "Additional metadata about the extracted content",
+                                            "properties": {
+                                                "source": {
+                                                    "type": "string",
+                                                    "description": "Source of the extracted content",
                                                 },
                                             },
                                         },
-                                    }
-                                },
-                                "required": ["extracted_content"],
+                                    },
+                                }
                             },
+                            "required": ["extracted_content"],
                         },
                     }
 
@@ -498,78 +594,38 @@ Page content:
             elif hasattr(ctx, "config") and hasattr(ctx.config, "browser_window_size"):
                 viewport_height = ctx.config.browser_window_size.get("height", 0)
 
-            # Take a screenshot for the state
+            # Get the current page
             page = await ctx.get_current_page()
 
-            await page.bring_to_front()
-            await page.wait_for_load_state()
+            # Get screenshot as base64
+            screenshot = None
+            try:
+                screenshot_bytes = await page.screenshot(type="jpeg", quality=50)
+                screenshot = base64.b64encode(screenshot_bytes).decode("utf-8")
+            except Exception as e:
+                logger.warning(f"Failed to take screenshot: {e}")
 
-            screenshot = await page.screenshot(
-                full_page=True, animations="disabled", type="jpeg", quality=100
-            )
-
-            screenshot = base64.b64encode(screenshot).decode("utf-8")
-
-            # Build the state info with all required fields
-            state_info = {
-                "url": state.url,
-                "title": state.title,
-                "tabs": [tab.model_dump() for tab in state.tabs],
-                "help": "[0], [1], [2], etc., represent clickable indices corresponding to the elements listed. Clicking on these indices will navigate to or interact with the respective content behind them.",
-                "interactive_elements": (
-                    state.element_tree.clickable_elements_to_string()
-                    if state.element_tree
-                    else ""
-                ),
-                "scroll_info": {
-                    "pixels_above": getattr(state, "pixels_above", 0),
-                    "pixels_below": getattr(state, "pixels_below", 0),
-                    "total_height": getattr(state, "pixels_above", 0)
-                    + getattr(state, "pixels_below", 0)
-                    + viewport_height,
-                },
-                "viewport_height": viewport_height,
-            }
-
-            return ToolResult(
-                output=json.dumps(state_info, indent=4, ensure_ascii=False),
+            # Return the state
+            result = ToolResult(
+                output=json.dumps(state),
                 base64_image=screenshot,
             )
+
+            return result
         except Exception as e:
             return ToolResult(error=f"Failed to get browser state: {str(e)}")
 
     async def cleanup(self):
         """Clean up browser resources."""
-        async with self.lock:
-            if self.context is not None:
+        try:
+            if self.context:
                 await self.context.close()
                 self.context = None
-                self.dom_service = None
-            if self.browser is not None:
+
+            if self.browser:
                 await self.browser.close()
                 self.browser = None
 
-    def __del__(self):
-        """Ensure cleanup when object is destroyed."""
-        try:
-            # Check if browser and context attributes exist before accessing them
-            browser_exists = hasattr(self, 'browser') and self.browser is not None
-            context_exists = hasattr(self, 'context') and self.context is not None
-            
-            if browser_exists or context_exists:
-                try:
-                    asyncio.run(self.cleanup())
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    loop.run_until_complete(self.cleanup())
-                    loop.close()
-        except Exception:
-            # Silently ignore cleanup errors in destructor
-            pass
-
-    @classmethod
-    def create_with_context(cls, context: Context) -> "BrowserUseTool[Context]":
-        """Factory method to create a BrowserUseTool with a specific context."""
-        tool = cls()
-        tool.tool_context = context
-        return tool
+            logger.info("Browser resources cleaned up")
+        except Exception as e:
+            logger.error(f"Error during browser cleanup: {e}")
