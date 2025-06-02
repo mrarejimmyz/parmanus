@@ -25,7 +25,7 @@ cleanup_threshold = 0.9         # Automatic cleanup threshold (90% usage)
 auto_cleanup = true             # Enable automatic memory cleanup
 fallback_to_cpu = true          # Fallback to CPU when GPU memory insufficient
 enable_monitoring = true        # Enable background memory monitoring
-monitoring_interval = 5.0       # Monitoring interval in seconds
+monitoring_interval = 30.0      # Monitoring interval in seconds (reduced frequency)
 
 # Model allocation strategy
 text_model_priority = "high"    # Always prioritize text model for GPU

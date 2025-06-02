@@ -167,9 +167,18 @@ class BrowserAgent(ToolCallAgent):
     async def think(self) -> bool:
         """Process current state and decide next actions using tools, with browser state info added."""
         try:
-            # Update next step prompt with current browser state
-            if self.browser_context_helper:
-                self.next_step_prompt = await self.browser_context_helper.format_next_step_prompt()
+            # Use simplified prompt for first few steps to avoid complexity
+            if self.current_step <= 3:
+                from app.prompt.browser import SIMPLE_NEXT_STEP_PROMPT
+                # Get the original user request from memory
+                user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
+                task = user_messages[0].content if user_messages else "Navigate and analyze the website"
+                self.next_step_prompt = SIMPLE_NEXT_STEP_PROMPT.format(task=task)
+                logger.info(f"Using simplified prompt for step {self.current_step}")
+            else:
+                # Update next step prompt with current browser state for later steps
+                if self.browser_context_helper:
+                    self.next_step_prompt = await self.browser_context_helper.format_next_step_prompt()
             
             # Call parent think method
             return await super().think()

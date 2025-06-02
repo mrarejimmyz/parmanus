@@ -1,3 +1,4 @@
+import asyncio
 import time
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
@@ -274,7 +275,17 @@ class BaseAgent(BaseModel, ABC):
                 try:
                     step_start = time.time()
                     logger.info(f"Calling step() method for {self.name}")
-                    step_result = await self.step()
+                    
+                    # Add timeout to step execution to prevent hanging
+                    try:
+                        step_result = await asyncio.wait_for(
+                            self.step(),
+                            timeout=60.0  # 60 second timeout for each step
+                        )
+                    except asyncio.TimeoutError:
+                        step_result = f"Step {self.current_step} timed out after 60 seconds"
+                        logger.error(f"Step {self.current_step} timed out after 60 seconds")
+                    
                     step_duration = time.time() - step_start
                     
                     logger.info(f"Step {self.current_step} completed in {step_duration:.2f}s, result: {step_result[:200] if step_result else 'None'}...")
