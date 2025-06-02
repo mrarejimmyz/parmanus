@@ -211,7 +211,7 @@ class LLMOptimized:
             if use_gpu:
                 # Estimate total layers (rough approximation for common models)
                 estimated_layers = int(model_size_gb * 10)  # Rough estimate
-                gpu_layers = self.gpu_manager.optimize_gpu_layers(estimated_layers, model_size_gb)
+                gpu_layers = self.gpu_manager.optimize_gpu_layers(estimated_layers, model_size_gb, self.model_path)
             
             logger.info(f"Loading text model with {gpu_layers} GPU layers")
 
@@ -276,7 +276,7 @@ class LLMOptimized:
                 if use_gpu:
                     estimated_layers = int(model_size_gb * 8)  # Conservative estimate
                     gpu_layers = min(
-                        self.gpu_manager.optimize_gpu_layers(estimated_layers, model_size_gb),
+                        self.gpu_manager.optimize_gpu_layers(estimated_layers, model_size_gb, self.vision_settings.model_path),
                         estimated_layers // 2  # Use only half the layers for vision
                     )
 

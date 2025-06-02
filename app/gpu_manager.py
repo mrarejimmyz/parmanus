@@ -392,19 +392,37 @@ class CUDAGPUManager:
         
         return optimal_layers
     
-    def optimize_gpu_layers(self, total_layers: int, model_size_gb: float) -> int:
+    def get_gpu_memory_info(self) -> Dict[str, float]:
+        """
+        Get GPU memory information in the format expected by LLM class.
+        Backward compatibility wrapper for get_memory_info.
+        
+        Returns:
+            Dictionary with memory information in GB
+        """
+        memory_info = self.get_memory_info()
+        return {
+            "total": memory_info.total,
+            "used": memory_info.used,
+            "free": memory_info.free,
+            "utilization": memory_info.utilization
+        }
+    
+    def optimize_gpu_layers(self, total_layers: int, model_size_gb: float, model_path: str = None) -> int:
         """
         Backward compatibility wrapper for calculate_optimal_layers.
         
         Args:
             total_layers: Total number of layers in model
             model_size_gb: Model size in GB
+            model_path: Optional path to model file
             
         Returns:
             Optimal number of GPU layers
         """
-        # Use a dummy model path for the calculation
-        return self.calculate_optimal_layers("model", total_layers)
+        # Use provided model path or a dummy path for the calculation
+        path = model_path or "dummy_model"
+        return self.calculate_optimal_layers(path, total_layers)
     
     def can_allocate(self, required_memory_gb: float) -> bool:
         """
@@ -686,7 +704,12 @@ class CUDAGPUManager:
     
     def __del__(self):
         """Cleanup on destruction."""
-        self.stop_monitoring()
+        try:
+            if hasattr(self, '_monitoring_active'):
+                self.stop_monitoring()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
 
 
 # Global GPU manager instance
