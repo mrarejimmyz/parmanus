@@ -216,3 +216,6 @@ examples/cat.png
 .vs/parmanus/v17/DocumentLayout.json
 llama_cpp_python-0.3.8+cu128.gemma3-cp311-cp311-win_amd64.whl
 .vscode/launch.json
+models/llava-1.6-mistral-7b-gguf
+verify_gpy.py
+
