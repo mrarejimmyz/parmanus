@@ -102,7 +102,7 @@ performance_monitoring = true   # Enable performance monitoring
 
 # Browser optimization
 [browser]
-headless = true                 # Run browser in headless mode for performance
+headless = false                # Run browser in visible mode so you can see it
 disable_security = true         # Disable security features for speed
 timeout = 30                    # Browser operation timeout
 max_retries = 3                 # Maximum retries for browser operations
