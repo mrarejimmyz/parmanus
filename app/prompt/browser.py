@@ -16,18 +16,24 @@ Start by navigating to the website using the browser_use tool with action="go_to
 """
 
 SIMPLE_NEXT_STEP_PROMPT = """
-What should I do next to complete the task?
+You are a browser automation agent. Your task is: {task}
 
-Available actions:
+You MUST use the browser_use tool to complete this task. 
+
+For the task "rate www.google.com and give me a feedback", you should:
+1. First, use browser_use with action="go_to_url" and url="https://www.google.com"
+2. Then analyze the page and provide feedback
+
+IMPORTANT: You must call the browser_use tool in your response. Do not just think - take action!
+
+Available actions for browser_use tool:
 - go_to_url: Navigate to a website
-- click_element: Click on page elements
+- click_element: Click on page elements  
 - input_text: Type text into forms
 - extract_content: Get information from the page
 - scroll_down/scroll_up: Scroll the page
 
-Current task: {task}
-
-Please use the browser_use tool to take the next action.
+Start by calling browser_use with action="go_to_url" and url="https://www.google.com"
 """
 
 NEXT_STEP_PROMPT = """

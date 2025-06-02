@@ -1,0 +1,33 @@
+# Clean Test Configuration - NO LOG SPAM
+# Place this in the root directory for easy access
+
+[llm]
+model = "llama-jb"
+model_path = "/models/llama-jb.gguf"
+max_tokens = 1024
+temperature = 0.0
+
+[gpu]
+force_cuda = true
+force_gpu_layers = 20
+enable_monitoring = false
+auto_cleanup = false
+
+[browser]
+headless = false
+disable_security = true
+timeout = 30
+
+[agent]
+max_steps = 10
+stuck_detection = "basic"
+
+[logging]
+level = "WARNING"
+reduce_verbosity = true
+
+[monitoring]
+enable_metrics = false
+gpu_monitoring = false
+memory_monitoring = false
+
