@@ -650,15 +650,134 @@ class LLMOptimized:
                     )
                 except Exception as e:
                     logger.error(f"Error in model completion: {e}")
-                    raise
+                    return f"[Error: {str(e)}]"
+
         except TokenLimitExceeded:
-            # Re-raise token limit errors without logging
+            # Re-raise token limit exceptions without modification
             raise
         except Exception as e:
-            logger.error(f"Unexpected error in ask: {e}")
+            logger.error(f"Unexpected error in ask method: {e}")
+            return f"[Unexpected error: {str(e)}]"
+
+    async def ask_tool(
+        self,
+        messages: List[Union[Message, Dict[str, Any]]],
+        system_msgs: Optional[List[Union[Message, Dict[str, Any]]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None,
+        temperature: Optional[float] = None,
+        timeout: int = 120,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """
+        Send a request to the model with tool support and get a response.
+
+        Args:
+            messages: List of messages to send to the model
+            system_msgs: Optional system messages to prepend
+            tools: List of available tools in OpenAI format
+            tool_choice: Tool choice strategy ("auto", "none", or specific tool)
+            temperature: Temperature for sampling (0.0 to 1.0)
+            timeout: Timeout in seconds for the request
+            **kwargs: Additional arguments to pass to the model
+
+        Returns:
+            Dictionary with 'content' and optionally 'tool_calls'
+
+        Raises:
+            TokenLimitExceeded: If the input exceeds the model's token limit
+            Exception: For other unexpected errors
+        """
+        try:
+            # For now, since llama-cpp-python doesn't natively support function calling,
+            # we'll simulate it by including tool information in the system prompt
+            # and parsing the response for tool calls
+            
+            # Build enhanced system message with tool information
+            enhanced_system_msgs = system_msgs or []
+            
+            if tools:
+                tool_descriptions = []
+                for tool in tools:
+                    func = tool.get('function', {})
+                    name = func.get('name', 'unknown')
+                    desc = func.get('description', 'No description')
+                    params = func.get('parameters', {})
+                    
+                    tool_desc = f"- {name}: {desc}"
+                    if params and params.get('properties'):
+                        param_names = list(params['properties'].keys())
+                        tool_desc += f" (Parameters: {', '.join(param_names)})"
+                    tool_descriptions.append(tool_desc)
+                
+                tool_system_msg = {
+                    "role": "system",
+                    "content": f"""You have access to the following tools:
+
+{chr(10).join(tool_descriptions)}
+
+To use a tool, respond with a JSON object in this format:
+{{"tool_calls": [{{"function": {{"name": "tool_name", "arguments": {{"param": "value"}}}}}}]}}
+
+You can also provide regular text responses. If you need to use a tool, include the tool call JSON in your response."""
+                }
+                enhanced_system_msgs = [tool_system_msg] + enhanced_system_msgs
+            
+            # Get regular response
+            response_text = await self.ask(
+                messages=messages,
+                system_msgs=enhanced_system_msgs,
+                temperature=temperature,
+                timeout=timeout,
+                **kwargs
+            )
+            
+            # Try to parse tool calls from the response
+            tool_calls = []
+            content = response_text
+            
+            # Simple parsing for tool calls (this is a basic implementation)
+            import json
+            import re
+            import uuid
+            from app.schema import ToolCall, Function
+            
+            # Look for JSON tool call patterns
+            tool_call_pattern = r'\{"tool_calls":\s*\[.*?\]\}'
+            matches = re.findall(tool_call_pattern, response_text, re.DOTALL)
+            
+            for match in matches:
+                try:
+                    parsed = json.loads(match)
+                    if 'tool_calls' in parsed:
+                        for tc in parsed['tool_calls']:
+                            if 'function' in tc:
+                                # Convert to expected ToolCall format
+                                tool_call = ToolCall(
+                                    id=str(uuid.uuid4()),
+                                    type="function",
+                                    function=Function(
+                                        name=tc['function'].get('name', ''),
+                                        arguments=json.dumps(tc['function'].get('arguments', {}))
+                                    )
+                                )
+                                tool_calls.append(tool_call)
+                        # Remove the tool call JSON from content
+                        content = content.replace(match, '').strip()
+                except json.JSONDecodeError:
+                    continue
+            
+            return {
+                'content': content,
+                'tool_calls': tool_calls
+            }
+            
+        except TokenLimitExceeded:
+            # Re-raise token limit exceptions without modification
             raise
-
-
-# Alias for backward compatibility
-LLM = LLMOptimized
-
+        except Exception as e:
+            logger.error(f"Unexpected error in ask_tool method: {e}")
+            return {
+                'content': f"[Unexpected error: {str(e)}]",
+                'tool_calls': []
+            }
