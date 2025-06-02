@@ -63,10 +63,38 @@ class AgentRouter:
             The name of the best agent for this query.
         """
         query_lower = query.lower()
+        
+        # Log the query for debugging
+        logger.info(f"Analyzing query for routing: {query}")
 
-        # Simple keyword-based routing for now
-        # This will be enhanced with more sophisticated analysis
+        # Browser-related queries (check first for web content)
+        if any(
+            keyword in query_lower
+            for keyword in [
+                "browse",
+                "website",
+                "web",
+                "www",
+                "http",
+                "url",
+                "search",
+                "click",
+                "navigate",
+                "download",
+                "scrape",
+                "form",
+                "button",
+                "google.com",
+                "rate",
+                "feedback",
+                "visit",
+                "page"
+            ]
+        ):
+            logger.info("Routing to browser agent based on web keywords")
+            return "browser"
 
+        # Code-related queries
         if any(
             keyword in query_lower
             for keyword in [
@@ -85,26 +113,10 @@ class AgentRouter:
                 "rust",
             ]
         ):
+            logger.info("Routing to code agent based on programming keywords")
             return "code"
 
-        if any(
-            keyword in query_lower
-            for keyword in [
-                "browse",
-                "website",
-                "web",
-                "search",
-                "click",
-                "navigate",
-                "url",
-                "download",
-                "scrape",
-                "form",
-                "button",
-            ]
-        ):
-            return "browser"
-
+        # File-related queries
         if any(
             keyword in query_lower
             for keyword in [
@@ -121,8 +133,10 @@ class AgentRouter:
                 "edit",
             ]
         ):
+            logger.info("Routing to file agent based on file keywords")
             return "file"
 
+        # Planning-related queries
         if any(
             keyword in query_lower
             for keyword in [
@@ -137,9 +151,11 @@ class AgentRouter:
                 "strategy",
             ]
         ):
+            logger.info("Routing to planner agent based on planning keywords")
             return "planner"
 
         # Default to manus agent for general queries
+        logger.info("Routing to default manus agent")
         return self.default_agent_name
 
     async def _create_agent(self, agent_name: str) -> BaseAgent:
