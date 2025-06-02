@@ -278,13 +278,18 @@ class BaseAgent(BaseModel, ABC):
                     
                     # Add timeout to step execution to prevent hanging
                     try:
+                        logger.info(f"About to call self.step() for {self.name}")
                         step_result = await asyncio.wait_for(
                             self.step(),
                             timeout=60.0  # 60 second timeout for each step
                         )
+                        logger.info(f"self.step() completed successfully for {self.name}")
                     except asyncio.TimeoutError:
                         step_result = f"Step {self.current_step} timed out after 60 seconds"
                         logger.error(f"Step {self.current_step} timed out after 60 seconds")
+                    except Exception as step_error:
+                        step_result = f"Step {self.current_step} failed with error: {str(step_error)}"
+                        logger.error(f"Step {self.current_step} failed with error: {step_error}", exc_info=True)
                     
                     step_duration = time.time() - step_start
                     
