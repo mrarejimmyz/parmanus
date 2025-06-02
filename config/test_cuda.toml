@@ -1,0 +1,43 @@
+# Test Configuration with Force CUDA Enabled
+# Use this config to test CUDA functionality when detection fails
+
+[llm]
+model = "llama-jb"
+model_path = "models/llama-jb.gguf"
+max_tokens = 2048
+temperature = 0.0
+
+[llm.vision]
+model = "qwen-vl-7b"
+model_path = "models/llava-model.gguf"
+max_tokens = 1024
+temperature = 0.0
+
+# Force CUDA usage even if detection fails
+[gpu]
+force_cuda = true               # ENABLE THIS TO FORCE CUDA USAGE
+memory_threshold = 0.8
+cleanup_threshold = 0.9
+auto_cleanup = true
+fallback_to_cpu = true
+enable_monitoring = true
+monitoring_interval = 5.0
+
+# Model allocation with GPU priority
+text_model_priority = "high"
+vision_model_priority = "low"
+max_gpu_layers_text = 20        # Start with 20 GPU layers for testing
+max_gpu_layers_vision = 10
+
+[browser]
+headless = false
+disable_security = true
+
+[search]
+engine = "Google"
+lang = "en"
+country = "us"
+
+[workspace_root]
+path = "/home/ubuntu/ParManusAI/workspace"
+
