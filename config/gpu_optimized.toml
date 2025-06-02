@@ -17,7 +17,8 @@ temperature = 0.0
 # GPU Optimization Settings
 [gpu]
 # Force CUDA usage even if detection fails
-force_cuda = false              # Set to true to force CUDA usage when detection fails
+force_cuda = true               # Set to true to force CUDA usage when detection fails
+force_gpu_layers = 20           # Force minimum GPU layers when CUDA is available
 # Memory management
 memory_threshold = 0.8          # Warning threshold (80% usage)
 cleanup_threshold = 0.9         # Automatic cleanup threshold (90% usage)

@@ -84,7 +84,8 @@ class LLMOptimized:
 
         # GPU management with configuration
         force_cuda = getattr(config, 'gpu', {}).get('force_cuda', False)
-        self.gpu_manager = CUDAGPUManager(force_cuda=force_cuda)
+        force_gpu_layers = getattr(config, 'gpu', {}).get('force_gpu_layers', 0)
+        self.gpu_manager = CUDAGPUManager(force_cuda=force_cuda, force_gpu_layers=force_gpu_layers)
         
         # Thread pool for model operations
         self._executor = ThreadPoolExecutor(max_workers=2)

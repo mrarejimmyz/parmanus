@@ -62,7 +62,8 @@ class CUDAGPUManager:
                  memory_threshold: float = 0.8,
                  cleanup_threshold: float = 0.9,
                  monitoring_interval: float = 5.0,
-                 force_cuda: bool = False):
+                 force_cuda: bool = False,
+                 force_gpu_layers: int = 0):
         """
         Initialize GPU manager.
         
@@ -71,11 +72,13 @@ class CUDAGPUManager:
             cleanup_threshold: Memory usage threshold for automatic cleanup (0-1)
             monitoring_interval: Monitoring interval in seconds
             force_cuda: Force CUDA usage even if detection fails
+            force_gpu_layers: Force minimum GPU layers when CUDA is available
         """
         self.memory_threshold = memory_threshold
         self.cleanup_threshold = cleanup_threshold
         self.monitoring_interval = monitoring_interval
         self.force_cuda = force_cuda
+        self.force_gpu_layers = force_gpu_layers
         
         # CUDA availability check
         self.cuda_available = self._check_cuda_availability()
@@ -249,7 +252,59 @@ class CUDAGPUManager:
             )
             
         except Exception as e:
-            logger.debug(f"Failed to get GPU memory info: {e}")
+            logger.debug(f"PyTorch GPU memory info failed: {e}, trying nvidia-smi fallback")
+            
+            # Fallback: Try to get memory info via nvidia-smi
+            try:
+                import subprocess
+                result = subprocess.run([
+                    'nvidia-smi', '--query-gpu=memory.total,memory.used,memory.free', 
+                    '--format=csv,noheader,nounits'
+                ], capture_output=True, text=True, timeout=5)
+                
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    if lines and device < len(lines):
+                        memory_data = lines[device].split(', ')
+                        if len(memory_data) == 3:
+                            total_mb = float(memory_data[0])
+                            used_mb = float(memory_data[1])
+                            free_mb = float(memory_data[2])
+                            
+                            # Convert to GB
+                            total_gb = total_mb / 1024
+                            used_gb = used_mb / 1024
+                            free_gb = free_mb / 1024
+                            
+                            utilization = used_mb / total_mb if total_mb > 0 else 0
+                            
+                            logger.info(f"GPU memory via nvidia-smi: {free_gb:.1f}GB free / {total_gb:.1f}GB total")
+                            
+                            return GPUMemoryInfo(
+                                total=total_gb,
+                                used=used_gb,
+                                free=free_gb,
+                                allocated=used_gb,  # Approximate
+                                reserved=used_gb,   # Approximate
+                                utilization=utilization,
+                                timestamp=time.time()
+                            )
+            except Exception as nvidia_error:
+                logger.debug(f"nvidia-smi fallback failed: {nvidia_error}")
+            
+            # Final fallback: Assume reasonable defaults for CUDA systems
+            if self.cuda_available:
+                logger.warning("Using default GPU memory estimates (8GB total, 6GB free)")
+                return GPUMemoryInfo(
+                    total=8.0,      # Assume 8GB GPU
+                    used=2.0,       # Assume 2GB used
+                    free=6.0,       # Assume 6GB free
+                    allocated=1.0,  # Conservative estimate
+                    reserved=2.0,   # Conservative estimate
+                    utilization=0.25,  # 25% utilization
+                    timestamp=time.time()
+                )
+            
             return GPUMemoryInfo(0, 0, 0, 0, 0, 0, time.time())
     
     def estimate_model_size(self, model_path: str) -> float:
@@ -320,12 +375,36 @@ class CUDAGPUManager:
         # Ensure we don't exceed available memory
         optimal_layers = max(0, min(optimal_layers, total_layers))
         
+        # Apply force_gpu_layers if specified
+        if self.force_gpu_layers > 0 and self.cuda_available:
+            forced_layers = min(self.force_gpu_layers, total_layers)
+            if forced_layers > optimal_layers:
+                logger.warning(
+                    f"Force GPU layers enabled: using {forced_layers} layers instead of {optimal_layers} "
+                    f"(may exceed memory estimates)"
+                )
+                optimal_layers = forced_layers
+        
         logger.info(
             f"Optimal layers for {model_path}: {optimal_layers}/{total_layers} "
             f"(model: {model_size:.1f}GB, available: {available_memory:.1f}GB)"
         )
         
         return optimal_layers
+    
+    def optimize_gpu_layers(self, total_layers: int, model_size_gb: float) -> int:
+        """
+        Backward compatibility wrapper for calculate_optimal_layers.
+        
+        Args:
+            total_layers: Total number of layers in model
+            model_size_gb: Model size in GB
+            
+        Returns:
+            Optimal number of GPU layers
+        """
+        # Use a dummy model path for the calculation
+        return self.calculate_optimal_layers("model", total_layers)
     
     def can_allocate(self, required_memory_gb: float) -> bool:
         """
