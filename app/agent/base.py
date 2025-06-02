@@ -246,14 +246,19 @@ class BaseAgent(BaseModel, ABC):
 
     async def run(self, request: Optional[str] = None) -> str:
         """Execute the agent's main loop with enhanced error handling and monitoring."""
+        logger.info(f"Agent {self.name} run() method started")
+        
         if self.state != AgentState.IDLE:
             raise RuntimeError(f"Cannot run agent from state: {self.state}")
 
         if request:
             self.update_memory("user", request)
+            logger.info(f"Added user request to memory: {request[:100]}...")
 
         results: List[str] = []
         start_time = time.time()
+        
+        logger.info(f"Starting agent execution loop, max_steps: {self.max_steps}")
         
         async with self.state_context(AgentState.RUNNING):
             while (
@@ -268,8 +273,11 @@ class BaseAgent(BaseModel, ABC):
                 
                 try:
                     step_start = time.time()
+                    logger.info(f"Calling step() method for {self.name}")
                     step_result = await self.step()
                     step_duration = time.time() - step_start
+                    
+                    logger.info(f"Step {self.current_step} completed in {step_duration:.2f}s, result: {step_result[:200] if step_result else 'None'}...")
                     
                     # Record successful step
                     self.performance_metrics["successful_steps"] += 1
@@ -280,6 +288,7 @@ class BaseAgent(BaseModel, ABC):
                     
                     # Check for stuck state
                     if self.stuck_detector.is_stuck():
+                        logger.warning(f"Stuck state detected in step {self.current_step}")
                         recovery_success = await self.handle_stuck_state_advanced()
                         if recovery_success:
                             self.performance_metrics["stuck_recoveries"] += 1
@@ -294,7 +303,7 @@ class BaseAgent(BaseModel, ABC):
                         logger.warning(f"Step {self.current_step} took {step_duration:.1f}s")
                     
                 except Exception as e:
-                    logger.error(f"Step {self.current_step} failed: {e}")
+                    logger.error(f"Step {self.current_step} failed: {e}", exc_info=True)
                     self.performance_metrics["failed_steps"] += 1
                     self.circuit_breaker.call_failed()
                     
@@ -308,18 +317,25 @@ class BaseAgent(BaseModel, ABC):
 
             # Handle termination reasons
             if self.current_step >= self.max_steps:
+                logger.info(f"Agent {self.name} reached max steps ({self.max_steps})")
                 self.current_step = 0
                 self.state = AgentState.IDLE
                 results.append(f"Terminated: Reached max steps ({self.max_steps})")
             elif not self.circuit_breaker.can_execute():
+                logger.warning(f"Agent {self.name} terminated due to circuit breaker")
                 results.append("Terminated: Circuit breaker opened due to repeated failures")
+            elif self.state == AgentState.FINISHED:
+                logger.info(f"Agent {self.name} finished successfully")
 
         # Log performance summary
         total_duration = time.time() - start_time
         self._log_performance_summary(total_duration)
 
         await SANDBOX_CLIENT.cleanup()
-        return "\n".join(results) if results else "No steps executed"
+        
+        final_result = "\n".join(results) if results else "No steps executed"
+        logger.info(f"Agent {self.name} run() completed, returning result length: {len(final_result)}")
+        return final_result
 
     async def handle_stuck_state_advanced(self) -> bool:
         """Advanced stuck state handling with multiple recovery strategies."""
