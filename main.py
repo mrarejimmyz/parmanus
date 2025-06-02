@@ -22,10 +22,6 @@ from app.gpu_manager import get_gpu_manager
 
 async def main():
     # Parse command line arguments
-    # Initialize GPU manager for optimization
-    gpu_manager = get_gpu_manager()
-    logger.info(f"GPU Manager initialized: CUDA={gpu_manager.cuda_available}")
-
     parser = argparse.ArgumentParser(
         description="ParManus AI Agent with Parmanus Integration"
     )
@@ -49,6 +45,10 @@ async def main():
     # Load configuration
     config_path = args.config if args.config else None
     config = get_config(config_path)
+
+    # Initialize GPU manager for optimization with config
+    gpu_manager = get_gpu_manager(config)
+    logger.info(f"GPU Manager initialized: CUDA={gpu_manager.cuda_available}")
 
     # Initialize voice modules if enabled
     tts = None

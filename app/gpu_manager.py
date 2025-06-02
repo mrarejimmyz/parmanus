@@ -719,10 +719,15 @@ class CUDAGPUManager:
 
 
 # Global GPU manager instance
-gpu_manager = CUDAGPUManager()
+gpu_manager = None
 
 
-def get_gpu_manager() -> CUDAGPUManager:
+def get_gpu_manager(config=None) -> CUDAGPUManager:
     """Get the global GPU manager instance."""
+    global gpu_manager
+    if gpu_manager is None:
+        gpu_manager = CUDAGPUManager()
+        if config:
+            gpu_manager.config = config
     return gpu_manager
 
