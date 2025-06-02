@@ -551,13 +551,21 @@ Page content:
 
     def __del__(self):
         """Ensure cleanup when object is destroyed."""
-        if self.browser is not None or self.context is not None:
-            try:
-                asyncio.run(self.cleanup())
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(self.cleanup())
-                loop.close()
+        try:
+            # Check if browser and context attributes exist before accessing them
+            browser_exists = hasattr(self, 'browser') and self.browser is not None
+            context_exists = hasattr(self, 'context') and self.context is not None
+            
+            if browser_exists or context_exists:
+                try:
+                    asyncio.run(self.cleanup())
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    loop.run_until_complete(self.cleanup())
+                    loop.close()
+        except Exception:
+            # Silently ignore cleanup errors in destructor
+            pass
 
     @classmethod
     def create_with_context(cls, context: Context) -> "BrowserUseTool[Context]":

@@ -149,7 +149,9 @@ async def main():
 
             # Process the request
             try:
+                logger.info(f"Starting agent.run() for {agent.name}")
                 result = await agent.run(prompt)
+                logger.info(f"Agent.run() completed for {agent.name}, result length: {len(result) if result else 0}")
 
                 # Add result to memory
                 memory.push("assistant", result)
@@ -166,7 +168,7 @@ async def main():
 
             except Exception as e:
                 error_msg = f"Error processing request: {e}"
-                logger.error(error_msg)
+                logger.error(error_msg, exc_info=True)
                 print(f"Error: {error_msg}")
                 if tts:
                     await tts.speak_async(
