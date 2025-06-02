@@ -61,3 +61,7 @@ openai-whisper~=20240930
 # Optional: Additional TTS engines
 espeak~=1.48.15; sys_platform == "linux"
 
+
+# GPU optimization dependencies
+torch>=2.0.0
+loguru>=0.7.0

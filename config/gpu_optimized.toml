@@ -1,0 +1,128 @@
+# GPU Optimization Configuration for ParManusAI
+# This file contains optimized settings for CUDA environments
+
+[llm]
+model = "llama-jb"
+model_path = "/models/llama-jb.gguf"
+max_tokens = 2048  # Reduced from 4096 for memory efficiency
+temperature = 0.0
+
+# Vision model with fallback handling
+[llm.vision]
+model = "qwen-vl-7b"
+model_path = "/models/llava-model.gguf"
+max_tokens = 1024  # Smaller context for vision
+temperature = 0.0
+
+# GPU Optimization Settings
+[gpu]
+# Memory management
+memory_threshold = 0.8          # Warning threshold (80% usage)
+cleanup_threshold = 0.9         # Automatic cleanup threshold (90% usage)
+auto_cleanup = true             # Enable automatic memory cleanup
+fallback_to_cpu = true          # Fallback to CPU when GPU memory insufficient
+enable_monitoring = true        # Enable background memory monitoring
+monitoring_interval = 5.0       # Monitoring interval in seconds
+
+# Model allocation strategy
+text_model_priority = "high"    # Always prioritize text model for GPU
+vision_model_priority = "low"   # Use remaining GPU memory for vision
+max_gpu_layers_text = -1        # Adaptive allocation for text model
+max_gpu_layers_vision = 20      # Conservative allocation for vision model
+
+# Performance optimization
+enable_quantization = false     # Enable when quantized models available
+mixed_precision = true          # Enable FP16 inference for memory savings
+context_optimization = true     # Adaptive context sizing
+batch_optimization = true       # Optimize batch processing
+
+# CUDA-specific settings
+[cuda]
+memory_fraction = 0.8           # Reserve 80% of GPU memory for models
+enable_memory_pool = true       # Enable CUDA memory pooling
+synchronize_operations = true   # Synchronize CUDA operations for stability
+stream_optimization = true      # Enable CUDA stream optimization
+
+# Model loading optimization
+[models]
+lazy_loading = true             # Load models only when needed
+cache_models = true             # Keep frequently used models in memory
+unload_unused = true            # Automatically unload unused models
+unload_timeout = 300            # Unload models after 5 minutes of inactivity
+
+# Text model optimization
+[models.text]
+context_size = 4096             # Context size for text model
+threads = 8                     # CPU threads for text model
+use_mmap = true                 # Use memory mapping
+use_mlock = false               # Disable memory locking to reduce pressure
+
+# Vision model optimization
+[models.vision]
+context_size = 2048             # Smaller context for vision model
+threads = 4                     # Fewer CPU threads for vision model
+use_mmap = true                 # Use memory mapping
+use_mlock = false               # Disable memory locking
+enable_fallback = true          # Enable graceful fallback on loading failure
+
+# Quality preservation settings
+[quality]
+min_gpu_layers = 10             # Minimum GPU layers for acceptable quality
+quality_threshold = 0.85        # Minimum acceptable quality score
+auto_adjust = true              # Automatically adjust parameters
+fallback_strategy = "graceful"  # How to handle quality degradation
+monitor_quality = true          # Enable quality monitoring
+
+# Timeout and retry settings
+[timeouts]
+model_loading = 120             # Model loading timeout (2 minutes)
+inference_base = 30             # Base inference timeout (30 seconds)
+inference_max = 180             # Maximum inference timeout (3 minutes)
+adaptive_timeout = true         # Enable adaptive timeout calculation
+retry_attempts = 2              # Number of retry attempts on timeout
+
+# Logging optimization
+[logging]
+level = "INFO"                  # Console log level
+file_level = "DEBUG"            # File log level
+max_size = "10 MB"              # Maximum log file size
+retention = "7 days"            # Log retention period
+enable_file_logging = true      # Enable file logging
+reduce_verbosity = true         # Reduce verbosity for high-frequency operations
+
+# Agent optimization
+[agent]
+max_steps = 20                  # Maximum steps per agent run
+stuck_detection = "advanced"    # Use advanced stuck state detection
+circuit_breaker = true          # Enable circuit breaker pattern
+performance_monitoring = true   # Enable performance monitoring
+
+# Browser optimization
+[browser]
+headless = true                 # Run browser in headless mode for performance
+disable_security = true         # Disable security features for speed
+timeout = 30                    # Browser operation timeout
+max_retries = 3                 # Maximum retries for browser operations
+
+# Memory management
+[memory]
+save_session = false            # Disable session saving for performance
+recover_last_session = false    # Disable session recovery
+memory_compression = false      # Disable memory compression
+cleanup_interval = 300          # Memory cleanup interval (5 minutes)
+
+# Performance monitoring
+[monitoring]
+enable_metrics = true           # Enable performance metrics collection
+metrics_interval = 60           # Metrics collection interval (1 minute)
+gpu_monitoring = true           # Enable GPU monitoring
+memory_monitoring = true        # Enable memory monitoring
+performance_alerts = true       # Enable performance alerts
+
+# Development and debugging
+[debug]
+verbose_gpu = false             # Verbose GPU logging (disable in production)
+profile_models = true           # Enable model performance profiling
+benchmark_mode = false          # Enable benchmarking mode
+save_profiles = true            # Save performance profiles
+
