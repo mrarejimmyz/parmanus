@@ -1,0 +1,43 @@
+# Simple Test Configuration for ParManusAI
+# Optimized for visible browser testing
+
+[llm]
+model = "llama-jb"
+model_path = "/models/llama-jb.gguf"
+max_tokens = 1024  # Reduced for faster responses
+temperature = 0.0
+
+# GPU Settings
+[gpu]
+force_cuda = true
+force_gpu_layers = 20
+monitoring_interval = 60.0  # Less frequent monitoring
+
+# Browser Settings - VISIBLE MODE
+[browser]
+headless = false            # Browser window will be visible
+disable_security = true     # Faster loading
+timeout = 30
+
+# Agent Settings
+[agent]
+max_steps = 10              # Fewer steps for testing
+stuck_detection = "basic"   # Simpler detection
+circuit_breaker = true
+
+# Reduced Logging
+[logging]
+level = "INFO"
+reduce_verbosity = true
+
+# Simple Memory Management
+[memory]
+save_session = false
+recover_last_session = false
+memory_compression = false
+
+# Performance
+[monitoring]
+enable_metrics = false      # Disable for cleaner output
+gpu_monitoring = false      # Disable for cleaner logs
+
