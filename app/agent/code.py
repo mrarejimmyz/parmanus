@@ -307,6 +307,12 @@ Please provide a corrected solution for: {prompt}"""
         # Will be implemented when Bash interpreter is added
         return {"success": False, "error": "Bash execution not yet implemented"}
 
+    async def initialize(self):
+        """Initialize the CodeAgent with enhanced reliability features."""
+        self.initialize_agent()
+        # Additional async initialization can be added here if needed
+        return self
+
     @classmethod
     async def create(cls, **kwargs) -> "CodeAgent":
         """Create a new CodeAgent instance.
