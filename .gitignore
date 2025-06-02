@@ -200,3 +200,19 @@ cython_debug/
 
 # node
 node_modules
+models/llava-model.gguf
+models/llama-jb.gguf
+models/llava-vision.gguf
+models/mmproj-model.gguf
+examples/cat.png
+.vs/parmanus/v17/.wsuo
+.vs/parmanus/CopilotIndices/17.14.719.50355/CodeChunks.db
+.vs/parmanus/CopilotIndices/17.14.719.50355/SemanticSymbols.db
+.vs/parmanus/FileContentIndex/06c3eb26-1e8f-41be-a946-581a09704540.vsidx
+.vs/parmanus/FileContentIndex/927a58ad-86cb-49f8-afcc-c51a11539370.vsidx
+.vs/slnx.sqlite
+.vs/ProjectSettings.json
+.vs/VSWorkspaceState.json
+.vs/parmanus/v17/DocumentLayout.json
+llama_cpp_python-0.3.8+cu128.gemma3-cp311-cp311-win_amd64.whl
+.vscode/launch.json

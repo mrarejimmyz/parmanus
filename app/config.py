@@ -3,19 +3,27 @@ import threading
 import tomllib
 from pathlib import Path
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
+
 
 def get_project_root() -> Path:
     """Get the project root directory"""
     return Path(__file__).resolve().parent.parent
 
+
 PROJECT_ROOT = get_project_root()
 WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
 
+
 class LLMSettings(BaseModel):
     model: str = Field(..., description="Model name")
-    model_path: str = Field("/models/llama-jb.gguf", description="Path to the model file")
-    max_tokens: int = Field(2048, description="Maximum number of tokens per request")  # Updated from 4096 to 2048
+    model_path: str = Field(
+        "/models/llama-jb.gguf", description="Path to the model file"
+    )
+    max_tokens: int = Field(
+        2048, description="Maximum number of tokens per request"
+    )  # Updated from 4096 to 2048
     max_input_tokens: Optional[int] = Field(
         None,
         description="Maximum input tokens to use across all requests (None for unlimited)",
@@ -25,10 +33,12 @@ class LLMSettings(BaseModel):
     # Optional vision model settings
     vision: Optional["LLMSettings"] = Field(None, description="Vision model settings")
 
+
 class ProxySettings(BaseModel):
     server: str = Field(None, description="Proxy server address")
     username: Optional[str] = Field(None, description="Proxy username")
     password: Optional[str] = Field(None, description="Proxy password")
+
 
 class SearchSettings(BaseModel):
     engine: str = Field(default="Google", description="Search engine the llm to use")
@@ -47,8 +57,11 @@ class SearchSettings(BaseModel):
     lang: str = Field(default="en", description="Language code for search results")
     country: str = Field(default="us", description="Country code for search results")
 
+
 class BrowserSettings(BaseModel):
-    headless: bool = Field(default=False, description="Whether to run browser in headless mode")
+    headless: bool = Field(
+        default=False, description="Whether to run browser in headless mode"
+    )
     disable_security: bool = Field(
         default=True, description="Disable browser security features"
     )
@@ -66,20 +79,27 @@ class BrowserSettings(BaseModel):
     )
     proxy: Optional[ProxySettings] = Field(None, description="Proxy settings")
 
+
 class SandboxSettings(BaseModel):
     use_sandbox: bool = Field(default=False, description="Whether to use sandbox")
     image: str = Field(default="python:3.12-slim", description="Docker image to use")
-    work_dir: str = Field(default="/workspace", description="Working directory in container")
+    work_dir: str = Field(
+        default="/workspace", description="Working directory in container"
+    )
     memory_limit: str = Field(default="1g", description="Memory limit for container")
     cpu_limit: float = Field(default=2.0, description="CPU limit for container")
     timeout: int = Field(default=300, description="Timeout in seconds")
     network_enabled: bool = Field(default=True, description="Whether to enable network")
 
+
 class MCPServerConfig(BaseModel):
     type: str = Field(default="sse", description="Server type (sse or stdio)")
     url: Optional[str] = Field(None, description="Server URL for SSE connections")
     command: Optional[str] = Field(None, description="Command for stdio connections")
-    args: List[str] = Field(default_factory=list, description="Arguments for stdio command")
+    args: List[str] = Field(
+        default_factory=list, description="Arguments for stdio command"
+    )
+
 
 class MCPConfig(BaseModel):
     server_reference: str = Field(
@@ -89,16 +109,55 @@ class MCPConfig(BaseModel):
         default_factory=dict, description="MCP server configurations"
     )
 
+
+class AgentRouterSettings(BaseModel):
+    """Configuration for agent routing system."""
+
+    enabled: bool = Field(default=True, description="Whether agent routing is enabled")
+    default_agent: str = Field(default="manus", description="Default agent to use")
+
+
+class MemorySettings(BaseModel):
+    """Configuration for memory system."""
+
+    save_session: bool = Field(default=False, description="Whether to save sessions")
+    recover_last_session: bool = Field(
+        default=False, description="Whether to recover last session"
+    )
+    memory_compression: bool = Field(
+        default=False, description="Whether to compress memory"
+    )
+
+
+class VoiceSettings(BaseModel):
+    """Configuration for voice interaction."""
+
+    speak: bool = Field(default=False, description="Whether to enable text-to-speech")
+    listen: bool = Field(default=False, description="Whether to enable speech-to-text")
+    agent_name: str = Field(
+        default="Friday", description="Agent name for voice interaction"
+    )
+
+
 class Config(BaseModel):
     llm: LLMSettings
     browser: Optional[BrowserSettings] = None
     search: Optional[SearchSettings] = None
     sandbox: Optional[SandboxSettings] = None
     mcp_config: MCPConfig = Field(default_factory=MCPConfig)
-    workspace_root: str = Field(default=str(WORKSPACE_ROOT), description="Workspace root directory")
+    workspace_root: str = Field(
+        default=str(WORKSPACE_ROOT), description="Workspace root directory"
+    )
+    agent_router: Optional[AgentRouterSettings] = Field(
+        default_factory=AgentRouterSettings
+    )
+    memory: Optional[MemorySettings] = Field(default_factory=MemorySettings)
+    voice: Optional[VoiceSettings] = Field(default_factory=VoiceSettings)
+
 
 # Thread-local storage for config
 _thread_local = threading.local()
+
 
 def load_config(config_path: Optional[str] = None) -> Config:
     """
@@ -135,7 +194,9 @@ def load_config(config_path: Optional[str] = None) -> Config:
                     mcp_config.server_reference = config_dict["mcp"]["server_reference"]
 
                 # Process servers if present
-                if "servers" in config_dict["mcp"] and isinstance(config_dict["mcp"]["servers"], dict):
+                if "servers" in config_dict["mcp"] and isinstance(
+                    config_dict["mcp"]["servers"], dict
+                ):
                     for server_id, server_data in config_dict["mcp"]["servers"].items():
                         mcp_config.servers[server_id] = MCPServerConfig(**server_data)
 
@@ -156,7 +217,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
             model="qwen-vl-7b",
             model_path="/models/qwen-vl-7b-awq.gguf",
             max_tokens=2048,  # Updated from 4096 to 2048
-            temperature=0.0
+            temperature=0.0,
         )
 
         llm_settings = LLMSettings(
@@ -164,16 +225,15 @@ def load_config(config_path: Optional[str] = None) -> Config:
             model_path="/models/llama-jb.gguf",
             max_tokens=2048,  # Updated from 4096 to 2048
             temperature=0.0,
-            vision=vision_settings
+            vision=vision_settings,
         )
 
         default_config = Config(
-            llm=llm_settings,
-            workspace_root=str(WORKSPACE_ROOT),
-            mcp_config=mcp_config
+            llm=llm_settings, workspace_root=str(WORKSPACE_ROOT), mcp_config=mcp_config
         )
 
         return default_config
+
 
 def get_config() -> Config:
     """
@@ -184,6 +244,7 @@ def get_config() -> Config:
     if not hasattr(_thread_local, "config"):
         _thread_local.config = load_config()
     return _thread_local.config
+
 
 # Global config instance
 config = get_config()
