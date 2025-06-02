@@ -160,7 +160,7 @@ class AgentRouter:
             return await CodeAgent.create()
         elif agent_name == "browser":
             # Will be implemented when BrowserAgent is created
-            from app.agent.browser_agent import BrowserAgent
+            from app.agent.browser import BrowserAgent
 
             return await BrowserAgent.create()
         elif agent_name == "file":
