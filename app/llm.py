@@ -781,3 +781,7 @@ You can also provide regular text responses. If you need to use a tool, include 
                 'content': f"[Unexpected error: {str(e)}]",
                 'tool_calls': []
             }
+
+# Alias for backward compatibility
+LLM = LLMOptimized
+
