@@ -561,24 +561,37 @@ class CUDAGPUManager:
     
     def start_monitoring(self):
         """Start background memory monitoring."""
-        # Check if monitoring is disabled in config
+        # Debug: Check if monitoring is disabled in config
+        logger.info(f"GPU Manager start_monitoring called. Has config: {hasattr(self, 'config') and self.config is not None}")
+        
         if hasattr(self, 'config') and self.config:
+            logger.info(f"Config object found. Type: {type(self.config)}")
+            
             # Check multiple possible config paths for monitoring disable
             monitoring_disabled = False
             
             # Check gpu.enable_monitoring
-            if hasattr(self.config, 'gpu') and hasattr(self.config.gpu, 'enable_monitoring'):
-                if not self.config.gpu.enable_monitoring:
-                    monitoring_disabled = True
+            if hasattr(self.config, 'gpu'):
+                logger.info(f"Config has gpu section. Has enable_monitoring: {hasattr(self.config.gpu, 'enable_monitoring')}")
+                if hasattr(self.config.gpu, 'enable_monitoring'):
+                    logger.info(f"gpu.enable_monitoring value: {self.config.gpu.enable_monitoring}")
+                    if not self.config.gpu.enable_monitoring:
+                        monitoring_disabled = True
             
             # Check monitoring.gpu_monitoring  
-            if hasattr(self.config, 'monitoring') and hasattr(self.config.monitoring, 'gpu_monitoring'):
-                if not self.config.monitoring.gpu_monitoring:
-                    monitoring_disabled = True
-                    
+            if hasattr(self.config, 'monitoring'):
+                logger.info(f"Config has monitoring section. Has gpu_monitoring: {hasattr(self.config.monitoring, 'gpu_monitoring')}")
+                if hasattr(self.config.monitoring, 'gpu_monitoring'):
+                    logger.info(f"monitoring.gpu_monitoring value: {self.config.monitoring.gpu_monitoring}")
+                    if not self.config.monitoring.gpu_monitoring:
+                        monitoring_disabled = True
+                        
+            logger.info(f"Monitoring disabled by config: {monitoring_disabled}")
             if monitoring_disabled:
                 logger.info("GPU memory monitoring disabled by configuration")
                 return
+        else:
+            logger.info("No config found or config is None")
         
         if self._monitoring_active or not self.cuda_available:
             return
