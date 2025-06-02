@@ -367,6 +367,21 @@ class LLMOptimized:
         except Exception as e:
             logger.warning(f"Error during model cleanup: {e}")
 
+    @classmethod
+    def cleanup_all_models(cls):
+        """Clean up all models in the global cache (class method for cleanup handlers)."""
+        try:
+            # Clear all models from global cache
+            MODEL_CACHE.clear()
+            
+            # Force garbage collection
+            gc.collect()
+            
+            logger.info("All models cleanup completed")
+            
+        except Exception as e:
+            logger.warning(f"Error during global model cleanup: {e}")
+
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get current memory statistics."""
         gpu_info = self.gpu_manager.get_gpu_memory_info()

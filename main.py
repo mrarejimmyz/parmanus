@@ -29,6 +29,7 @@ async def main():
     parser = argparse.ArgumentParser(
         description="ParManus AI Agent with Parmanus Integration"
     )
+    parser.add_argument("--config", type=str, help="Path to configuration file")
     parser.add_argument("--prompt", type=str, help="Input prompt for the agent")
     parser.add_argument(
         "--no-wait",
@@ -46,7 +47,8 @@ async def main():
     args = parser.parse_args()
 
     # Load configuration
-    config = get_config()
+    config_path = args.config if args.config else None
+    config = get_config(config_path)
 
     # Initialize voice modules if enabled
     tts = None

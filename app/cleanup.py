@@ -21,7 +21,7 @@ def signal_handler(sig, frame):
     
     # Clean up model resources
     try:
-        LLM.cleanup_models()
+        LLM.cleanup_all_models()
     except Exception as e:
         logger.error(f"Error during model cleanup: {e}")
     
@@ -35,7 +35,7 @@ def cleanup_handler():
     
     # Clean up model resources
     try:
-        LLM.cleanup_models()
+        LLM.cleanup_all_models()
     except Exception as e:
         logger.error(f"Error during model cleanup: {e}")
     

@@ -237,12 +237,19 @@ def load_config(config_path: Optional[str] = None) -> Config:
         return default_config
 
 
-def get_config() -> Config:
+def get_config(config_path: Optional[str] = None) -> Config:
     """
     Get the configuration for the current thread.
+    Args:
+        config_path: Optional path to configuration file
     Returns:
         Config object
     """
+    # If a specific config path is provided, always load it fresh
+    if config_path:
+        return load_config(config_path)
+    
+    # Otherwise use thread-local caching
     if not hasattr(_thread_local, "config"):
         _thread_local.config = load_config()
     return _thread_local.config
