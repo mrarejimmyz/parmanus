@@ -1,3 +1,4 @@
+# Core ParManus dependencies
 pydantic~=2.10.6
 openai~=1.66.3
 tenacity~=9.0.0
@@ -33,3 +34,30 @@ beautifulsoup4~=4.13.3
 huggingface-hub~=0.29.2
 setuptools~=75.8.0
 llama-cpp-python>=0.2.56
+
+# Parmanus integration dependencies
+# Voice interaction
+pyttsx3~=2.90
+gtts~=2.5.1
+SpeechRecognition~=3.10.4
+pyaudio~=0.2.14
+soundfile~=0.12.1
+sounddevice~=0.4.7
+
+# Code execution and interpreters
+subprocess32~=3.5.4; python_version < "3.0"
+
+# Enhanced browser automation
+selenium~=4.26.1
+undetected-chromedriver~=3.5.5
+
+# Additional utilities
+psutil~=6.1.0
+pathlib2~=2.3.7; python_version < "3.4"
+
+# Optional: Whisper for advanced STT
+openai-whisper~=20240930
+
+# Optional: Additional TTS engines
+espeak~=1.48.15; sys_platform == "linux"
+

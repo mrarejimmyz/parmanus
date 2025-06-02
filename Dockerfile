@@ -89,25 +89,23 @@ RUN mkdir -p /usr/local/cuda/lib64/stubs && \
 # Install PyTorch with CUDA 12.2 support (matching your CUDA version)
 RUN pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
 
-# Install CUDA-enabled llama-cpp-python using explicit CUDA flags
-# This ensures proper CUDA support during compilation
-# Use the stub directory for build-time linking
+# Install CUDA-enabled llama-cpp-python using pre-built wheels
+# This avoids compilation issues while maintaining GPU acceleration
 RUN pip uninstall -y llama-cpp-python || true && \
-    export CUDA_LIB_PATH=/usr/local/cuda/lib64/stubs && \
-    export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH && \
-    CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_COMPILER=${CUDA_HOME}/bin/nvcc -DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs" \
-    FORCE_CMAKE=1 \
-    pip install --no-cache-dir llama-cpp-python
+    pip install --no-cache-dir llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
 
 # After installation, restore the normal library path
 RUN rm /etc/ld.so.conf.d/cuda-stubs.conf && ldconfig
 
 # Verify CUDA support is properly enabled - but don't fail the build if it's not
 # This allows the container to build, and the quick_cuda_fix.sh script can be used later
-RUN python -c "from llama_cpp import llama_cpp; has_cublas = hasattr(llama_cpp, '_LLAMA_CUBLAS'); \
-    cuda_enabled = has_cublas and llama_cpp._LLAMA_CUBLAS; \
-    print(f'CUDA support enabled: {cuda_enabled}'); \
-    if not cuda_enabled: print('WARNING: llama-cpp-python was not compiled with CUDA support. Use quick_cuda_fix.sh to enable it.')"
+RUN echo 'from llama_cpp import llama_cpp\n\
+    has_cublas = hasattr(llama_cpp, "_LLAMA_CUBLAS")\n\
+    cuda_enabled = has_cublas and llama_cpp._LLAMA_CUBLAS\n\
+    print(f"CUDA support enabled: {cuda_enabled}")\n\
+    if not cuda_enabled:\n\
+    print("WARNING: llama-cpp-python was not compiled with CUDA support. Use quick_cuda_fix.sh to enable it.")' > /tmp/check_cuda.py && \
+    python /tmp/check_cuda.py
 
 # Copy requirements and install remaining Python dependencies
 COPY requirements.txt .
@@ -190,16 +188,13 @@ RUN echo '#!/bin/bash\n\
     \n\
     # Verify llama-cpp-python CUDA support\n\
     echo "Checking llama-cpp-python CUDA support..."\n\
-    python -c "from llama_cpp import llama_cpp; has_cublas = hasattr(llama_cpp, \"_LLAMA_CUBLAS\"); \
-    cuda_enabled = has_cublas and llama_cpp._LLAMA_CUBLAS; \
-    print(f\"CUDA support enabled: {cuda_enabled}\"); \
-    if not cuda_enabled: print(\"⚠️ llama-cpp-python is not compiled with CUDA support. Run scripts/quick_cuda_fix.sh to enable GPU acceleration.\")"\n\
+    echo "from llama_cpp import llama_cpp\\nhas_cublas = hasattr(llama_cpp, \\"_LLAMA_CUBLAS\\")\\ncuda_enabled = has_cublas and llama_cpp._LLAMA_CUBLAS\\nprint(f\\"CUDA support enabled: {cuda_enabled}\\")\\nif not cuda_enabled:\\n    print(\\"⚠️ llama-cpp-python is not compiled with CUDA support. Run scripts/quick_cuda_fix.sh to enable GPU acceleration.\\")" > /tmp/check_cuda_support.py\n\
+    python /tmp/check_cuda_support.py\n\
     \n\
     # Run quick CUDA fix if needed and if the script exists\n\
     if [ -f \"/app/ParManus/scripts/quick_cuda_fix.sh\" ]; then\n\
-    python -c "from llama_cpp import llama_cpp; has_cublas = hasattr(llama_cpp, \"_LLAMA_CUBLAS\"); \
-    cuda_enabled = has_cublas and llama_cpp._LLAMA_CUBLAS; \
-    exit(0 if cuda_enabled else 1)"\n\
+    echo "from llama_cpp import llama_cpp\\nhas_cublas = hasattr(llama_cpp, \\"_LLAMA_CUBLAS\\")\\ncuda_enabled = has_cublas and llama_cpp._LLAMA_CUBLAS\\nif cuda_enabled:\\n    exit(0)\\nelse:\\n    exit(1)" > /tmp/check_cuda_exit.py\n\
+    python /tmp/check_cuda_exit.py\n\
     \n\
     if [ $? -ne 0 ]; then\n\
     echo "🔧 Attempting to fix CUDA support automatically..."\n\
