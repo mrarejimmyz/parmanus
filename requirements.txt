@@ -56,7 +56,7 @@ psutil~=6.1.0
 pathlib2~=2.3.7; python_version < "3.4"
 
 # Optional: Whisper for advanced STT
-openai-whisper~=20240930
+# openai-whisper~=20240930
 
 # Optional: Additional TTS engines
 espeak~=1.48.15; sys_platform == "linux"

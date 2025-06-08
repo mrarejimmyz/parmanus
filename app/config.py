@@ -42,10 +42,7 @@ class ProxySettings(BaseModel):
 
 class SearchSettings(BaseModel):
     engine: str = Field(default="Google", description="Search engine the llm to use")
-    fallback_engines: List[str] = Field(
-        default_factory=lambda: ["DuckDuckGo", "Baidu", "Bing"],
-        description="Fallback search engines to try if the primary engine fails",
-    )
+    fallback_engines: List[str] = Field(default_factory=lambda: [])
     retry_delay: int = Field(
         default=60,
         description="Seconds to wait before retrying all engines again after they all fail",
@@ -154,6 +151,37 @@ class Config(BaseModel):
     memory: Optional[MemorySettings] = Field(default_factory=MemorySettings)
     voice: Optional[VoiceSettings] = Field(default_factory=VoiceSettings)
 
+    @property
+    def browser_config(self) -> Optional[BrowserSettings]:
+        """
+        Compatibility property for browser_config access.
+        Returns the browser settings object.
+        """
+        return self.browser
+
+    def get_browser_config(self) -> Dict:
+        """
+        Get browser configuration as a dictionary for backwards compatibility.
+        Returns a dictionary with browser settings.
+        """
+        if self.browser is None:
+            return {
+                "headless": False,
+                "disable_security": True,
+                "chrome_instance_path": None,
+                "extra_chromium_args": [],
+            }
+
+        return {
+            "headless": self.browser.headless,
+            "disable_security": self.browser.disable_security,
+            "chrome_instance_path": self.browser.chrome_instance_path,
+            "extra_chromium_args": self.browser.extra_chromium_args,
+            "wss_url": self.browser.wss_url,
+            "cdp_url": self.browser.cdp_url,
+            "proxy": self.browser.proxy,
+        }
+
 
 # Thread-local storage for config
 _thread_local = threading.local()
@@ -188,6 +216,10 @@ def load_config(config_path: Optional[str] = None) -> Config:
 
             # Create LLMSettings instance
             config_dict["llm"] = LLMSettings(**llm_dict)
+
+        # Handle browser configuration
+        if "browser" in config_dict and isinstance(config_dict["browser"], dict):
+            config_dict["browser"] = BrowserSettings(**config_dict["browser"])
 
         # Handle MCP configuration
         if "mcp" in config_dict:
@@ -230,8 +262,16 @@ def load_config(config_path: Optional[str] = None) -> Config:
             vision=vision_settings,
         )
 
+        # Default browser settings
+        browser_settings = BrowserSettings(
+            headless=False, disable_security=True, chrome_instance_path=None
+        )
+
         default_config = Config(
-            llm=llm_settings, workspace_root=str(WORKSPACE_ROOT), mcp_config=mcp_config
+            llm=llm_settings,
+            browser=browser_settings,
+            workspace_root=str(WORKSPACE_ROOT),
+            mcp_config=mcp_config,
         )
 
         return default_config
@@ -248,7 +288,7 @@ def get_config(config_path: Optional[str] = None) -> Config:
     # If a specific config path is provided, always load it fresh
     if config_path:
         return load_config(config_path)
-    
+
     # Otherwise use thread-local caching
     if not hasattr(_thread_local, "config"):
         _thread_local.config = load_config()
