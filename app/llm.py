@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import gc
 import json
 import os
 import re
@@ -8,16 +9,16 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from io import BytesIO
 from typing import Any, Dict, Generator, List, Optional, Union
-import gc
 
+import psutil
 import tiktoken
 from llama_cpp import Llama
 from pydantic import BaseModel
 
 from app.config import LLMSettings, config
 from app.exceptions import TokenLimitExceeded
-from app.logger import logger
 from app.gpu_manager import CUDAGPUManager
+from app.logger import logger
 from app.schema import (
     ROLE_VALUES,
     TOOL_CHOICE_TYPE,
@@ -61,17 +62,18 @@ class TokenCounter:
 class LLMOptimized:
     """
     Optimized LLM wrapper for llama-cpp-python with enhanced GPU management.
-    
+
     Features:
     - Intelligent GPU memory management
     - Graceful vision model fallback
     - Adaptive layer allocation
     - Memory monitoring and cleanup
+    - Dynamic context sizing
     """
 
-    # Model context sizes
-    TEXT_MODEL_CONTEXT_SIZE = 4096
-    VISION_MODEL_CONTEXT_SIZE = 2048
+    # Updated model context sizes - increased for better utilization
+    TEXT_MODEL_CONTEXT_SIZE = 8192  # Increased from 4096
+    VISION_MODEL_CONTEXT_SIZE = 4096  # Increased from 2048
     MAX_ALLOWED_OUTPUT_TOKENS = 2048
 
     def __init__(self, settings: LLMSettings = None):
@@ -83,10 +85,12 @@ class LLMOptimized:
         self.temperature = self.settings.temperature
 
         # GPU management with configuration
-        force_cuda = getattr(config, 'gpu', {}).get('force_cuda', False)
-        force_gpu_layers = getattr(config, 'gpu', {}).get('force_gpu_layers', 0)
-        self.gpu_manager = CUDAGPUManager(force_cuda=force_cuda, force_gpu_layers=force_gpu_layers)
-        
+        force_cuda = getattr(config, "gpu", {}).get("force_cuda", False)
+        force_gpu_layers = getattr(config, "gpu", {}).get("force_gpu_layers", 0)
+        self.gpu_manager = CUDAGPUManager(
+            force_cuda=force_cuda, force_gpu_layers=force_gpu_layers
+        )
+
         # Thread pool for model operations
         self._executor = ThreadPoolExecutor(max_workers=2)
 
@@ -107,7 +111,7 @@ class LLMOptimized:
 
         logger.info(
             f"Initialized optimized LLM: {self.model}, GPU: {self.gpu_manager.cuda_available}, "
-            f"Vision: {self.vision_enabled}"
+            f"Vision: {self.vision_enabled}, Context: {self.TEXT_MODEL_CONTEXT_SIZE}"
         )
 
         # Initialize locks if they don't exist
@@ -128,25 +132,71 @@ class LLMOptimized:
         """Validate if vision model can be loaded."""
         if not self.vision_settings:
             return False
-        
+
         vision_path = self.vision_settings.model_path
         if not os.path.exists(vision_path):
-            logger.warning(f"Vision model not found: {vision_path}, disabling vision capabilities")
+            logger.warning(
+                f"Vision model not found: {vision_path}, disabling vision capabilities"
+            )
             return False
-        
+
         # Check file size and integrity
         try:
             file_size = os.path.getsize(vision_path) / (1024**3)  # GB
             if file_size < 0.1:  # Less than 100MB is suspicious
-                logger.warning(f"Vision model file too small: {file_size:.1f}GB, disabling vision")
+                logger.warning(
+                    f"Vision model file too small: {file_size:.1f}GB, disabling vision"
+                )
                 return False
-            
+
             logger.info(f"Vision model validated: {vision_path} ({file_size:.1f}GB)")
             return True
-            
+
         except Exception as e:
             logger.warning(f"Failed to validate vision model: {e}")
             return False
+
+    def _get_optimal_context_size(self, model_path: str, default_size: int) -> int:
+        """Determine optimal context size based on available memory and model."""
+        try:
+            # Get system memory info
+            memory = psutil.virtual_memory()
+            available_ram_gb = memory.available / (1024**3)
+
+            # Get GPU memory info
+            gpu_info = self.gpu_manager.get_gpu_memory_info()
+            available_vram_gb = gpu_info.get("free", 0)
+
+            # Get model size
+            model_size_gb = os.path.getsize(model_path) / (1024**3)
+
+            # Calculate context size based on available memory
+            # Rule of thumb: context memory usage is roughly proportional to context size
+            memory_factor = min(
+                available_ram_gb / 8.0, available_vram_gb / 4.0
+            )  # Conservative estimate
+
+            if memory_factor >= 2.0:
+                # Plenty of memory - use larger context
+                optimal_size = min(default_size * 4, 32768)
+            elif memory_factor >= 1.0:
+                # Decent memory - use 2x default
+                optimal_size = min(default_size * 2, 16384)
+            else:
+                # Limited memory - stick to default or smaller
+                optimal_size = default_size
+
+            logger.info(
+                f"Context size optimization: RAM={available_ram_gb:.1f}GB, "
+                f"VRAM={available_vram_gb:.1f}GB, Model={model_size_gb:.1f}GB, "
+                f"Context={optimal_size}"
+            )
+
+            return optimal_size
+
+        except Exception as e:
+            logger.warning(f"Failed to optimize context size: {e}")
+            return default_size
 
     async def _preload_text_model_safe(self):
         """Preload text model with GPU optimization."""
@@ -201,41 +251,58 @@ class LLMOptimized:
             logger.info(f"Loading text model: {self.model_path}")
             start_time = time.time()
 
+            # Get optimal context size
+            optimal_context = self._get_optimal_context_size(
+                self.model_path, self.TEXT_MODEL_CONTEXT_SIZE
+            )
+
+            # Update the cache key if context size changed
+            if optimal_context != self.TEXT_MODEL_CONTEXT_SIZE:
+                self.TEXT_MODEL_CONTEXT_SIZE = optimal_context
+                self._text_model_key = (
+                    f"{self.model_path}_{self.TEXT_MODEL_CONTEXT_SIZE}"
+                )
+
             # Estimate model size (rough approximation)
             model_size_gb = os.path.getsize(self.model_path) / (1024**3)
-            
+
             # Determine GPU usage
             use_gpu = self.gpu_manager.should_use_gpu(model_size_gb)
             gpu_layers = 0
-            
+
             if use_gpu:
                 # Estimate total layers (rough approximation for common models)
                 estimated_layers = int(model_size_gb * 10)  # Rough estimate
-                gpu_layers = self.gpu_manager.optimize_gpu_layers(estimated_layers, model_size_gb, self.model_path)
-            
-            logger.info(f"Loading text model with {gpu_layers} GPU layers")
+                gpu_layers = self.gpu_manager.optimize_gpu_layers(
+                    estimated_layers, model_size_gb, self.model_path
+                )
+
+            logger.info(
+                f"Loading text model with {gpu_layers} GPU layers and {optimal_context} context size"
+            )
 
             try:
                 model = Llama(
                     model_path=self.model_path,
-                    n_ctx=self.TEXT_MODEL_CONTEXT_SIZE,
+                    n_ctx=optimal_context,
                     n_gpu_layers=gpu_layers,
                     n_threads=min(os.cpu_count(), 8),  # Limit CPU threads
                     use_mmap=True,
                     use_mlock=False,  # Disable mlock to reduce memory pressure
                     verbose=False,  # Reduce verbosity
+                    # Additional optimizations
+                    n_batch=512,  # Batch size for prompt processing
+                    rope_freq_base=10000.0,  # RoPE frequency base
                 )
 
                 MODEL_CACHE[self._text_model_key] = model
                 load_time = time.time() - start_time
-                
-                # Log memory usage
-                memory_info = self.gpu_manager.get_gpu_memory_info()
-                logger.info(
-                    f"Text model loaded in {load_time:.2f}s, "
-                    f"GPU memory: {memory_info['used']:.1f}/{memory_info['total']:.1f}GB"
-                )
-                
+
+                # Log memory usage - improved GPU memory detection
+                memory_info = self._get_detailed_memory_info()
+                logger.info(f"Text model loaded in {load_time:.2f}s")
+                logger.info(f"Memory usage: {memory_info}")
+
             except Exception as e:
                 logger.error(f"Failed to load text model: {e}")
                 # Fallback to CPU-only
@@ -243,12 +310,13 @@ class LLMOptimized:
                     logger.warning("Retrying with CPU-only mode")
                     model = Llama(
                         model_path=self.model_path,
-                        n_ctx=self.TEXT_MODEL_CONTEXT_SIZE,
+                        n_ctx=optimal_context,
                         n_gpu_layers=0,
                         n_threads=os.cpu_count(),
                         use_mmap=True,
                         use_mlock=False,
                         verbose=False,
+                        n_batch=512,
                     )
                     MODEL_CACHE[self._text_model_key] = model
                     logger.info("Text model loaded in CPU-only mode")
@@ -267,39 +335,56 @@ class LLMOptimized:
             start_time = time.time()
 
             try:
+                # Get optimal context size for vision model
+                optimal_context = self._get_optimal_context_size(
+                    self.vision_settings.model_path, self.VISION_MODEL_CONTEXT_SIZE
+                )
+
+                # Update context size and cache key if needed
+                if optimal_context != self.VISION_MODEL_CONTEXT_SIZE:
+                    self.VISION_MODEL_CONTEXT_SIZE = optimal_context
+                    self._vision_model_key = f"{self.vision_settings.model_path}_{self.VISION_MODEL_CONTEXT_SIZE}"
+
                 # Check if we have enough GPU memory for vision model
-                model_size_gb = os.path.getsize(self.vision_settings.model_path) / (1024**3)
+                model_size_gb = os.path.getsize(self.vision_settings.model_path) / (
+                    1024**3
+                )
                 use_gpu = self.gpu_manager.should_use_gpu(model_size_gb)
-                
+
                 # Use fewer GPU layers for vision model to conserve memory
                 gpu_layers = 0
                 if use_gpu:
                     estimated_layers = int(model_size_gb * 8)  # Conservative estimate
                     gpu_layers = min(
-                        self.gpu_manager.optimize_gpu_layers(estimated_layers, model_size_gb, self.vision_settings.model_path),
-                        estimated_layers // 2  # Use only half the layers for vision
+                        self.gpu_manager.optimize_gpu_layers(
+                            estimated_layers,
+                            model_size_gb,
+                            self.vision_settings.model_path,
+                        ),
+                        estimated_layers // 2,  # Use only half the layers for vision
                     )
 
-                logger.info(f"Loading vision model with {gpu_layers} GPU layers")
+                logger.info(
+                    f"Loading vision model with {gpu_layers} GPU layers and {optimal_context} context size"
+                )
 
                 model = Llama(
                     model_path=self.vision_settings.model_path,
-                    n_ctx=self.VISION_MODEL_CONTEXT_SIZE,
+                    n_ctx=optimal_context,
                     n_gpu_layers=gpu_layers,
                     n_threads=min(os.cpu_count(), 4),  # Fewer threads for vision
                     use_mmap=True,
                     use_mlock=False,
                     verbose=False,
+                    n_batch=256,  # Smaller batch for vision
                 )
 
                 MODEL_CACHE[self._vision_model_key] = model
                 load_time = time.time() - start_time
-                
-                memory_info = self.gpu_manager.get_gpu_memory_info()
-                logger.info(
-                    f"Vision model loaded in {load_time:.2f}s, "
-                    f"GPU memory: {memory_info['used']:.1f}/{memory_info['total']:.1f}GB"
-                )
+
+                memory_info = self._get_detailed_memory_info()
+                logger.info(f"Vision model loaded in {load_time:.2f}s")
+                logger.info(f"Memory usage: {memory_info}")
 
             except Exception as e:
                 logger.error(f"Failed to load vision model: {e}")
@@ -308,6 +393,29 @@ class LLMOptimized:
                 return None
 
         return MODEL_CACHE[self._vision_model_key]
+
+    def _get_detailed_memory_info(self) -> str:
+        """Get detailed memory information including GPU memory."""
+        try:
+            # System memory
+            memory = psutil.virtual_memory()
+            ram_used = memory.used / (1024**3)
+            ram_total = memory.total / (1024**3)
+
+            # GPU memory
+            gpu_info = self.gpu_manager.get_gpu_memory_info()
+
+            # Process memory
+            process = psutil.Process()
+            process_memory = process.memory_info().rss / (1024**3)
+
+            return (
+                f"RAM: {ram_used:.1f}/{ram_total:.1f}GB, "
+                f"GPU: {gpu_info.get('used', 0):.1f}/{gpu_info.get('total', 0):.1f}GB, "
+                f"Process: {process_memory:.1f}GB"
+            )
+        except Exception as e:
+            return f"Memory info unavailable: {e}"
 
     @property
     def text_model(self):
@@ -330,15 +438,15 @@ class LLMOptimized:
         """Count tokens with improved estimation."""
         if not text:
             return 0
-        
+
         # More accurate token estimation
         # Average of 3.5 characters per token for English
-        return max(1, len(text.encode('utf-8')) // 4)
+        return max(1, len(text.encode("utf-8")) // 4)
 
     def update_token_count(self, prompt_tokens: int, completion_tokens: int):
         """Update token counter and check limits."""
         self.token_counter.update(prompt_tokens, completion_tokens)
-        
+
         # Check token limits
         if self.settings.max_input_tokens:
             if self.token_counter.total_tokens > self.settings.max_input_tokens:
@@ -353,18 +461,18 @@ class LLMOptimized:
             # Clear model cache for this instance
             if self._text_model_key in MODEL_CACHE:
                 del MODEL_CACHE[self._text_model_key]
-            
+
             if self._vision_model_key and self._vision_model_key in MODEL_CACHE:
                 del MODEL_CACHE[self._vision_model_key]
-            
+
             # Force garbage collection
             gc.collect()
-            
+
             # Clean up GPU memory
             self.gpu_manager.cleanup_gpu_memory()
-            
+
             logger.info("Model cleanup completed")
-            
+
         except Exception as e:
             logger.warning(f"Error during model cleanup: {e}")
 
@@ -374,35 +482,49 @@ class LLMOptimized:
         try:
             # Clear all models from global cache
             MODEL_CACHE.clear()
-            
+
             # Force garbage collection
             gc.collect()
-            
+
             logger.info("All models cleanup completed")
-            
+
         except Exception as e:
             logger.warning(f"Error during global model cleanup: {e}")
 
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get current memory statistics."""
         gpu_info = self.gpu_manager.get_gpu_memory_info()
-        
+
+        # Get system memory
+        memory = psutil.virtual_memory()
+
         return {
             "gpu_memory": gpu_info,
+            "system_memory": {
+                "used": memory.used / (1024**3),
+                "total": memory.total / (1024**3),
+                "percent": memory.percent,
+            },
             "models_loaded": len(MODEL_CACHE),
             "text_model_loaded": self._text_model_key in MODEL_CACHE,
-            "vision_model_loaded": self._vision_model_key in MODEL_CACHE if self._vision_model_key else False,
+            "vision_model_loaded": (
+                self._vision_model_key in MODEL_CACHE
+                if self._vision_model_key
+                else False
+            ),
             "vision_enabled": self.vision_enabled,
+            "context_sizes": {
+                "text": self.TEXT_MODEL_CONTEXT_SIZE,
+                "vision": (
+                    self.VISION_MODEL_CONTEXT_SIZE if self.vision_enabled else None
+                ),
+            },
             "token_count": {
                 "prompt": self.token_counter.prompt_tokens,
                 "completion": self.token_counter.completion_tokens,
                 "total": self.token_counter.total_tokens,
-            }
+            },
         }
-
-    def update_token_count(self, prompt_tokens: int, completion_tokens: int) -> None:
-        """Update the token counter with the latest usage."""
-        self.token_counter.update(prompt_tokens, completion_tokens)
 
     def check_token_limit(self, input_tokens: int, has_images: bool = False) -> bool:
         """Check if the input tokens exceed the model's context window."""
@@ -416,7 +538,9 @@ class LLMOptimized:
         available_tokens = context_size - self.max_tokens
         return input_tokens <= available_tokens
 
-    def get_limit_error_message(self, input_tokens: int, has_images: bool = False) -> str:
+    def get_limit_error_message(
+        self, input_tokens: int, has_images: bool = False
+    ) -> str:
         """Get error message for token limit exceeded."""
         context_size = (
             self.VISION_MODEL_CONTEXT_SIZE
@@ -645,9 +769,7 @@ class LLMOptimized:
                     return completion_text
                 except asyncio.TimeoutError:
                     logger.error(f"Model completion timed out after {timeout} seconds")
-                    return (
-                        f"[Response incomplete due to timeout after {timeout} seconds]"
-                    )
+                    return f"[Response timed out after {timeout} seconds]"
                 except Exception as e:
                     logger.error(f"Error in model completion: {e}")
                     return f"[Error: {str(e)}]"
@@ -657,167 +779,8 @@ class LLMOptimized:
             raise
         except Exception as e:
             logger.error(f"Unexpected error in ask method: {e}")
-            return f"[Unexpected error: {str(e)}]"
-
-    async def ask_tool(
-        self,
-        messages: List[Union[Message, Dict[str, Any]]],
-        system_msgs: Optional[List[Union[Message, Dict[str, Any]]]] = None,
-        tools: Optional[List[Dict[str, Any]]] = None,
-        tool_choice: Optional[str] = None,
-        temperature: Optional[float] = None,
-        timeout: int = 120,
-        **kwargs,
-    ) -> Dict[str, Any]:
-        """
-        Send a request to the model with tool support and get a response.
-
-        Args:
-            messages: List of messages to send to the model
-            system_msgs: Optional system messages to prepend
-            tools: List of available tools in OpenAI format
-            tool_choice: Tool choice strategy ("auto", "none", or specific tool)
-            temperature: Temperature for sampling (0.0 to 1.0)
-            timeout: Timeout in seconds for the request
-            **kwargs: Additional arguments to pass to the model
-
-        Returns:
-            Dictionary with 'content' and optionally 'tool_calls'
-
-        Raises:
-            TokenLimitExceeded: If the input exceeds the model's token limit
-            Exception: For other unexpected errors
-        """
-        try:
-            # For now, since llama-cpp-python doesn't natively support function calling,
-            # we'll simulate it by including tool information in the system prompt
-            # and parsing the response for tool calls
-            
-            # Build enhanced system message with tool information
-            enhanced_system_msgs = system_msgs or []
-            
-            if tools:
-                tool_descriptions = []
-                for tool in tools:
-                    func = tool.get('function', {})
-                    name = func.get('name', 'unknown')
-                    desc = func.get('description', 'No description')
-                    params = func.get('parameters', {})
-                    
-                    tool_desc = f"- {name}: {desc}"
-                    if params and params.get('properties'):
-                        param_names = list(params['properties'].keys())
-                        tool_desc += f" (Parameters: {', '.join(param_names)})"
-                    tool_descriptions.append(tool_desc)
-                
-                tool_system_msg = {
-                    "role": "system",
-                    "content": f"""You have access to the following tools:
-
-{chr(10).join(tool_descriptions)}
-
-To use a tool, respond with a JSON object in this format:
-{{"tool_calls": [{{"function": {{"name": "tool_name", "arguments": {{"param": "value"}}}}}}]}}
-
-You can also provide regular text responses. If you need to use a tool, include the tool call JSON in your response."""
-                }
-                enhanced_system_msgs = [tool_system_msg] + enhanced_system_msgs
-            
-            # Get regular response
-            response_text = await self.ask(
-                messages=messages,
-                system_msgs=enhanced_system_msgs,
-                temperature=temperature,
-                timeout=timeout,
-                **kwargs
-            )
-            
-            # Try to parse tool calls from the response
-            tool_calls = []
-            content = response_text
-            
-            # Simple parsing for tool calls (this is a basic implementation)
-            import json
-            import re
-            import uuid
-            from app.schema import ToolCall, Function
-            
-            # Look for JSON tool call patterns
-            tool_call_pattern = r'\{"tool_calls":\s*\[.*?\]\}'
-            matches = re.findall(tool_call_pattern, response_text, re.DOTALL)
-            
-            for match in matches:
-                try:
-                    parsed = json.loads(match)
-                    if 'tool_calls' in parsed:
-                        for tc in parsed['tool_calls']:
-                            if 'function' in tc:
-                                # Convert to expected ToolCall format
-                                tool_call = ToolCall(
-                                    id=str(uuid.uuid4()),
-                                    type="function",
-                                    function=Function(
-                                        name=tc['function'].get('name', ''),
-                                        arguments=json.dumps(tc['function'].get('arguments', {}))
-                                    )
-                                )
-                                tool_calls.append(tool_call)
-                        # Remove the tool call JSON from content
-                        content = content.replace(match, '').strip()
-                except json.JSONDecodeError:
-                    continue
-            
-            # Also look for function call syntax: tool_name(param="value", param2="value2")
-            if not tool_calls:
-                func_call_pattern = r'(\w+)\((.*?)\)'
-                func_matches = re.findall(func_call_pattern, response_text)
-                
-                for func_name, args_str in func_matches:
-                    # Check if this is a known tool
-                    if tools and any(tool.get('function', {}).get('name') == func_name for tool in tools):
-                        try:
-                            # Parse arguments from the function call
-                            arguments = {}
-                            # Simple parsing for key="value" pairs
-                            arg_pattern = r'(\w+)="([^"]*)"'
-                            arg_matches = re.findall(arg_pattern, args_str)
-                            for key, value in arg_matches:
-                                arguments[key] = value
-                            
-                            # Create tool call
-                            tool_call = ToolCall(
-                                id=str(uuid.uuid4()),
-                                type="function",
-                                function=Function(
-                                    name=func_name,
-                                    arguments=json.dumps(arguments)
-                                )
-                            )
-                            tool_calls.append(tool_call)
-                            
-                            # Remove the function call from content
-                            full_call = f"{func_name}({args_str})"
-                            content = content.replace(full_call, '').strip()
-                            
-                        except Exception as e:
-                            logger.warning(f"Failed to parse function call {func_name}: {e}")
-                            continue
-            
-            return {
-                'content': content,
-                'tool_calls': tool_calls
-            }
-            
-        except TokenLimitExceeded:
-            # Re-raise token limit exceptions without modification
             raise
-        except Exception as e:
-            logger.error(f"Unexpected error in ask_tool method: {e}")
-            return {
-                'content': f"[Unexpected error: {str(e)}]",
-                'tool_calls': []
-            }
 
-# Alias for backward compatibility
+
+# For backward compatibility - alias LLMOptimized as LLM
 LLM = LLMOptimized
-

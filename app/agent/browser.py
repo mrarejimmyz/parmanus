@@ -157,6 +157,23 @@ class BrowserAgent(ToolCallAgent):
     max_recent_actions: int = 10
     hallucination_detected: bool = False
 
+    def _extract_url(self, prompt: str) -> str:
+        """Extract and format URL from user prompt (private helper)."""
+        for separator in ["go to", "open", "navigate to"]:
+            if separator in prompt.lower():
+                url = prompt.lower().split(separator)[-1].strip()
+                break
+        else:
+            url = prompt.strip()
+
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+
+        if "." not in url.split("//")[-1]:
+            url += ".com"
+
+        return url
+
     @classmethod
     async def create(cls, **kwargs) -> "BrowserAgent":
         """Factory method to create and properly initialize a BrowserAgent instance."""
@@ -232,21 +249,66 @@ class BrowserAgent(ToolCallAgent):
                 self.state = "FINISHED"
                 return False
 
+            # Check for navigation commands first and handle them directly
+            user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
+            if user_messages and any(
+                cmd in user_messages[-1].content.lower()
+                for cmd in ["go to", "open", "navigate to"]
+            ):
+                prompt = user_messages[-1].content
+                url = self._extract_url(prompt)
+                logger.info(f"Direct navigation requested to: {url}")
+
+                # Force the browser tool to be used for navigation
+                from app.schema import Function, ToolCall
+
+                # Create a tool call for navigation
+                nav_tool_call = ToolCall(
+                    id="nav_001",
+                    function=Function(
+                        name="browser_use",
+                        arguments=json.dumps({"action": "navigate", "url": url}),
+                    ),
+                )
+
+                # Set this as our tool call
+                self.tool_calls = [nav_tool_call]
+
+                # Execute the tool call
+                browser_tool = self.available_tools.get_tool(BrowserUseTool().name)
+                if browser_tool:
+                    result = await browser_tool.execute(action="navigate", url=url)
+                    if result and not result.error:
+                        self.memory.add_message(
+                            Message.assistant_message(
+                                f"Successfully navigated to {url}"
+                            )
+                        )
+                        logger.info(f"Successfully navigated to {url}")
+                        return True
+                    else:
+                        logger.error(
+                            f"Navigation failed: {result.error if result else 'Unknown error'}"
+                        )
+
             # Use simplified prompt for first few steps to avoid complexity
             if self.current_step <= 3:
-                from app.prompt.browser import SIMPLE_NEXT_STEP_PROMPT
+                try:
+                    from app.prompt.browser import SIMPLE_NEXT_STEP_PROMPT
 
-                # Get the original user request from memory
-                user_messages = [
-                    msg for msg in self.memory.messages if msg.role == "user"
-                ]
-                task = (
-                    user_messages[0].content
-                    if user_messages
-                    else "Navigate and analyze the website"
-                )
-                self.next_step_prompt = SIMPLE_NEXT_STEP_PROMPT.format(task=task)
-                logger.info(f"Using simplified prompt for step {self.current_step}")
+                    # Get the original user request from memory
+                    user_messages = [
+                        msg for msg in self.memory.messages if msg.role == "user"
+                    ]
+                    task = (
+                        user_messages[0].content
+                        if user_messages
+                        else "Navigate and analyze the website"
+                    )
+                    self.next_step_prompt = SIMPLE_NEXT_STEP_PROMPT.format(task=task)
+                    logger.info(f"Using simplified prompt for step {self.current_step}")
+                except ImportError:
+                    logger.warning("SIMPLE_NEXT_STEP_PROMPT not found, using default")
             else:
                 # Update next step prompt with current browser state for later steps
                 if self.browser_context_helper:
