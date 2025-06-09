@@ -107,7 +107,7 @@ api_key = "sk-..."  # Replace with your actual API key
 
 One line for run ParManus:
 ```bash
-python main.py
+python main.py --prompt "your prompt here"
 ```
 
 Then input your idea via terminal!
