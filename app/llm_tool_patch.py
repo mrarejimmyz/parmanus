@@ -1,4 +1,4 @@
-"""Fixes for LLM tool patching issues."""
+"""Complete fixes for LLM tool patching issues."""
 
 import asyncio
 import json
@@ -30,13 +30,22 @@ def format_tool_definitions(tools: Optional[List[Dict[str, Any]]]) -> str:
 
     tool_str = "\nAvailable tools:\n"
     for tool in tools:
-        tool_str += f"\n- {tool['name']}: {tool['description']}"
-        if "parameters" in tool:
+        # Handle both direct format and OpenAI function call format
+        if "function" in tool:
+            func_data = tool["function"]
+            name = func_data.get("name", "unknown")
+            description = func_data.get("description", "")
+            parameters = func_data.get("parameters", {})
+        else:
+            name = tool.get("name", "unknown")
+            description = tool.get("description", "")
+            parameters = tool.get("parameters", {})
+
+        tool_str += f"\n- {name}: {description}"
+        if parameters and "properties" in parameters:
             tool_str += "\n  Parameters:"
-            for param_name, param_info in (
-                tool["parameters"].get("properties", {}).items()
-            ):
-                required = param_name in tool["parameters"].get("required", [])
+            for param_name, param_info in parameters.get("properties", {}).items():
+                required = param_name in parameters.get("required", [])
                 tool_str += f"\n    - {param_name} ({'required' if required else 'optional'}): {param_info.get('description', '')}"
     return tool_str
 
@@ -54,108 +63,242 @@ def get_tool_instructions(tool_choice: Union[str, ToolChoice]) -> str:
     return ""
 
 
-def _parse_tool_calls(text: str) -> List[Dict[str, Any]]:
-    """Parse tool calls from text with improved error handling."""
-    tool_calls = []
+def _format_tool_call(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Format a tool call into the expected structure."""
+    try:
+        logger.debug(f"Formatting tool call: {data}")
 
-    if not text:
-        return []
+        if not isinstance(data, dict):
+            raise ValueError(f"Tool call data must be a dictionary, got {type(data)}")
+
+        if not data:
+            raise ValueError("Tool call data cannot be empty")
+
+        # Extract tool name from either direct name field or function name
+        name = None
+        if "function" in data and isinstance(data["function"], dict):
+            name = data["function"].get("name")
+        elif "name" in data:
+            name = data["name"]
+
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"Tool call missing valid name, got {name}")
+
+        # Get arguments from either direct arguments field or function arguments
+        args = {}
+        if "function" in data and isinstance(data["function"], dict):
+            args = data["function"].get("arguments", {})
+        elif "arguments" in data:
+            args = data["arguments"]
+
+        # Normalize args to a string
+        if isinstance(args, (dict, list)):
+            try:
+                args_str = json.dumps(args)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to JSON encode arguments: {e}, using str() instead"
+                )
+                args_str = str(args)
+        elif not isinstance(args, str):
+            args_str = str(args)
+        else:
+            args_str = args
+
+        result = {
+            "id": data.get("id", f"call_{time.time_ns()}"),
+            "type": "function",
+            "function": {"name": name.strip(), "arguments": args_str},
+        }
+        logger.debug(f"Formatted tool call result: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to format tool call: {e}")
+        raise ValueError(f"Tool call formatting failed: {str(e)}")
+
+
+def _parse_tool_calls(text: str) -> List[Dict[str, Any]]:
+    """Parse tool calls from text with comprehensive pattern matching."""
+    tool_calls = []
+    logger.debug(f"Parsing tool calls from: {text[:200]}...")
 
     try:
-        # First try to parse as pure JSON
+        # Pattern 1: Try to parse as pure JSON first
         try:
-            data = json.loads(text)
+            data = json.loads(text.strip())
+            logger.debug(f"Successfully parsed as JSON: {type(data)}")
+
             if isinstance(data, dict):
-                try:
-                    formatted_call = _format_tool_call(data)
-                    tool_calls.append(formatted_call)
+                if "name" in data or (
+                    "function" in data
+                    and isinstance(data["function"], dict)
+                    and "name" in data["function"]
+                ):
+                    formatted = _format_tool_call(data)
+                    tool_calls.append(formatted)
                     return tool_calls
-                except Exception as e:
-                    logger.warning(f"Failed to format tool call: {str(e)}")
             elif isinstance(data, list):
                 for item in data:
-                    if isinstance(item, dict):
-                        try:
-                            formatted_call = _format_tool_call(item)
-                            tool_calls.append(formatted_call)
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to format list item tool call: {str(e)}"
-                            )
+                    if isinstance(item, dict) and (
+                        "name" in item
+                        or (
+                            "function" in item
+                            and isinstance(item["function"], dict)
+                            and "name" in item["function"]
+                        )
+                    ):
+                        formatted = _format_tool_call(item)
+                        tool_calls.append(formatted)
                 if tool_calls:
                     return tool_calls
         except json.JSONDecodeError:
-            logger.debug("Text is not valid JSON, trying other patterns")
+            logger.debug("Failed to parse as pure JSON, trying other patterns")
 
-        # Pattern 1: Natural language tool calls
-        pattern = r"(?:Called|Using|Execute|Run|Invoke|Call)\s+[`']([^`']+)[`']\s+with(?:\s+arguments?)?:?\s*({[^}]+}|\([^)]+\))"
-        matches = re.finditer(pattern, text, re.IGNORECASE)
+        # Pattern 2: JSON code blocks
+        json_block_pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+        json_matches = re.finditer(json_block_pattern, text, re.IGNORECASE)
 
-        for match in matches:
+        for match in json_matches:
+            try:
+                json_content = match.group(1).strip()
+                data = json.loads(json_content)
+
+                if isinstance(data, dict):
+                    if "name" in data or (
+                        "function" in data
+                        and isinstance(data["function"], dict)
+                        and "name" in data["function"]
+                    ):
+                        formatted = _format_tool_call(data)
+                        tool_calls.append(formatted)
+                elif isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and (
+                            "name" in item
+                            or (
+                                "function" in item
+                                and isinstance(item["function"], dict)
+                                and "name" in item["function"]
+                            )
+                        ):
+                            formatted = _format_tool_call(item)
+                            tool_calls.append(formatted)
+            except (json.JSONDecodeError, Exception) as e:
+                logger.debug(f"Failed to parse JSON block: {e}")
+                continue
+
+        # Pattern 3: Natural language tool calls
+        natural_pattern = r"(?:Call|Use|Execute|Run|Invoke)\s+`([^`]+)`\s+with(?:\s+(?:arguments?|params?))?:?\s*({[^}]+})"
+        natural_matches = re.finditer(natural_pattern, text, re.IGNORECASE)
+
+        for match in natural_matches:
             try:
                 tool_name = match.group(1).strip()
-                args_str = match.group(2).strip()
+                args_text = match.group(2).strip()
 
-                # Remove outer parens if present
-                if args_str.startswith("(") and args_str.endswith(")"):
-                    args_str = args_str[1:-1]
-
+                # Try to parse arguments as JSON
                 try:
-                    # Try to parse as JSON first
-                    args = json.loads(args_str)
+                    args = json.loads(args_text)
                 except json.JSONDecodeError:
-                    # Fallback to simple key=value parsing
+                    # Fallback to simple parsing
                     args = {}
-                    for pair in args_str.split(","):
+                    # Remove braces and parse key=value pairs
+                    clean_args = args_text.strip("{}")
+                    for pair in clean_args.split(","):
                         if "=" in pair:
                             k, v = pair.split("=", 1)
-                            args[k.strip()] = v.strip().strip("\"'")
+                            args[k.strip()] = v.strip().strip('"').strip("'")
 
-                tool_call = _format_tool_call({"name": tool_name, "arguments": args})
-                tool_calls.append(tool_call)
+                tool_data = {"name": tool_name, "arguments": args}
+                formatted = _format_tool_call(tool_data)
+                tool_calls.append(formatted)
             except Exception as e:
-                logger.warning(f"Failed to parse natural language tool call: {str(e)}")
+                logger.debug(f"Failed to parse natural language tool call: {e}")
                 continue
 
-        # Pattern 2: XML-style function calls
-        xml_pattern = r'<(?:antml:)?function_calls>\s*<(?:antml:)?(?:invoke|function)\s+name="([^"]+)">(.*?)</(?:antml:)?(?:invoke|function)>\s*</(?:antml:)?function_calls>'
-        xml_matches = re.finditer(xml_pattern, text, re.DOTALL)
+        # Pattern 4: XML-style function calls
+        xml_patterns = [
+            r'<(?:antml:)?function_calls>\s*<(?:antml:)?(?:invoke|function)\s+name="([^"]+)">(.*?)</(?:antml:)?(?:invoke|function)>\s*</(?:antml:)?function_calls>',
+            r'<function_calls>\s*<function\s+name="([^"]+)"[^>]*>(.*?)</function>\s*</function_calls>',
+        ]
 
-        for xml_match in xml_matches:
-            try:
-                tool_name = xml_match.group(1).strip()
-                params_text = xml_match.group(2).strip()
-                tool_args = {}
+        for xml_pattern in xml_patterns:
+            xml_matches = re.finditer(xml_pattern, text, re.DOTALL)
 
-                # Parse individual parameters
-                param_pattern = r'<(?:antml:)?parameter\s+name="([^"]+)">(.*?)</(?:antml:)?parameter>'
-                param_matches = re.finditer(param_pattern, params_text, re.DOTALL)
+            for xml_match in xml_matches:
+                try:
+                    tool_name = xml_match.group(1).strip()
+                    params_text = xml_match.group(2).strip()
+                    tool_args = {}
 
-                for param_match in param_matches:
-                    param_name = param_match.group(1)
-                    param_value = param_match.group(2).strip()
+                    # Parse individual parameters
+                    param_patterns = [
+                        r'<(?:antml:)?parameter\s+name="([^"]+)">(.*?)</(?:antml:)?parameter>',
+                        r'<param\s+name="([^"]+)">(.*?)</param>',
+                    ]
 
-                    # Try to parse as JSON if it looks like a JSON value
-                    if param_value.startswith("{") or param_value.startswith("["):
-                        try:
-                            tool_args[param_name] = json.loads(param_value)
-                        except json.JSONDecodeError:
-                            tool_args[param_name] = param_value
-                    else:
-                        tool_args[param_name] = param_value
+                    for param_pattern in param_patterns:
+                        param_matches = re.finditer(
+                            param_pattern, params_text, re.DOTALL
+                        )
+                        for param_match in param_matches:
+                            param_name = param_match.group(1)
+                            param_value = param_match.group(2).strip()
 
-                tool_call = _format_tool_call(
-                    {"name": tool_name, "arguments": tool_args}
-                )
-                tool_calls.append(tool_call)
-            except Exception as e:
-                logger.warning(f"Failed to parse XML tool call: {str(e)}")
-                continue
+                            # Try to parse as JSON if it looks like JSON
+                            if param_value.startswith(("{", "[")):
+                                try:
+                                    tool_args[param_name] = json.loads(param_value)
+                                except json.JSONDecodeError:
+                                    tool_args[param_name] = param_value
+                            else:
+                                tool_args[param_name] = param_value
 
+                    tool_data = {"name": tool_name, "arguments": tool_args}
+                    formatted = _format_tool_call(tool_data)
+                    tool_calls.append(formatted)
+                except Exception as e:
+                    logger.debug(f"Failed to parse XML tool call: {e}")
+                    continue
+
+        # Pattern 5: Simple function calls
+        simple_pattern = r"(\w+)\s*\(([^)]*)\)"
+        simple_matches = re.finditer(simple_pattern, text)
+
+        # Only consider this if no other patterns matched and the function name looks like a tool
+        if not tool_calls:
+            for match in simple_matches:
+                try:
+                    func_name = match.group(1)
+                    args_text = match.group(2).strip()
+
+                    # Only consider if it looks like a tool name (contains underscore or specific patterns)
+                    if "_" in func_name or func_name.lower().startswith(
+                        ("browser", "search", "file", "web")
+                    ):
+                        args = {}
+                        if args_text:
+                            # Simple argument parsing
+                            for arg in args_text.split(","):
+                                arg = arg.strip()
+                                if "=" in arg:
+                                    k, v = arg.split("=", 1)
+                                    args[k.strip()] = v.strip().strip('"').strip("'")
+                                else:
+                                    args["value"] = arg.strip('"').strip("'")
+
+                        tool_data = {"name": func_name, "arguments": args}
+                        formatted = _format_tool_call(tool_data)
+                        tool_calls.append(formatted)
+                except Exception as e:
+                    logger.debug(f"Failed to parse simple function call: {e}")
+                    continue
+
+        logger.debug(f"Parsed {len(tool_calls)} tool calls")
         return tool_calls
 
     except Exception as e:
-        logger.error(f"Error parsing tool calls: {str(e)}", exc_info=True)
+        logger.error(f"Error in _parse_tool_calls: {str(e)}", exc_info=True)
         return []
 
 
@@ -203,9 +346,7 @@ async def ask_tool(
             prompt = self._format_prompt_for_llama(formatted_messages)
             tool_definitions = format_tool_definitions(tools) if tools else ""
             tool_instructions = get_tool_instructions(tool_choice)
-            enhanced_prompt = f"{prompt}\n\n{tool_definitions}{tool_instructions}"
-
-            # Run model with timeout
+            enhanced_prompt = f"{prompt}\n\n{tool_definitions}{tool_instructions}"  # Run model with timeout
             completion = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(
                     self._executor,
@@ -213,23 +354,67 @@ async def ask_tool(
                         prompt=enhanced_prompt,
                         max_tokens=min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS),
                         temperature=temp,
-                        stop=["<|user|>", "<|system|>"],
+                        stop=["<|user|>", "<|system|>", "<|eot_id|>"],
                         **kwargs,
                     ),
                 ),
                 timeout=timeout,
-            )  # Extract and validate completion text
+            )
+
+            # Extract and validate completion text
             completion_text = completion.get("choices", [{}])[0].get("text", "").strip()
             if not completion_text:
-                raise ValueError("Empty completion text received")
-
-            # Parse tool calls
+                raise ValueError(
+                    "Empty completion text received"
+                )  # Parse tool calls with error handling
             try:
+                logger.debug(
+                    f"About to parse tool calls from: {completion_text[:100]}..."
+                )
                 tool_calls = self._parse_tool_calls(completion_text)
-                if not tool_calls:
-                    logger.warning("No valid tool calls found in completion text")
+                logger.debug(f"Successfully parsed {len(tool_calls)} tool calls")
+
+                # Validate and filter tool calls
+                valid_tool_calls = []
+                for i, tc in enumerate(tool_calls):
+                    try:
+                        # Check if tool call has proper structure
+                        if not isinstance(tc, dict):
+                            logger.warning(f"Tool call {i} is not a dict: {type(tc)}")
+                            continue
+
+                        function_data = tc.get("function", {})
+                        if not isinstance(function_data, dict):
+                            logger.warning(
+                                f"Tool call {i} has invalid function data: {function_data}"
+                            )
+                            continue
+
+                        tool_name = function_data.get("name")
+                        if (
+                            not tool_name
+                            or not isinstance(tool_name, str)
+                            or not tool_name.strip()
+                        ):
+                            logger.warning(
+                                f"Tool call {i} missing or invalid name: {tool_name}"
+                            )
+                            continue
+
+                        # Tool call is valid
+                        valid_tool_calls.append(tc)
+                        logger.debug(f"Tool call {i} validated: {tool_name}")
+
+                    except Exception as tc_error:
+                        logger.warning(f"Error validating tool call {i}: {tc_error}")
+                        continue
+
+                tool_calls = valid_tool_calls
+                logger.debug(f"Validated {len(tool_calls)} tool calls")
+
             except Exception as e:
-                logger.error(f"Failed to parse tool calls: {str(e)}")
+                logger.error(f"Error parsing tool calls: {str(e)}")
+                # Instead of failing, return empty tool calls
                 tool_calls = []
 
             # Build successful response
@@ -271,54 +456,6 @@ async def ask_tool(
     raise last_exception or RuntimeError("Tool call failed with no error details")
 
 
-def _format_tool_call(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Format a tool call into the expected structure."""
-    try:
-        if not isinstance(data, dict):
-            raise ValueError(f"Tool call data must be a dictionary, got {type(data)}")
-
-        if not data:
-            raise ValueError("Tool call data cannot be empty")
-
-        # Extract tool name from either direct name field or function name
-        name = None
-        if "function" in data and isinstance(data["function"], dict):
-            name = data["function"].get("name")
-        elif "name" in data:
-            name = data["name"]
-
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError(f"Tool call missing valid name, got {name}")
-
-        # Get arguments from either direct arguments field or function arguments
-        args = {}
-        if "function" in data and isinstance(data["function"], dict):
-            args = data["function"].get("arguments", {})
-        elif "arguments" in data:
-            args = data["arguments"]
-
-        # Normalize args to a string
-        if isinstance(args, (dict, list)):
-            try:
-                args = json.dumps(args)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to JSON encode arguments: {e}, using str() instead"
-                )
-                args = str(args)
-        elif not isinstance(args, str):
-            args = str(args)
-
-        return {
-            "id": data.get("id", f"call_{time.time_ns()}"),
-            "type": "function",
-            "function": {"name": name.strip(), "arguments": args},
-        }
-    except Exception as e:
-        logger.error(f"Failed to format tool call: {e}")
-        raise ValueError(f"Tool call formatting failed: {str(e)}")
-
-
 def patch_llm_class():
     """Apply LLM patches with improved error handling."""
     from app.llm import LLM
@@ -332,10 +469,14 @@ def patch_llm_class():
         def parse_tool_calls_wrapper(self, text):
             return _parse_tool_calls(text)
 
+        def format_tool_call_wrapper(self, data):
+            return _format_tool_call(data)
+
         # Patch both LLM and LLMOptimized classes
         for cls in [LLM, LLMOptimized]:
             cls.ask_tool = ask_tool_wrapper
             cls._parse_tool_calls = parse_tool_calls_wrapper
+            cls._format_tool_call = format_tool_call_wrapper
             logger.info(f"Successfully patched {cls.__name__} with tool methods")
     except Exception as e:
         logger.error(f"Failed to patch LLM classes: {e}")

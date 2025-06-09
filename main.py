@@ -10,9 +10,11 @@ from app.agent.router import AgentRouter
 # Import configuration
 from app.config import get_config
 from app.gpu_manager import get_gpu_manager
+
+# Import LLM classes AFTER patches are applied
 from app.llm_optimized import LLMOptimized
 
-# Import the main patch module first to ensure all patches are applied
+# Import the main patch module FIRST to ensure all patches are applied
 from app.main_patch import logger
 from app.manus import Manus  # Add Manus import
 
