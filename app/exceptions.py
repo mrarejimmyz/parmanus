@@ -8,6 +8,20 @@ class ToolError(Exception):
 class ParManusError(Exception):
     """Base exception for all ParManus errors"""
 
+    pass
+
 
 class TokenLimitExceeded(ParManusError):
-    """Exception raised when the token limit is exceeded"""
+    """Raised when a token limit is exceeded."""
+
+    def __init__(self, message="Token limit exceeded"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ModelTimeoutError(ParManusError):
+    """Raised when model execution times out."""
+
+    def __init__(self, message="Model execution timed out"):
+        self.message = message
+        super().__init__(self.message)

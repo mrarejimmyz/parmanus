@@ -219,3 +219,15 @@ llama_cpp_python-0.3.8+cu128.gemma3-cp311-cp311-win_amd64.whl
 models/llava-1.6-mistral-7b-gguf
 verify_gpy.py
 
+app/llm_tool_patch_optimized.py.backup_1749482174
+app/llm_tool_patch_optimized.py.backup_1749482019
+app/llm_tool_patch_optimized.py.backup_1749298912
+app/llm_tool_patch.py.backup_1749480798
+app/llm_tool_patch.py.backup_1749482019
+.gitignore
+app/llm_tool_patch.py.backup_1749482174
+main_optimized.py.backup_1749482238
+.gitignore
+main_optimized.py.backup_1749482078
+main_optimized.py.backup_1749298912
+optimize_gpu.ps1

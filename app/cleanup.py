@@ -1,12 +1,13 @@
+import atexit
 import os
 import signal
 import sys
-import atexit
+
 from app.llm import LLM
-from app.logger import logger
 
 # Import the tool patch
-from app.llm_tool_patch import ask_tool, _parse_tool_calls
+from app.llm_tool_patch import _parse_tool_calls, ask_tool
+from app.logger import logger
 
 # Patch the LLM class with the missing methods
 LLM.ask_tool = ask_tool
@@ -15,31 +16,38 @@ LLM._parse_tool_calls = _parse_tool_calls
 # Global model cache reference for cleanup
 MODEL_CACHE = {}
 
+
 def signal_handler(sig, frame):
     """Handle interrupt signals gracefully."""
     logger.warning("Interrupt signal received. Cleaning up resources...")
-    
+
     # Clean up model resources
     try:
-        LLM.cleanup_all_models()
+        # Clean up any existing LLM instances
+        if hasattr(LLM, "cleanup_models"):
+            LLM.cleanup_models()
     except Exception as e:
         logger.error(f"Error during model cleanup: {e}")
-    
+
     # Clean up any other resources
     logger.info("Cleanup complete. Exiting.")
     sys.exit(0)
 
+
 def cleanup_handler():
     """Handle cleanup on normal exit."""
     logger.info("Application exiting. Cleaning up resources...")
-    
+
     # Clean up model resources
     try:
-        LLM.cleanup_all_models()
+        # Clean up any existing LLM instances
+        if hasattr(LLM, "cleanup_models"):
+            LLM.cleanup_models()
     except Exception as e:
         logger.error(f"Error during model cleanup: {e}")
-    
+
     logger.info("Cleanup complete.")
+
 
 # Register signal handlers
 signal.signal(signal.SIGINT, signal_handler)

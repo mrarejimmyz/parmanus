@@ -50,17 +50,55 @@ class Memory:
             self.load_session()
 
     def add_message(self, message: Message) -> None:
-        """Add a message to memory.
+        """Add a message to memory with enhanced error handling.
 
         Args:
             message: The message to add to memory.
         """
-        self.messages.append(message)
-        logger.debug(f"Added {message.role} message to memory")
+        try:
+            if message is None:
+                logger.warning("Attempted to add None message to memory, skipping")
+                return
 
-        # Trigger compression if enabled and memory is getting large
-        if self.memory_compression and len(self.messages) > 50:
-            self._compress_memory()
+            # Handle non-Message objects
+            if not isinstance(message, Message):
+                logger.warning(
+                    f"Invalid message type: {type(message)}, converting to Message"
+                )
+                try:
+                    if isinstance(message, dict):
+                        # Try to convert dict to Message, with content fallback
+                        content = message.get("content", "")
+                        if not content:
+                            content = "Message content was empty"
+                        message = Message(**{**message, "content": content})
+                    else:
+                        # Try to convert to string and create user message
+                        content = str(message) if message else "Message was empty"
+                        message = Message.user_message(content)
+                except Exception as e:
+                    logger.error(f"Failed to convert message: {e}")
+                    # Create a fallback message rather than failing
+                    message = Message.system_message(
+                        "Message conversion failed, using fallback"
+                    )
+
+            # Ensure message has required fields
+            if not message.role:
+                message.role = "user"  # Default to user role if none specified
+            if not message.content and not message.tool_calls:
+                message.content = "Empty message content"  # Provide default content
+
+            self.messages.append(message)
+            logger.debug(f"Added {message.role} message to memory")
+
+            # Trigger compression if enabled and memory is getting large
+            if self.memory_compression and len(self.messages) > 50:
+                self._compress_memory()
+
+        except Exception as e:
+            logger.error(f"Error adding message to memory: {e}")
+            # Don't raise the exception to avoid breaking the agent's flow
 
     def push(self, role: str, content: str, **kwargs) -> None:
         """Add a message to memory (Parmanus compatibility method).

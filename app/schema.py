@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Role(str, Enum):
@@ -54,12 +54,44 @@ class ToolCall(BaseModel):
 class Message(BaseModel):
     """Represents a chat message in the conversation"""
 
-    role: ROLE_TYPE = Field(...)  # type: ignore
-    content: Optional[str] = Field(default=None)
-    tool_calls: Optional[List[ToolCall]] = Field(default=None)
-    name: Optional[str] = Field(default=None)
-    tool_call_id: Optional[str] = Field(default=None)
-    base64_image: Optional[str] = Field(default=None)
+    role: ROLE_TYPE = Field(
+        ..., description="Role of the message sender"
+    )  # Required field
+    content: Optional[str] = Field(
+        default="", description="Message content"
+    )  # Default to empty string
+    tool_calls: Optional[List[ToolCall]] = Field(
+        default_factory=list, description="Tool calls in the message"
+    )
+    name: Optional[str] = Field(
+        default=None, description="Name associated with the message"
+    )
+    tool_call_id: Optional[str] = Field(default=None, description="ID of the tool call")
+    base64_image: Optional[str] = Field(
+        default=None, description="Base64 encoded image"
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_message(cls, values):
+        """Validate and normalize message data"""
+        if isinstance(values, dict):
+            # Ensure role is valid
+            if not values.get("role"):
+                values["role"] = "user"
+
+            # Ensure content is a string
+            content = values.get("content")
+            if content is None:
+                values["content"] = ""
+            elif not isinstance(content, str):
+                values["content"] = str(content)
+
+            # Ensure tool_calls is a list
+            if values.get("tool_calls") is None:
+                values["tool_calls"] = []
+
+        return values
 
     def __add__(self, other) -> List["Message"]:
         """支持 Message + list 或 Message + Message 的操作"""
