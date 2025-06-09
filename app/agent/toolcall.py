@@ -71,39 +71,33 @@ class ToolCallAgent(ReActAgent):
                 return False
             raise
 
-        self.tool_calls = tool_calls = (
-            response.get("tool_calls")
-            if response and isinstance(response, dict)
-            else (
-                response.tool_calls
-                if response and hasattr(response, "tool_calls")
-                else []
-            )
-        )
-        content = (
-            response.get("content")
-            if response and isinstance(response, dict)
-            else response.content if response and hasattr(response, "content") else ""
-        )
+        if not response:
+            logger.error("No response received from LLM")
+            return False
+
+        self.tool_calls = []
+        content = ""
+
+        if isinstance(response, dict):
+            self.tool_calls = response.get("tool_calls", [])
+            content = response.get("content", "")
+        else:
+            self.tool_calls = getattr(response, "tool_calls", [])
+            content = getattr(response, "content", "")
 
         # Log response info
         logger.info(f"✨ {self.name}'s thoughts: {content}")
-        logger.info(
-            f"🛠️ {self.name} selected {len(tool_calls) if tool_calls else 0} tools to use"
-        )
-        if tool_calls:
+        logger.info(f"🛠️ {self.name} selected {len(self.tool_calls)} tools to use")
+        if self.tool_calls:
             logger.info(
-                f"🧰 Tools being prepared: {[call.function.name for call in tool_calls]}"
+                f"🧰 Tools being prepared: {[call.function.name for call in self.tool_calls]}"
             )
-            logger.info(f"🔧 Tool arguments: {tool_calls[0].function.arguments}")
+            logger.info(f"🔧 Tool arguments: {self.tool_calls[0].function.arguments}")
 
         try:
-            if response is None:
-                raise RuntimeError("No response received from the LLM")
-
             # Handle different tool_choices modes
             if self.tool_choices == ToolChoice.NONE:
-                if tool_calls:
+                if self.tool_calls:
                     logger.warning(
                         f"🤔 Hmm, {self.name} tried to use tools when they weren't available!"
                     )
@@ -124,8 +118,8 @@ class ToolCallAgent(ReActAgent):
                 return True  # Will be handled in act()
 
             # For 'auto' mode, continue with content if no commands but content exists
-            if self.tool_choices == ToolChoice.AUTO and not self.tool_calls:
-                return bool(content)
+            if self.tool_choices == ToolChoice.AUTO and not self.tool_calls and content:
+                return True
 
             return bool(self.tool_calls)
         except Exception as e:
@@ -141,10 +135,15 @@ class ToolCallAgent(ReActAgent):
         """Execute tool calls and handle their results"""
         if not self.tool_calls:
             if self.tool_choices == ToolChoice.REQUIRED:
+                logger.error("Tool calls required but none provided")
                 raise ValueError(TOOL_CALL_REQUIRED)
 
             # Return last message content if no tool calls
-            return self.messages[-1].content or "No content or commands to execute"
+            last_message = self.messages[-1] if self.messages else None
+            return (
+                getattr(last_message, "content", "")
+                or "No content or commands to execute"
+            )
 
         results = []
         for command in self.tool_calls:
@@ -162,13 +161,13 @@ class ToolCallAgent(ReActAgent):
 
             # Add tool response to memory
             tool_msg = Message.tool_message(
-                content=result,
+                content=str(result),  # Ensure content is string
                 tool_call_id=command.id,
                 name=command.function.name,
                 base64_image=self._current_base64_image,
             )
             self.memory.add_message(tool_msg)
-            results.append(result)
+            results.append(str(result))
 
         return "\n\n".join(results)
 
@@ -257,3 +256,58 @@ class ToolCallAgent(ReActAgent):
             return await super().run(request)
         finally:
             await self.cleanup()
+
+    def ask_tool(self, query: str, tool_name: str = None, max_retries: int = 3) -> dict:
+        """
+        Ask a tool to perform an action and return the result
+        """
+        # Default tool selection if none specified
+        if tool_name is None:
+            tool_name = self._default_tool
+
+        # Input validation
+        if not isinstance(query, str):
+            raise ValueError("Query must be a string")
+
+        # Get tool instance
+        tool = self._get_tool_instance(tool_name)
+        if not tool:
+            raise ValueError(f"Tool {tool_name} not found")
+
+        # Format tool call object
+        tool_call = {"name": tool_name, "query": query, "args": {}, "metadata": {}}
+
+        # Execute tool with retries
+        for attempt in range(max_retries):
+            try:
+                result = tool.execute(tool_call)
+                if result and isinstance(result, dict):
+                    return result
+                self.logger.warning(f"Tool returned invalid result: {result}")
+            except Exception as e:
+                self.logger.warning(f"Tool call attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    self.logger.error("All retry attempts failed")
+                    raise
+
+        return {"error": "Tool call failed after all retries"}
+
+    def _get_tool_instance(self, tool_name: str):
+        """Get a tool instance by name"""
+        # Ensure tool name is properly formatted
+        tool_name = str(tool_name).strip().lower()
+
+        # Check registered tools
+        if tool_name in self._tools:
+            return self._tools[tool_name]
+
+        # Try loading tool if not found
+        try:
+            tool = self._load_tool(tool_name)
+            self._tools[tool_name] = tool
+            return tool
+        except Exception as e:
+            self.logger.error(f"Failed to load tool {tool_name}: {str(e)}")
+            return None

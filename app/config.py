@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 import tomllib
 from pathlib import Path
@@ -16,22 +17,36 @@ PROJECT_ROOT = get_project_root()
 WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
 
 
-class LLMSettings(BaseModel):
-    model: str = Field(..., description="Model name")
-    model_path: str = Field(
-        "/models/llama-jb.gguf", description="Path to the model file"
-    )
-    max_tokens: int = Field(
-        2048, description="Maximum number of tokens per request"
-    )  # Updated from 4096 to 2048
-    max_input_tokens: Optional[int] = Field(
-        None,
-        description="Maximum input tokens to use across all requests (None for unlimited)",
-    )
-    temperature: float = Field(0.0, description="Sampling temperature")
+class VisionSettings(BaseModel):
+    """Vision model configuration."""
 
-    # Optional vision model settings
-    vision: Optional["LLMSettings"] = Field(None, description="Vision model settings")
+    enabled: bool = Field(default=False, description="Enable vision capabilities")
+    model: str = Field(default="llava-v1.6-mistral-7b", description="Vision model name")
+    model_path: str = Field(
+        default="models/llava-model.gguf", description="Path to vision model"
+    )
+    clip_model_path: str = Field(
+        default="models/mmproj-model.gguf", description="Path to CLIP model"
+    )
+    max_tokens: int = Field(default=2048, description="Maximum tokens for vision model")
+    temperature: float = Field(default=0.1, description="Temperature for vision model")
+    n_gpu_layers: int = Field(
+        default=0, description="Number of GPU layers for vision model"
+    )
+
+
+class LLMSettings(BaseModel):
+    """LLM configuration."""
+
+    model: str = Field(default="llama-jb", description="Main model name")
+    model_path: str = Field(
+        default="models/llama-jb.gguf", description="Path to main model"
+    )
+    max_tokens: int = Field(default=2048, description="Maximum tokens for generation")
+    temperature: float = Field(default=0.0, description="Temperature for generation")
+    vision: VisionSettings = Field(
+        default_factory=VisionSettings, description="Vision model settings"
+    )
 
 
 class ProxySettings(BaseModel):
@@ -188,93 +203,70 @@ _thread_local = threading.local()
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
-    """
-    Load configuration from a TOML file.
-    Args:
-        config_path: Path to the configuration file
-    Returns:
-        Config object
-    """
+    """Load configuration from a TOML file."""
     if config_path is None:
         config_path = PROJECT_ROOT / "config" / "config.toml"
 
-    # Initialize MCP config outside try block to ensure it's always available
+    # Initialize MCP config
     mcp_config = MCPConfig(server_reference="app.mcp.server")
 
     try:
         with open(config_path, "rb") as f:
             config_dict = tomllib.load(f)
 
-        # Convert llm section to LLMSettings if it's a dict
-        if "llm" in config_dict and isinstance(config_dict["llm"], dict):
-            llm_dict = config_dict["llm"]
+        # Create vision settings first if present
+        vision_settings = None
+        if "llm" in config_dict and "vision" in config_dict["llm"]:
+            vision_settings = VisionSettings(**config_dict["llm"]["vision"])
 
-            # Handle vision settings if present
-            if "vision" in llm_dict and isinstance(llm_dict["vision"], dict):
-                vision_settings = LLMSettings(**llm_dict["vision"])
+        # Create LLM settings with proper vision settings
+        if "llm" in config_dict:
+            llm_dict = config_dict["llm"].copy()
+            if vision_settings:
                 llm_dict["vision"] = vision_settings
-
-            # Create LLMSettings instance
             config_dict["llm"] = LLMSettings(**llm_dict)
 
         # Handle browser configuration
-        if "browser" in config_dict and isinstance(config_dict["browser"], dict):
+        if "browser" in config_dict:
             config_dict["browser"] = BrowserSettings(**config_dict["browser"])
 
-        # Handle MCP configuration
-        if "mcp" in config_dict:
-            if isinstance(config_dict["mcp"], dict):
-                if "server_reference" in config_dict["mcp"]:
-                    mcp_config.server_reference = config_dict["mcp"]["server_reference"]
-
-                # Process servers if present
-                if "servers" in config_dict["mcp"] and isinstance(
-                    config_dict["mcp"]["servers"], dict
-                ):
-                    for server_id, server_data in config_dict["mcp"]["servers"].items():
-                        mcp_config.servers[server_id] = MCPServerConfig(**server_data)
-
-        config_dict["mcp_config"] = mcp_config
-
-        # Ensure workspace_root is set
+        # Set workspace root if not present
         if "workspace_root" not in config_dict:
             config_dict["workspace_root"] = str(WORKSPACE_ROOT)
 
         return Config(**config_dict)
+
     except Exception as e:
-        # If config file doesn't exist or is invalid, create a default config
         print(f"Error loading config: {e}")
         print("Using default configuration")
 
-        # Default configuration for local GGUF models
-        vision_settings = LLMSettings(
-            model="qwen-vl-7b",
-            model_path="/models/qwen-vl-7b-awq.gguf",
-            max_tokens=2048,  # Updated from 4096 to 2048
-            temperature=0.0,
+        # Create default vision settings
+        vision_settings = VisionSettings(
+            enabled=False,
+            model="llava-v1.6-mistral-7b",
+            model_path="models/llava-model.gguf",
+            clip_model_path="models/mmproj-model.gguf",
+            max_tokens=2048,
+            temperature=0.1,
+            n_gpu_layers=0,
         )
 
+        # Create default LLM settings
         llm_settings = LLMSettings(
             model="llama-jb",
-            model_path="/models/llama-jb.gguf",
-            max_tokens=2048,  # Updated from 4096 to 2048
+            model_path="models/llama-jb.gguf",
+            max_tokens=2048,
             temperature=0.0,
-            vision=vision_settings,
+            vision=vision_settings,  # Pass VisionSettings instance
         )
 
-        # Default browser settings
-        browser_settings = BrowserSettings(
-            headless=False, disable_security=True, chrome_instance_path=None
-        )
-
-        default_config = Config(
+        # Return default config
+        return Config(
             llm=llm_settings,
-            browser=browser_settings,
+            browser=BrowserSettings(headless=False, disable_security=True),
             workspace_root=str(WORKSPACE_ROOT),
             mcp_config=mcp_config,
         )
-
-        return default_config
 
 
 def get_config(config_path: Optional[str] = None) -> Config:

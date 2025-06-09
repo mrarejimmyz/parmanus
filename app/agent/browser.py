@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 from pydantic import Field, model_validator
 
 from app.agent.toolcall import ToolCallAgent
+from app.config import config
+from app.llm_optimized import LLMOptimized
 from app.logger import logger
 from app.prompt.browser import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.schema import Message, ToolChoice
@@ -137,6 +139,12 @@ class BrowserAgent(ToolCallAgent):
     max_observe: int = 10000
     max_steps: int = 20
 
+    # Override LLM field with proper type
+    llm: LLMOptimized = Field(
+        default_factory=lambda: LLMOptimized(config.llm),
+        description="The LLM instance to use for generating responses",
+    )
+
     # Configure the available tools
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(BrowserUseTool(), Terminate())
@@ -151,10 +159,10 @@ class BrowserAgent(ToolCallAgent):
     # Loop prevention tracking
     repeated_actions: Dict[str, int] = Field(default_factory=dict)
     action_timestamps: Dict[str, float] = Field(default_factory=dict)
-    max_repetitions: int = 3
-    repetition_window: float = 60.0  # seconds
+    max_repetitions: int = 2  # Reduced from 3 to 2 for faster detection
+    repetition_window: float = 5.0  # Reduced from 60 to 5 seconds
     recent_actions: List[str] = Field(default_factory=list)
-    max_recent_actions: int = 10
+    max_recent_actions: int = 5  # Reduced from 10 to 5 for faster response
     hallucination_detected: bool = False
 
     def _extract_url(self, prompt: str) -> str:
@@ -207,9 +215,9 @@ class BrowserAgent(ToolCallAgent):
             self.recent_actions.pop(0)
 
         # Check for repetitive patterns in recent actions
-        if len(self.recent_actions) >= 3:
-            last_three = self.recent_actions[-3:]
-            if len(set(last_three)) == 1:  # All three are the same
+        if len(self.recent_actions) >= 2:  # Reduced from 3 to 2 for faster detection
+            last_two = self.recent_actions[-2:]
+            if len(set(last_two)) == 1:  # Two consecutive same actions
                 logger.warning(f"Detected repetitive action pattern: {action_str}")
                 self.hallucination_detected = True
                 return False
@@ -249,6 +257,16 @@ class BrowserAgent(ToolCallAgent):
                 self.state = "FINISHED"
                 return False
 
+            # Reset action tracking if enough time has passed
+            current_time = time.time()
+            if (
+                self.action_timestamps
+                and (current_time - min(self.action_timestamps.values())) > 5
+            ):
+                self.action_timestamps.clear()
+                self.repeated_actions.clear()
+                self.recent_actions.clear()
+
             # Check for navigation commands first and handle them directly
             user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
             if user_messages and any(
@@ -267,7 +285,7 @@ class BrowserAgent(ToolCallAgent):
                     id="nav_001",
                     function=Function(
                         name="browser_use",
-                        arguments=json.dumps({"action": "navigate", "url": url}),
+                        arguments=json.dumps({"action": "go_to_url", "url": url}),
                     ),
                 )
 
@@ -277,7 +295,7 @@ class BrowserAgent(ToolCallAgent):
                 # Execute the tool call
                 browser_tool = self.available_tools.get_tool(BrowserUseTool().name)
                 if browser_tool:
-                    result = await browser_tool.execute(action="navigate", url=url)
+                    result = await browser_tool.execute(action="go_to_url", url=url)
                     if result and not result.error:
                         self.memory.add_message(
                             Message.assistant_message(
