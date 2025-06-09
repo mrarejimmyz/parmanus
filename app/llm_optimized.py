@@ -178,21 +178,33 @@ class LLMOptimized:
     MAX_ALLOWED_OUTPUT_TOKENS = 2048
     max_tokens = 2048  # Default max tokens for completion
 
+    # Thread pool for model loading and inference - required for tool execution
+    _executor = ThreadPoolExecutor(max_workers=2)
+
     def __init__(self, settings: LLMSettings, gpu_manager=None):
         """Initialize LLM with optimized settings."""
         self.settings = settings
         self.model_path = settings.model_path
         self.model = settings.model
+        self.max_tokens = min(settings.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
+        self.temperature = settings.temperature
         self.gpu_manager = gpu_manager or get_gpu_manager()
         self._text_model_key = f"{self.model}_text"
         self._model = None  # Store model instance
         self.tokenizer = None
         self.token_counter = TokenCounter()  # Initialize token counter
 
+        # Vision model settings - required for compatibility
+        self.vision_settings = settings.vision
+        self.vision_enabled = settings.vision.enabled if settings.vision else False
+        self._vision_model_key = None
+        if self.vision_settings and self.vision_settings.enabled:
+            self._vision_model_key = f"{self.vision_settings.model}_vision"
+
         logger.info(
             f"Initialized optimized LLM: {self.model}, "
             f"GPU: {self.gpu_manager.cuda_available}, "
-            f"Vision: {settings.vision.enabled}"
+            f"Vision: {self.vision_enabled}"
         )
 
     def format_messages(
@@ -283,13 +295,22 @@ class LLMOptimized:
         """Update token counter and check limits."""
         self.token_counter.update(prompt_tokens, completion_tokens)
 
-        # Check token limits
-        if self.settings.max_input_tokens:
+        # Check token limits against max_tokens (which is available in settings)
+        if (
+            hasattr(self.settings, "max_input_tokens")
+            and self.settings.max_input_tokens
+        ):
             if self.token_counter.total_tokens > self.settings.max_input_tokens:
                 raise TokenLimitExceeded(
                     f"Total tokens ({self.token_counter.total_tokens}) "
                     f"exceeded limit ({self.settings.max_input_tokens})"
                 )
+        elif self.token_counter.total_tokens > self.DEFAULT_CONTEXT_SIZE:
+            # Fallback to default context size limit
+            raise TokenLimitExceeded(
+                f"Total tokens ({self.token_counter.total_tokens}) "
+                f"exceeded default limit ({self.DEFAULT_CONTEXT_SIZE})"
+            )
 
     def cleanup_models(self):
         """Clean up models and free GPU memory."""
@@ -304,8 +325,11 @@ class LLMOptimized:
             # Force garbage collection
             gc.collect()
 
-            # Clean up GPU memory
-            self.gpu_manager.cleanup_gpu_memory()
+            # Clean up GPU memory if method exists
+            if hasattr(self.gpu_manager, "cleanup_gpu_memory"):
+                self.gpu_manager.cleanup_gpu_memory()
+            elif hasattr(self.gpu_manager, "cleanup"):
+                self.gpu_manager.cleanup()
 
             logger.info("Model cleanup completed")
 
@@ -545,3 +569,97 @@ class LLMOptimized:
         formatted_messages.append("<|start_header_id|>assistant<|end_header_id|>\n\n")
 
         return "".join(formatted_messages)
+
+    async def ask(
+        self,
+        messages: List[Union[Message, Dict[str, Any]]],
+        system_msgs: Optional[List[Union[Message, Dict[str, Any]]]] = None,
+        temperature: Optional[float] = None,
+        stream: bool = False,
+        timeout: int = 120,
+        **kwargs,
+    ) -> Union[str, Generator[str, None, None]]:
+        """Ask the model to generate a response."""
+        try:
+            # Format messages
+            formatted_messages = []
+            if system_msgs:
+                formatted_messages.extend(
+                    [
+                        msg if isinstance(msg, dict) else msg.to_dict()
+                        for msg in system_msgs
+                    ]
+                )
+            formatted_messages.extend(
+                [msg if isinstance(msg, dict) else msg.to_dict() for msg in messages]
+            )
+
+            # Format prompt
+            prompt = self._format_prompt_for_llama(formatted_messages)
+
+            # Get model
+            model = self.text_model
+
+            # Set temperature
+            temp = temperature if temperature is not None else self.temperature
+
+            # Calculate safe max tokens
+            prompt_tokens = self.count_tokens(prompt)
+            safe_max_tokens = min(
+                self.max_tokens, self.DEFAULT_CONTEXT_SIZE - prompt_tokens - 100
+            )
+
+            if safe_max_tokens <= 0:
+                raise TokenLimitExceeded("Prompt too long for available context")
+
+            if stream:
+                # Streaming response
+                def generate_stream():
+                    try:
+                        for chunk in model.create_completion(
+                            prompt=prompt,
+                            max_tokens=safe_max_tokens,
+                            temperature=temp,
+                            stream=True,
+                            stop=["<|user|>", "<|system|>", "<|eot_id|>"],
+                            **kwargs,
+                        ):
+                            yield chunk["choices"][0]["text"]
+                    except Exception as e:
+                        logger.error(f"Error in streaming completion: {e}")
+                        yield f"[Error: {str(e)}]"
+
+                return generate_stream()
+            else:
+                # Non-streaming response
+                completion = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        self._executor,
+                        lambda: model.create_completion(
+                            prompt=prompt,
+                            max_tokens=safe_max_tokens,
+                            temperature=temp,
+                            stop=["<|user|>", "<|system|>", "<|eot_id|>"],
+                            **kwargs,
+                        ),
+                    ),
+                    timeout=timeout,
+                )
+
+                # Extract completion text
+                completion_text = completion["choices"][0]["text"]
+
+                # Update token counter
+                completion_tokens = self.count_tokens(completion_text)
+                self.update_token_count(prompt_tokens, completion_tokens)
+
+                return completion_text
+
+        except TokenLimitExceeded:
+            raise
+        except asyncio.TimeoutError:
+            logger.error(f"Model completion timed out after {timeout} seconds")
+            return f"[Response incomplete due to timeout after {timeout} seconds]"
+        except Exception as e:
+            logger.error(f"Error in ask: {e}")
+            raise

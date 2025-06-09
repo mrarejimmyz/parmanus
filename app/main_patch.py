@@ -26,10 +26,7 @@ def initialize_patches(retries: int = 3) -> bool:
             try:
                 from app.llm_tool_patch_optimized import (
                     _format_tool_call,
-                    _normalize_tool_call,
                     _parse_tool_calls,
-                    _validate_tool_call,
-                    _validate_tool_parameters,
                     ask_tool,
                 )
 
@@ -50,16 +47,6 @@ def initialize_patches(retries: int = 3) -> bool:
                 cls.ask_tool = ask_tool
                 cls._parse_tool_calls = _parse_tool_calls
                 cls._format_tool_call = _format_tool_call
-
-                # Optional optimized methods - bind as class methods
-                try:
-                    cls._normalize_tool_call = _normalize_tool_call
-                    cls._validate_tool_call = _validate_tool_call
-                    cls._validate_tool_parameters = _validate_tool_parameters
-                except NameError:
-                    logger.debug(
-                        f"Some optimized methods not available for {cls.__name__}"
-                    )
 
                 logger.info(f"Successfully patched {cls.__name__} with tool methods")
 

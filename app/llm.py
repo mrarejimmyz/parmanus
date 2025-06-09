@@ -104,6 +104,67 @@ class LLM:
         if self._vision_model_key and self._vision_model_key not in MODEL_LOCKS:
             MODEL_LOCKS[self._vision_model_key] = asyncio.Lock()
 
+    def _load_text_model(self):
+        """Load text model with memory mapping for faster loading"""
+        if self._text_model_key not in MODEL_CACHE:
+            logger.info(f"Loading text model from {self.model_path}")
+            start_time = time.time()
+
+            model = Llama(
+                model_path=self.model_path,
+                n_ctx=self.TEXT_MODEL_CONTEXT_SIZE,
+                n_gpu_layers=-1,  # Use all GPU layers
+                n_threads=os.cpu_count(),  # Use all available CPU threads
+                use_mmap=True,  # Use memory mapping for faster loading
+                use_mlock=True,  # Lock memory to prevent swapping
+            )
+
+            MODEL_CACHE[self._text_model_key] = model
+            load_time = time.time() - start_time
+            logger.info(f"Text model loaded in {load_time:.2f} seconds")
+
+        return MODEL_CACHE[self._text_model_key]
+
+    @property
+    def text_model(self):
+        """Get cached text model or load if not available"""
+        if self._text_model_key in MODEL_CACHE:
+            return MODEL_CACHE[self._text_model_key]
+        return self._load_text_model()
+
+    def count_tokens(self, text: str) -> int:
+        """
+        Count the number of tokens in a text string.
+        This is an estimate and may not match the exact tokenization of the model.
+        """
+        # Simple approximation: 1 token ≈ 4 characters for English text
+        return len(text) // 4 + 1
+
+    def update_token_count(self, prompt_tokens: int, completion_tokens: int) -> None:
+        """Update the token counter with the latest usage."""
+        self.token_counter.update(prompt_tokens, completion_tokens)
+
+    def _format_prompt_for_llama(self, messages: List[Dict[str, Any]]) -> str:
+        """Format messages into a prompt string for Llama models."""
+        prompt = ""
+        for message in messages:
+            role = message["role"]
+            content = message.get("content", "")
+
+            if role == "system":
+                prompt += f"<|system|>\n{content}\n"
+            elif role == "user":
+                prompt += f"<|user|>\n{content}\n"
+            elif role == "assistant":
+                prompt += f"<|assistant|>\n{content}\n"
+            else:
+                # Default to user for unknown roles
+                prompt += f"<|user|>\n{content}\n"
+
+        # Add the final assistant prefix to prompt the model to respond
+        prompt += "<|assistant|>\n"
+        return prompt
+
 
 class LLMOptimized(LLM):
     """
