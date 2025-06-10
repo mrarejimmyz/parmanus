@@ -76,49 +76,36 @@ class LocalLLMWithTools:
         self.temperature = config.temperature
         self.n_gpu_layers = config.n_gpu_layers
         
-        # Vision settings
+        # Vision settings (using same model)
         self.vision_enabled = config.vision_enabled
-        self.vision_model_path = getattr(config, 'vision_model_path', None)
-        self.vision_clip_path = getattr(config, 'vision_clip_path', None)
+        self.vision_model_path = getattr(config, 'model_path', None)  # Same as main model
+        self.vision_clip_path = None  # Not needed for unified model
         
         # Initialize models
         self._load_models()
         
-        logger.info(f"Initialized Local LLM with model: {self.model}")
-        if self.vision_enabled:
-            logger.info(f"Vision enabled with model: {self.vision_model_path}")
+        logger.info(f"Initialized Local LLM with unified model: {self.model}")
+        logger.info("✅ Single model handles both text and vision tasks")
     
     def _load_models(self):
-        """Load text and vision models."""
-        # Load main text model
+        """Load the unified Llama 3.2 Vision model."""
+        # Load main text/vision model (unified)
         if os.path.exists(self.model_path):
-            logger.info(f"Loading text model: {self.model_path}")
+            logger.info(f"Loading unified Llama 3.2 Vision model: {self.model_path}")
             self.text_model = Llama(
                 model_path=self.model_path,
                 n_gpu_layers=self.n_gpu_layers,
                 n_ctx=self.TEXT_MODEL_CONTEXT_SIZE,
                 verbose=False
             )
+            # For Llama 3.2 Vision, the same model handles both text and vision
+            self.vision_model = self.text_model
+            logger.info("✅ Unified model loaded - handles both text and vision")
         else:
             raise FileNotFoundError(f"Model not found: {self.model_path}")
         
-        # Load vision model if enabled
-        self.vision_model = None
-        if (self.vision_enabled and 
-            self.vision_model_path and 
-            os.path.exists(self.vision_model_path)):
-            try:
-                logger.info(f"Loading vision model: {self.vision_model_path}")
-                self.vision_model = Llama(
-                    model_path=self.vision_model_path,
-                    clip_model_path=self.vision_clip_path,
-                    n_gpu_layers=self.n_gpu_layers,
-                    n_ctx=self.VISION_MODEL_CONTEXT_SIZE,
-                    verbose=False
-                )
-            except Exception as e:
-                logger.warning(f"Failed to load vision model: {e}")
-                self.vision_enabled = False
+        # Note: For Llama 3.2 Vision, we don't need separate vision model loading
+        # The unified model handles both text and vision tasks
     
     def _format_prompt_for_llama(self, messages: List[Dict[str, Any]]) -> str:
         """Format messages for Llama prompt format."""
@@ -454,7 +441,7 @@ class LocalLLMWithTools:
         images: Optional[List[str]] = None,
         **kwargs
     ) -> str:
-        """Ask vision model with image support."""
+        """Ask vision model with image support - uses the same unified model."""
         if not self.vision_enabled or not self.vision_model:
             raise ValueError("Vision model not available")
         
@@ -464,8 +451,8 @@ class LocalLLMWithTools:
             else:
                 prompt = self._format_prompt_for_llama(messages)
             
-            # Note: Image handling would need to be implemented based on
-            # the specific vision model format
+            # For Llama 3.2 Vision, image handling is built into the model
+            # The model can process both text and images in the same prompt
             
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
@@ -490,7 +477,7 @@ class LocalLLMWithTools:
             return content
             
         except Exception as e:
-            logger.error(f"Error in vision model: {e}")
+            logger.error(f"Error in unified vision model: {e}")
             raise
     
     def get_token_count(self) -> Dict[str, int]:

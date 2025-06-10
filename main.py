@@ -27,7 +27,7 @@ except ImportError:
 
 # Import ParManus components
 try:
-    from app.llm_complete import create_llm_with_tools
+    from app.llm_ollama_only import create_llm_with_tools
     from app.agent.manus import Manus
     from app.agent.code import CodeAgent
     from app.agent.browser import BrowserAgent
@@ -41,26 +41,20 @@ except ImportError as e:
 
 
 class Config(BaseModel):
-    """Unified configuration model."""
+    """Unified configuration model - Ollama only."""
     
-    # LLM Configuration
-    api_type: str = Field(default="local", description="API type: local, ollama")
-    model: str = Field(default="Llama-3.2-11B-Vision-Instruct", description="Model name")
-    model_path: str = Field(default="models/Llama-3.2-11B-Vision-Instruct.Q4_K_M.gguf", description="Path to GGUF model")
+    # LLM Configuration (Ollama only)
+    api_type: str = Field(default="ollama", description="API type: ollama (only option)")
+    model: str = Field(default="llama3.2-vision", description="Ollama model name")
     max_tokens: int = Field(default=2048, description="Maximum tokens")
     temperature: float = Field(default=0.0, description="Temperature")
-    n_gpu_layers: int = Field(default=-1, description="GPU layers (-1 = all)")
-    gpu_memory_limit: int = Field(default=7000, description="GPU memory limit MB")
     
-    # Ollama Configuration (fallback)
+    # Ollama Configuration
     base_url: str = Field(default="http://localhost:11434/v1", description="Ollama API endpoint")
     api_key: str = Field(default="ollama", description="Ollama API key")
     
-    # Vision Configuration
+    # Vision Configuration (same model)
     vision_enabled: bool = Field(default=True, description="Enable vision")
-    vision_model: str = Field(default="llava-v1.6-mistral-7b", description="Vision model")
-    vision_model_path: str = Field(default="models/llava-1.6-mistral-7b-gguf/ggml-model-q4_k.gguf", description="Vision model path")
-    vision_clip_path: str = Field(default="models/llava-1.6-mistral-7b-gguf/mmproj-model-f16.gguf", description="CLIP model path")
     
     # Workspace and paths
     workspace_root: str = Field(default="./workspace", description="Workspace directory")
@@ -330,7 +324,9 @@ async def main():
         
         # Override settings from command line
         if args.api_type:
-            config.api_type = args.api_type
+            if args.api_type != "ollama":
+                logger.warning(f"Only Ollama is supported. Ignoring --api-type {args.api_type}")
+            config.api_type = "ollama"
         if args.workspace:
             config.workspace_root = args.workspace
         if args.max_steps:
@@ -339,29 +335,21 @@ async def main():
         # Create workspace directory
         os.makedirs(config.workspace_root, exist_ok=True)
         
-        # Initialize LLM
+        # Initialize LLM (Ollama only)
         try:
             llm = create_llm_with_tools(config)
         except Exception as e:
-            logger.error(f"Failed to initialize LLM: {e}")
-            # Try fallback
-            if config.api_type == "local":
-                logger.info("Trying Ollama fallback...")
-                config.api_type = "ollama"
-                try:
-                    llm = create_llm_with_tools(config)
-                except Exception as e2:
-                    logger.error(f"Fallback also failed: {e2}")
-                    sys.exit(1)
-            else:
-                sys.exit(1)
+            logger.error(f"Failed to initialize Ollama LLM: {e}")
+            logger.error("Make sure Ollama is running: ollama serve")
+            logger.error("And the model is available: ollama pull llama3.2-vision")
+            sys.exit(1)
         
         # Initialize memory
         memory = Memory(config)
         
         # Display startup info
         logger.info("🚀 ParManus AI Agent System Ready!")
-        logger.info(f"🧠 Backend: {config.api_type}")
+        logger.info(f"🧠 Backend: Ollama")
         logger.info(f"🤖 Model: {config.model}")
         logger.info(f"📁 Workspace: {config.workspace_root}")
         if PARMANUS_AVAILABLE and not args.simple:
