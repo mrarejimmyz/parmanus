@@ -50,13 +50,13 @@ async def test_tool_calling():
             }
         }
     ]
-    
+
     result = await llm.ask_tool(
         messages=[{'role': 'user', 'content': 'Use the test tool with param1=test'}],
         tools=tools,
         tool_choice='auto'
     )
-    
+
     print('Tool call result:', result)
     if 'tool_calls' in result:
         print('Tool calls found:', len(result['tool_calls']))

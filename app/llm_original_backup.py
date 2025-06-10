@@ -12,6 +12,7 @@ from app.exceptions import TokenLimitExceeded
 from app.logger import logger
 from app.schema import ROLE_VALUES, Message
 
+
 # Define models that support vision capabilities
 MULTIMODAL_MODELS = ["qwen-vl-7b"]
 

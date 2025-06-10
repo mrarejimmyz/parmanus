@@ -31,15 +31,15 @@ def patch_llm_class():
     This ensures methods are bound to instances and receive 'self' automatically.
     """
     from app.llm import LLM
-    
+
     # Use types.MethodType to properly bind methods to the class
     # This ensures 'self' is passed correctly when methods are called
-    
+
     # First, check if methods are already patched to avoid duplicate patching
     if not hasattr(LLM, 'ask_tool') or not isinstance(LLM.ask_tool, types.FunctionType):
         LLM.ask_tool = ask_tool
         logger.info("Added ask_tool method to LLM class")
-    
+
     if not hasattr(LLM, '_parse_tool_calls') or not isinstance(LLM._parse_tool_calls, types.FunctionType):
         LLM._parse_tool_calls = _parse_tool_calls
         logger.info("Added _parse_tool_calls method to LLM class")
@@ -52,7 +52,7 @@ def patch_llm_class():
 try:
     # Import the tool patch functions and patch function
     from app.llm_tool_patch import patch_llm_class
-    
+
     # Apply the patch to ensure methods are properly bound
     patch_llm_class()
     logger.info("LLM tool methods patched successfully")

@@ -8,6 +8,7 @@ from app.llm import LLM
 from app.llm_tool_patch import _parse_tool_calls, ask_tool
 from app.logger import logger
 
+
 # Patch the LLM class with the missing methods
 LLM.ask_tool = ask_tool
 LLM._parse_tool_calls = _parse_tool_calls

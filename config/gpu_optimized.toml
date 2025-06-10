@@ -128,4 +128,3 @@ verbose_gpu = false             # Verbose GPU logging (disable in production)
 profile_models = true           # Enable model performance profiling
 benchmark_mode = false          # Enable benchmarking mode
 save_profiles = true            # Save performance profiles
-

@@ -1,6 +1,7 @@
 import os
 import sys
 
+
 # Add the patch directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -13,6 +14,7 @@ from app.llm import LLM
 # Import and apply patches
 from app.llm_tool_patch import _parse_tool_calls, ask_tool
 from app.logger import logger
+
 
 # Ensure the LLM class has the necessary methods
 if not hasattr(LLM, "ask_tool"):

@@ -11,6 +11,7 @@ from llama_cpp import Llama
 from app.config import LLMSettings
 from app.exceptions import TokenLimitExceeded
 
+
 # Handle GPU manager imports gracefully
 try:
     from app.gpu_manager import GPUManager, get_gpu_manager
@@ -37,6 +38,7 @@ except ImportError:
 
 from app.logger import logger
 from app.schema import Message, ToolChoice
+
 
 # Define models that support vision capabilities
 MULTIMODAL_MODELS = ["qwen-vl-7b"]

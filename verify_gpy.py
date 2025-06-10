@@ -1,5 +1,5 @@
-
 from llama_cpp import Llama
+
 
 MODEL_PATH = "models/llama-jb.gguf"  # Change this to your model
 

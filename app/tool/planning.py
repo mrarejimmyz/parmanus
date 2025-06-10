@@ -4,6 +4,7 @@ from typing import Dict, List, Literal, Optional
 from app.exceptions import ToolError
 from app.tool.base import BaseTool, ToolResult
 
+
 _PLANNING_TOOL_DESCRIPTION = """
 A planning tool that allows the agent to create and manage plans for solving complex tasks.
 The tool provides functionality for creating plans, updating plan steps, and tracking progress.

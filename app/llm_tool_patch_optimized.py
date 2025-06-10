@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from app.schema import TOOL_CHOICE_TYPE, Message, ToolChoice
 
+
 logger = logging.getLogger(__name__)
 
 

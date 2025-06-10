@@ -1,6 +1,7 @@
 import asyncio
 import os
 
+
 os.environ["PYTHONIOENCODING"] = "utf-8"
 os.environ["LANG"] = "C.UTF-8"
 import time
@@ -13,6 +14,7 @@ from app.config import LLMSettings, config
 from app.gpu_manager import CUDAGPUManager
 from app.logger import logger
 from app.schema import Message
+
 
 # Define models that support vision capabilities
 MULTIMODAL_MODELS = ["Llama-3.2-11B-Vision-Instruct"]

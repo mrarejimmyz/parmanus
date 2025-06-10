@@ -54,7 +54,7 @@ try:
     # Import the tool patch functions
     from app.llm_tool_patch import ask_tool, _parse_tool_calls
     from app.llm import LLM
-    
+
     # Ensure the LLM class has the necessary methods
     if not hasattr(LLM, 'ask_tool'):
         LLM.ask_tool = ask_tool

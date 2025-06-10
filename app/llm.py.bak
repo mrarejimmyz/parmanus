@@ -65,10 +65,10 @@ class LLM:
     # Define the context window sizes as class variables
     TEXT_MODEL_CONTEXT_SIZE = 16384  # Increased from 8192
     VISION_MODEL_CONTEXT_SIZE = 8192  # Increased from 4096
-    
+
     # Define maximum allowed output tokens to prevent token limit errors
     MAX_ALLOWED_OUTPUT_TOKENS = 8192
-    
+
     # Thread pool for model loading and inference
     _executor = ThreadPoolExecutor(max_workers=2)
 
@@ -85,28 +85,28 @@ class LLM:
         # Double-check that settings is an LLMSettings instance
         if not isinstance(settings, LLMSettings):
             raise TypeError(f"Expected LLMSettings instance, got {type(settings)}")
-        
+
         self.model = settings.model
         self.model_path = settings.model_path
         self.max_tokens = settings.max_tokens
         self.temperature = settings.temperature
         self.token_counter = TokenCounter()
-        
+
         # Vision model settings
         self.vision_settings = settings.vision
-        
+
         # Cache keys for model instances
         self._text_model_key = f"{self.model_path}_{self.TEXT_MODEL_CONTEXT_SIZE}"
         self._vision_model_key = None
         if self.vision_settings:
             self._vision_model_key = f"{self.vision_settings.model_path}_{self.VISION_MODEL_CONTEXT_SIZE}"
-        
+
         logger.info(f"Initialized LLM with model: {self.model}, path: {self.model_path}")
-        
+
         # Preload models in background if not already loaded
         if self._text_model_key not in MODEL_CACHE:
             asyncio.create_task(self._preload_text_model())
-        
+
         if self._vision_model_key and self._vision_model_key not in MODEL_CACHE:
             asyncio.create_task(self._preload_vision_model())
 
@@ -126,7 +126,7 @@ class LLM:
         """Preload vision model in background"""
         if not self.vision_settings:
             return
-            
+
         try:
             logger.info(f"Preloading vision model from {self.vision_settings.model_path}")
             await asyncio.get_event_loop().run_in_executor(
@@ -142,7 +142,7 @@ class LLM:
         if self._text_model_key not in MODEL_CACHE:
             logger.info(f"Loading text model from {self.model_path}")
             start_time = time.time()
-            
+
             model = Llama(
                 model_path=self.model_path,
                 n_ctx=self.TEXT_MODEL_CONTEXT_SIZE,
@@ -151,22 +151,22 @@ class LLM:
                 use_mmap=True,  # Use memory mapping for faster loading
                 use_mlock=True,  # Lock memory to prevent swapping
             )
-            
+
             MODEL_CACHE[self._text_model_key] = model
             load_time = time.time() - start_time
             logger.info(f"Text model loaded in {load_time:.2f} seconds")
-        
+
         return MODEL_CACHE[self._text_model_key]
 
     def _load_vision_model(self):
         """Load vision model with memory mapping for faster loading"""
         if not self.vision_settings:
             return None
-            
+
         if self._vision_model_key not in MODEL_CACHE:
             logger.info(f"Loading vision model from {self.vision_settings.model_path}")
             start_time = time.time()
-            
+
             model = Llama(
                 model_path=self.vision_settings.model_path,
                 n_ctx=self.VISION_MODEL_CONTEXT_SIZE,
@@ -175,11 +175,11 @@ class LLM:
                 use_mmap=True,  # Use memory mapping for faster loading
                 use_mlock=True,  # Lock memory to prevent swapping
             )
-            
+
             MODEL_CACHE[self._vision_model_key] = model
             load_time = time.time() - start_time
             logger.info(f"Vision model loaded in {load_time:.2f} seconds")
-        
+
         return MODEL_CACHE[self._vision_model_key]
 
     @property
@@ -194,7 +194,7 @@ class LLM:
         """Get cached vision model or load if not available"""
         if not self.vision_settings:
             return None
-            
+
         if self._vision_model_key in MODEL_CACHE:
             return MODEL_CACHE[self._vision_model_key]
         return self._load_vision_model()
@@ -262,13 +262,13 @@ class LLM:
                 message_dict = message.model_dump()
             else:
                 message_dict = message.copy()
-            
+
             # Ensure role is valid
             if "role" not in message_dict or message_dict["role"] not in ROLE_VALUES:
                 message_dict["role"] = "user"
-            
+
             formatted_messages.append(message_dict)
-        
+
         return formatted_messages
 
     def _format_prompt_for_llama(self, messages: List[Dict[str, Any]]) -> str:
@@ -277,7 +277,7 @@ class LLM:
         for message in messages:
             role = message["role"]
             content = message.get("content", "")
-            
+
             if role == "system":
                 prompt += f"<|system|>\n{content}\n"
             elif role == "user":
@@ -287,7 +287,7 @@ class LLM:
             else:
                 # Default to user for unknown roles
                 prompt += f"<|user|>\n{content}\n"
-        
+
         # Add the final assistant prefix to prompt the model to respond
         prompt += "<|assistant|>\n"
         return prompt
@@ -298,7 +298,7 @@ class LLM:
         for message in messages:
             role = message["role"]
             content = message.get("content", "")
-            
+
             if role == "system":
                 prompt += f"<|system|>\n{content}\n"
             elif role == "user":
@@ -319,7 +319,7 @@ class LLM:
             else:
                 # Default to user for unknown roles
                 prompt += f"<|user|>\n{content}\n"
-        
+
         # Add the final assistant prefix to prompt the model to respond
         prompt += "<|assistant|>\n"
         return prompt
@@ -335,7 +335,7 @@ class LLM:
     ) -> Union[str, Generator[str, None, None]]:
         """
         Send a request to the model and get a response.
-        
+
         Args:
             messages: List of messages to send to the model
             system_msgs: Optional system messages to prepend
@@ -343,10 +343,10 @@ class LLM:
             stream: Whether to stream the response
             timeout: Timeout in seconds for the request
             **kwargs: Additional arguments to pass to the model
-            
+
         Returns:
             The model's response as a string or a generator of strings if streaming
-            
+
         Raises:
             TokenLimitExceeded: If the input exceeds the model's token limit
             Exception: For other unexpected errors
@@ -354,14 +354,14 @@ class LLM:
         try:
             # Check if the model supports images
             supports_images = self.model in MULTIMODAL_MODELS
-            
+
             # Format messages
             if system_msgs:
                 system_msgs = self.format_messages(system_msgs, supports_images)
                 messages = system_msgs + self.format_messages(messages, supports_images)
             else:
                 messages = self.format_messages(messages, supports_images)
-            
+
             # Check for images in messages
             has_images = False
             for msg in messages:
@@ -371,16 +371,16 @@ class LLM:
                         if isinstance(item, dict) and item.get("type") == "image_url":
                             has_images = True
                             break
-            
+
             # Calculate input token count
             input_tokens = self.count_message_tokens(messages)
-            
+
             # Check if token limits are exceeded
             if not self.check_token_limit(input_tokens, has_images):
                 error_message = self.get_limit_error_message(input_tokens, has_images)
                 # Raise a special exception that won't be retried
                 raise TokenLimitExceeded(error_message)
-            
+
             # Use vision model if content has images and vision model is available
             if has_images and supports_images and self.vision_model:
                 logger.info("Using vision model for image content")
@@ -389,13 +389,13 @@ class LLM:
             else:
                 prompt = self._format_prompt_for_llama(messages)
                 model = self.text_model
-            
+
             # Set temperature
             temp = temperature if temperature is not None else self.temperature
-            
+
             # Apply safe max tokens limit
             safe_max_tokens = min(self.max_tokens, self.MAX_ALLOWED_OUTPUT_TOKENS)
-            
+
             if stream:
                 # Create streaming response
                 async def response_stream():
@@ -409,13 +409,13 @@ class LLM:
                             stream=True,
                             **kwargs
                         )
-                        
+
                         total_text = ""
                         for chunk in completion_generator:
                             chunk_text = chunk.get("choices", [{}])[0].get("text", "")
                             total_text += chunk_text
                             yield chunk_text
-                        
+
                         # Update token counts after streaming completes
                         prompt_tokens = self.count_tokens(prompt)
                         completion_tokens = self.count_tokens(total_text)
@@ -423,7 +423,7 @@ class LLM:
                     except Exception as e:
                         logger.error(f"Error in streaming response: {e}")
                         raise
-                
+
                 return response_stream()
             else:
                 # Create a task for model completion with timeout and run in thread pool
@@ -442,17 +442,17 @@ class LLM:
                         ),
                         timeout=timeout
                     )
-                    
+
                     # Extract completion text
                     completion_text = completion.get("choices", [{}])[0].get("text", "").strip()
-                    
+
                     # Estimate token counts
                     prompt_tokens = self.count_tokens(prompt)
                     completion_tokens = self.count_tokens(completion_text)
-                    
+
                     # Update token counter
                     self.update_token_count(prompt_tokens, completion_tokens)
-                    
+
                     return completion_text
                 except asyncio.TimeoutError:
                     logger.error(f"Model completion timed out after {timeout} seconds")
@@ -479,10 +479,10 @@ class LLM:
                 logger.info(f"Cleaned up model: {key}")
             except Exception as e:
                 logger.error(f"Error cleaning up model {key}: {e}")
-        
+
         # Clear the cache
         MODEL_CACHE.clear()
-        
+
         # Shutdown thread pool
         cls._executor.shutdown(wait=True)
         logger.info("Model resources cleaned up")

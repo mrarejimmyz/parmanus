@@ -7,6 +7,7 @@ from typing import Dict, List, Literal, Optional
 
 import boto3
 
+
 # Global variables to track the current tool use ID across function calls
 # Tmp solution
 CURRENT_TOOLUSE_ID = None

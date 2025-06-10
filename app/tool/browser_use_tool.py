@@ -17,6 +17,7 @@ from app.logger import logger
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
 
+
 _BROWSER_DESCRIPTION = """\
 A powerful browser automation tool that allows interaction with web pages through various actions.
 * This tool provides commands for controlling a browser session, navigating web pages, and extracting information

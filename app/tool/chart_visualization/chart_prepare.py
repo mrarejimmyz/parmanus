@@ -5,9 +5,7 @@ class VisualizationPrepare(NormalPythonExecute):
     """A tool for Chart Generation Preparation"""
 
     name: str = "visualization_preparation"
-    description: str = (
-        "Using Python code to generates metadata of data_visualization tool. Outputs: 1) JSON Information. 2) Cleaned CSV data files (Optional)."
-    )
+    description: str = "Using Python code to generates metadata of data_visualization tool. Outputs: 1) JSON Information. 2) Cleaned CSV data files (Optional)."
     parameters: dict = {
         "type": "object",
         "properties": {
