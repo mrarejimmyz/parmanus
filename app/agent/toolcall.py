@@ -89,10 +89,35 @@ class ToolCallAgent(ReActAgent):
         logger.info(f"✨ {self.name}'s thoughts: {content}")
         logger.info(f"🛠️ {self.name} selected {len(self.tool_calls)} tools to use")
         if self.tool_calls:
-            logger.info(
-                f"🧰 Tools being prepared: {[call.function.name for call in self.tool_calls]}"
-            )
-            logger.info(f"🔧 Tool arguments: {self.tool_calls[0].function.arguments}")
+            # Handle both dict and object formats for tool calls
+            tool_names = []
+            for call in self.tool_calls:
+                if isinstance(call, dict):
+                    # Dict format
+                    if "function" in call and "name" in call["function"]:
+                        tool_names.append(call["function"]["name"])
+                    else:
+                        tool_names.append(str(call))
+                elif hasattr(call, "function") and hasattr(call.function, "name"):
+                    # Object format
+                    tool_names.append(call.function.name)
+                else:
+                    tool_names.append(str(call))
+
+            logger.info(f"🧰 Tools being prepared: {tool_names}")
+
+            # Log first tool arguments (handle both formats)
+            if self.tool_calls:
+                first_call = self.tool_calls[0]
+                if isinstance(first_call, dict) and "function" in first_call:
+                    args = first_call["function"].get("arguments", "{}")
+                elif hasattr(first_call, "function") and hasattr(
+                    first_call.function, "arguments"
+                ):
+                    args = first_call.function.arguments
+                else:
+                    args = str(first_call)
+                logger.info(f"🔧 Tool arguments: {args}")
 
         try:
             # Handle different tool_choices modes
@@ -140,10 +165,16 @@ class ToolCallAgent(ReActAgent):
 
             # Return last message content if no tool calls
             last_message = self.messages[-1] if self.messages else None
-            return (
-                getattr(last_message, "content", "")
-                or "No content or commands to execute"
-            )
+            if last_message:
+                if isinstance(last_message, dict):
+                    return last_message.get(
+                        "content", "No content or commands to execute"
+                    )
+                else:
+                    return getattr(
+                        last_message, "content", "No content or commands to execute"
+                    )
+            return "No content or commands to execute"
 
         results = []
         for command in self.tool_calls:
@@ -155,34 +186,55 @@ class ToolCallAgent(ReActAgent):
             if self.max_observe:
                 result = result[: self.max_observe]
 
+            # Handle both dict and object formats for logging
+            if isinstance(command, dict) and "function" in command:
+                tool_name = command["function"].get("name", "unknown")
+                tool_id = command.get("id", "unknown")
+            elif hasattr(command, "function") and hasattr(command.function, "name"):
+                tool_name = command.function.name
+                tool_id = command.id
+            else:
+                tool_name = str(command)
+                tool_id = "unknown"
+
             logger.info(
-                f"🎯 Tool '{command.function.name}' completed its mission! Result: {result}"
+                f"🎯 Tool '{tool_name}' completed its mission! Result: {result}"
             )
 
             # Add tool response to memory
             tool_msg = Message.tool_message(
-                content=str(result),  # Ensure content is string
-                tool_call_id=command.id,
-                name=command.function.name,
+                content=result,
+                tool_call_id=tool_id,
+                name=tool_name,
                 base64_image=self._current_base64_image,
             )
             self.memory.add_message(tool_msg)
-            results.append(str(result))
+            results.append(result)
 
         return "\n\n".join(results)
 
     async def execute_tool(self, command: ToolCall) -> str:
         """Execute a single tool call with robust error handling"""
-        if not command or not command.function or not command.function.name:
+        # Handle both dict and object formats
+        if isinstance(command, dict):
+            if "function" not in command or "name" not in command["function"]:
+                return "Error: Invalid command format"
+            name = command["function"]["name"]
+            arguments = command["function"].get("arguments", "{}")
+        elif hasattr(command, "function") and hasattr(command.function, "name"):
+            if not command or not command.function or not command.function.name:
+                return "Error: Invalid command format"
+            name = command.function.name
+            arguments = command.function.arguments or "{}"
+        else:
             return "Error: Invalid command format"
 
-        name = command.function.name
         if name not in self.available_tools.tool_map:
             return f"Error: Unknown tool '{name}'"
 
         try:
             # Parse arguments
-            args = json.loads(command.function.arguments or "{}")
+            args = json.loads(arguments)
 
             # Execute the tool
             logger.info(f"🔧 Activating tool: '{name}'...")
@@ -207,7 +259,7 @@ class ToolCallAgent(ReActAgent):
         except json.JSONDecodeError:
             error_msg = f"Error parsing arguments for {name}: Invalid JSON format"
             logger.error(
-                f"📝 Oops! The arguments for '{name}' don't make sense - invalid JSON, arguments:{command.function.arguments}"
+                f"📝 Oops! The arguments for '{name}' don't make sense - invalid JSON, arguments:{arguments}"
             )
             return f"Error: {error_msg}"
         except Exception as e:

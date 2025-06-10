@@ -11,6 +11,7 @@ from app.llm_optimized import LLMOptimized
 from app.logger import logger
 from app.memory import Memory
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
+from app.schema import AgentState
 from app.tool import Terminate, ToolCollection
 from app.tool.ask_human import AskHuman
 from app.tool.browser_use_tool import BrowserUseTool
@@ -20,10 +21,14 @@ from app.tool.str_replace_editor import StrReplaceEditor
 
 
 def validate_llm_instance(v) -> bool:
-    """Validate that the LLM is an instance of LLMOptimized."""
-    from app.llm_optimized import LLMOptimized
-
-    return isinstance(v, LLMOptimized) or (v.__class__.__name__ == "LLMOptimized")
+    """Validate that the LLM is a supported instance."""
+    # Accept any LLM instance that has the basic required methods
+    return (
+        hasattr(v, "ask")
+        or hasattr(v, "ask_tool")
+        or hasattr(v, "chat")
+        or hasattr(v, "complete")
+    )
 
 
 class Manus(ToolCallAgent):
@@ -46,9 +51,9 @@ class Manus(ToolCallAgent):
     # MCP clients for remote tool access
     mcp_clients: MCPClients = Field(default_factory=MCPClients)
 
-    # LLM field with proper type and validation
-    llm: LLMOptimized = Field(
-        default_factory=lambda: LLMOptimized(config.llm),
+    # LLM field with proper type and validation - accept any LLM
+    llm: Any = Field(
+        default=None,
         description="The LLM instance to use for generating responses",
     )
 
@@ -66,31 +71,30 @@ class Manus(ToolCallAgent):
     @model_validator(mode="after")
     def validate_llm(self):
         """Validate and initialize LLM if needed."""
-        from app.llm_optimized import LLMOptimized
+        from app.llm_factory import create_llm
 
         try:
-            if not validate_llm_instance(self.llm):
-                # Initialize with default config if not provided
-                self.llm = LLMOptimized(config.llm)
+            if self.llm is None:
+                # Initialize with factory (supports both Ollama and llama.cpp)
+                self.llm = create_llm(config.llm)
                 logger.info(
-                    f"Initialized new LLM instance with model: {self.llm.model}"
+                    f"Initialized new LLM instance with model: {getattr(self.llm, 'model', 'unknown')}"
+                )
+            elif not validate_llm_instance(self.llm):
+                # Try to use the provided LLM anyway
+                logger.warning(
+                    f"LLM instance may not be fully compatible: {type(self.llm)}"
                 )
             else:
                 # Already valid instance
-                logger.debug(
-                    f"Using existing LLM instance of type: {type(self.llm).__name__}"
-                )
+                logger.debug(f"Using existing LLM instance: {type(self.llm)}")
         except Exception as e:
             # Handle initialization errors
             logger.error(f"Error initializing LLM: {e}")
-            try:
-                self.llm = LLMOptimized(config.llm)
-                logger.info(
-                    f"Fallback: Initialized new LLM instance with model: {self.llm.model}"
-                )
-            except Exception as e2:
-                logger.error(f"Critical error during LLM fallback initialization: {e2}")
-                raise
+            # Use the provided LLM anyway if available
+            if self.llm is None:
+                raise ValueError(f"Failed to initialize LLM: {e}")
+
         return self
 
     special_tool_names: list[str] = Field(default_factory=lambda: [Terminate().name])
@@ -267,10 +271,10 @@ class Manus(ToolCallAgent):
             logger.error(f"Error during think step: {e}", exc_info=True)
             return False
 
-    async def step(self) -> bool:
+    async def step(self) -> str:
         """
         Execute one step of the agent's decision-making process.
-        Returns True if the agent should continue, False if it should stop.
+        Returns the result of the step execution.
         """
         try:
             # Check initialization
@@ -284,13 +288,16 @@ class Manus(ToolCallAgent):
 
             if not should_continue:
                 logger.info("Agent decided to stop.")
-                return False
+                self.state = AgentState.FINISHED
+                return "Agent thinking complete - no further action needed"
 
-            return True
+            # Execute the action step
+            action_result = await self.act()
+            return action_result
         except Exception as e:
             logger.error(f"Error during agent step: {e}", exc_info=True)
             await self.cleanup()  # Ensure cleanup on error
-            return False
+            return f"Error during step execution: {str(e)}"
 
     async def run(self, request: Optional[str] = None) -> str:
         """Execute the agent's main loop with enhanced error handling and monitoring."""

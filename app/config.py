@@ -38,9 +38,15 @@ class VisionSettings(BaseModel):
 class LLMSettings(BaseModel):
     """LLM configuration."""
 
+    backend: str = Field(
+        default="llamacpp", description="LLM backend to use (llamacpp or ollama)"
+    )
     model: str = Field(default="llama-jb", description="Main model name")
     model_path: str = Field(
         default="models/llama-jb.gguf", description="Path to main model"
+    )
+    base_url: str = Field(
+        default="http://localhost:11434", description="Ollama server URL"
     )
     max_tokens: int = Field(default=2048, description="Maximum tokens for generation")
     temperature: float = Field(default=0.0, description="Temperature for generation")
@@ -264,6 +270,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
         return Config(
             llm=llm_settings,
             browser=BrowserSettings(headless=False, disable_security=True),
+            sandbox=SandboxSettings(use_sandbox=False),
             workspace_root=str(WORKSPACE_ROOT),
             mcp_config=mcp_config,
         )

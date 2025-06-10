@@ -15,7 +15,6 @@ from app.tool.file_operators import (
     SandboxFileOperator,
 )
 
-
 Command = Literal[
     "view",
     "create",
@@ -107,7 +106,7 @@ class StrReplaceEditor(BaseTool):
         """Get the appropriate file operator based on execution mode."""
         return (
             self._sandbox_operator
-            if config.sandbox.use_sandbox
+            if config.sandbox and config.sandbox.use_sandbox
             else self._local_operator
         )
 

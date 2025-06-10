@@ -175,10 +175,42 @@ class Message(BaseModel):
             content: Optional message content
             base64_image: Optional base64 encoded image
         """
-        formatted_calls = [
-            {"id": call.id, "function": call.function.model_dump(), "type": "function"}
-            for call in tool_calls
-        ]
+        formatted_calls = []
+        for call in tool_calls:
+            # Handle both dict and object formats
+            if isinstance(call, dict):
+                # Dict format - use as is if properly formatted
+                if "id" in call and "function" in call and "type" in call:
+                    formatted_calls.append(call)
+                elif "function" in call and "name" in call["function"]:
+                    # Format dict into proper structure
+                    formatted_calls.append(
+                        {
+                            "id": call.get("id", f"call_{len(formatted_calls)}"),
+                            "function": call["function"],
+                            "type": "function",
+                        }
+                    )
+            else:
+                # Object format - extract attributes
+                try:
+                    formatted_calls.append(
+                        {
+                            "id": call.id,
+                            "function": call.function.model_dump(),
+                            "type": "function",
+                        }
+                    )
+                except AttributeError:
+                    # Fallback for malformed objects
+                    formatted_calls.append(
+                        {
+                            "id": f"call_{len(formatted_calls)}",
+                            "function": {"name": str(call), "arguments": "{}"},
+                            "type": "function",
+                        }
+                    )
+
         return cls(
             role=Role.ASSISTANT,
             content=content,

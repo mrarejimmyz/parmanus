@@ -1,6 +1,6 @@
 import json
 import time
-from typing import TYPE_CHECKING, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from pydantic import Field, model_validator
 
@@ -139,9 +139,9 @@ class BrowserAgent(ToolCallAgent):
     max_observe: int = 10000
     max_steps: int = 20
 
-    # Override LLM field with proper type
-    llm: LLMOptimized = Field(
-        default_factory=lambda: LLMOptimized(config.llm),
+    # Override LLM field with proper type - accept any LLM
+    llm: Any = Field(
+        default=None,
         description="The LLM instance to use for generating responses",
     )
 
@@ -197,8 +197,25 @@ class BrowserAgent(ToolCallAgent):
         return instance
 
     @model_validator(mode="after")
-    def initialize_helper(self) -> "BrowserAgent":
-        """Initialize the browser context helper."""
+    def validate_llm_and_initialize_helper(self) -> "BrowserAgent":
+        """Validate LLM and initialize the browser context helper."""
+        # LLM validation - accept any LLM type with basic methods
+        if self.llm is None:
+            from app.llm_factory import create_llm
+
+            self.llm = create_llm(config.llm)
+            logger.info(f"Initialized new LLM instance for browser agent")
+        elif not (
+            hasattr(self.llm, "ask")
+            or hasattr(self.llm, "ask_tool")
+            or hasattr(self.llm, "chat")
+            or hasattr(self.llm, "complete")
+        ):
+            logger.warning(
+                f"LLM instance may not be fully compatible: {type(self.llm)}"
+            )
+
+        # Initialize browser context helper
         self.browser_context_helper = BrowserContextHelper(self)
         return self
 

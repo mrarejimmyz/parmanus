@@ -1,39 +1,41 @@
 """Agent routing system based on Parmanus's Interaction class."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from app.agent.base import BaseAgent
 from app.agent.browser import BrowserAgent
 from app.agent.manus import Manus
 from app.config import config
 from app.gpu_manager import GPUManager, get_gpu_manager
-from app.llm_optimized import LLMOptimized
 from app.logger import logger
 
 
 class AgentRouter:
     """Routes user queries to the appropriate specialized agent."""
 
-    def __init__(self, llm: Optional[LLMOptimized] = None):
+    def __init__(self, llm: Optional[Any] = None):
         """Initialize the agent router.
 
         Args:
-            llm: LLMOptimized instance to use for agents
+            llm: Any LLM instance to use for agents
         """
         self.agents: Dict[str, BaseAgent] = {}
         self.current_agent: Optional[BaseAgent] = None
         self.default_agent_name = "manus"
-        self.llm = (
-            llm if llm and isinstance(llm, LLMOptimized) else LLMOptimized(config.llm)
-        )
+        self.llm = llm  # Use the provided LLM directly
 
         # Initialize default agents
         self._initialize_default_agents()
 
     def _initialize_default_agents(self):
         """Initialize default agents for the router."""
-        # Add Manus agent as default
-        self.agents["manus"] = Manus(llm=self.llm)
+        # Add Manus agent as default - pass the LLM to it
+        try:
+            self.agents["manus"] = Manus(llm=self.llm)
+            logger.info("Manus agent initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Manus agent: {e}")
+            # Continue without Manus agent
 
         try:
             # Add browser agent with error handling
