@@ -1,10 +1,10 @@
-# Complete ParManus AI dependencies with full tool support
+# Hybrid ParManus dependencies - supports both local GGUF and Ollama
 pydantic~=2.10.6
 
-# For local GGUF models (primary)
+# For local GGUF models (your current setup)
 llama-cpp-python>=0.2.56
 
-# For Ollama API (fallback)
+# For Ollama API (optional fallback)
 openai~=1.66.3
 httpx>=0.27.0
 
@@ -12,26 +12,17 @@ httpx>=0.27.0
 tomli>=2.0.0; python_version < "3.11"
 loguru~=0.7.3
 
-# Core ParManus dependencies
-aiofiles>=23.0.0
-beautifulsoup4>=4.12.0
-playwright>=1.40.0
-requests>=2.31.0
-python-dotenv>=1.0.0
-
-# Tool-specific dependencies
-selenium>=4.15.0
-webdriver-manager>=4.0.0
-
 # Optional: Voice interaction (uncomment if needed)
 # pyttsx3~=2.90
 # SpeechRecognition~=3.10.4
+
+# Optional: Browser automation (uncomment if needed)
+# playwright~=1.51.0
+# selenium~=4.26.1
 
 # Optional: Advanced features (uncomment if needed)
 # fastapi~=0.115.11
 # uvicorn~=0.34.0
 # numpy
 # pillow~=11.1.0
-# pandas
-# matplotlib
 

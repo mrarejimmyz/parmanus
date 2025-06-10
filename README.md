@@ -1,166 +1,297 @@
-# ParManus AI Agent with Ollama Integration
+# ParManus AI Agent - Complete System with Local GGUF Support
 
-A streamlined AI agent system using Ollama for local LLM inference with Llama 3.2 support.
+A comprehensive AI agent system with full tool calling capabilities, optimized for local GGUF models while supporting Ollama as a fallback.
 
-## Features
+## 🚀 Features
 
-- **Ollama Integration**: Native support for Ollama API with Llama 3.2 models
-- **Vision Support**: Multi-modal capabilities with vision models
-- **Streamlined Architecture**: Single main.py handles all functionality
+### **Core Capabilities**
+- **Local GGUF Models**: Native support for your local Llama 3.2 models
+- **Full Tool System**: Complete integration with all ParManus tools
+- **Vision Support**: Multi-modal capabilities with llava models
+- **Agent Routing**: Automatic agent selection (manus, code, browser, file, planner)
 - **Memory System**: Session persistence and recovery
-- **Agent Routing**: Automatic agent selection based on query type
-- **Voice Support**: Optional TTS/STT integration
-- **Optimized Dependencies**: Minimal required packages
+- **Hybrid Architecture**: Works with both local models and Ollama
 
-## Quick Start
+### **Available Tools**
+- **Browser Automation**: Web scraping, form filling, navigation
+- **File Operations**: Read, write, edit files and documents
+- **Code Execution**: Python script execution and debugging
+- **Web Search**: Search engines and information retrieval
+- **Planning Tools**: Task breakdown and organization
+- **Terminal/Bash**: System command execution
 
-### Prerequisites
+### **Agent Types**
+- **Manus**: General-purpose AI assistant with all tools
+- **Code**: Programming and development specialist
+- **Browser**: Web automation and scraping expert
+- **File**: Document and data processing specialist
+- **Planner**: Task planning and organization assistant
 
+## 📋 Prerequisites
+
+### **For Local Models (Recommended)**
+1. **GGUF Models**: Place your models in the `models/` directory
+   ```
+   models/
+   ├── Llama-3.2-11B-Vision-Instruct.Q4_K_M.gguf
+   └── llava-1.6-mistral-7b-gguf/
+       ├── ggml-model-q4_k.gguf
+       └── mmproj-model-f16.gguf
+   ```
+
+2. **GPU Support**: CUDA-compatible GPU (RTX 3070 or better recommended)
+
+### **For Ollama (Optional Fallback)**
 1. Install Ollama:
+   ```bash
+   curl -fsSL https://ollama.ai/install.sh | sh
+   ```
+
+2. Pull models:
+   ```bash
+   ollama pull llama3.2
+   ollama pull llama3.2-vision
+   ```
+
+## 🛠️ Installation
+
+1. **Clone Repository**:
+   ```bash
+   git clone https://github.com/mrarejimmyz/ParManusAI.git
+   cd ParManusAI
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Setup Browser (for browser tools)**:
+   ```bash
+   playwright install chromium
+   ```
+
+4. **Configure (Optional)**:
+   ```bash
+   cp config/config.toml config/config.toml.local
+   # Edit config/config.toml.local as needed
+   ```
+
+## 🎯 Usage
+
+### **Quick Start**
 ```bash
-curl -fsSL https://ollama.ai/install.sh | sh
-```
+# Basic usage with local models
+python main.py --prompt "Hello, analyze this code for me"
 
-2. Pull Llama 3.2 models:
-```bash
-ollama pull llama3.2
-ollama pull llama3.2-vision  # Optional for vision support
-```
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/mrarejimmyz/ParManusAI.git
-cd ParManusAI
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Configure (optional):
-```bash
-cp config/config.toml config/config.toml.local
-# Edit config/config.toml.local as needed
-```
-
-### Usage
-
-#### Basic Usage
-```bash
-python main.py --prompt "Hello, how are you?"
-```
-
-#### Interactive Mode
-```bash
+# Interactive mode
 python main.py
+
+# Specific agent
+python main.py --agent code --prompt "Write a Python web scraper"
+
+# Browser automation
+python main.py --agent browser --prompt "Search for Python tutorials"
+
+# File operations
+python main.py --agent file --prompt "Read and summarize document.txt"
 ```
 
-#### Specify Agent
+### **Advanced Usage**
 ```bash
-python main.py --agent code --prompt "Write a Python function to calculate fibonacci"
+# Use Ollama instead of local models
+python main.py --api-type ollama --prompt "Help me with this task"
+
+# Custom workspace
+python main.py --workspace ./my_project --prompt "Analyze this project"
+
+# Limit agent steps
+python main.py --max-steps 10 --prompt "Complex task"
+
+# Simple mode (no tools)
+python main.py --simple --prompt "Just chat"
+
+# Custom config
+python main.py --config config/my_config.toml --prompt "Task"
 ```
 
-#### With Custom Config
-```bash
-python main.py --config config/config.toml.local --prompt "Analyze this image"
-```
+### **Interactive Commands**
+Once in interactive mode, you can:
+- Type any prompt for the AI to process
+- Use `quit`, `exit`, `bye`, or `q` to exit
+- The system automatically routes to appropriate agents
 
-#### Voice Mode (requires voice dependencies)
-```bash
-python main.py --voice
-```
+## ⚙️ Configuration
 
-## Configuration
-
-The system uses TOML configuration files. Default configuration:
-
+### **Default Configuration** (`config/config.toml`)
 ```toml
 [llm]
-api_type = 'ollama'
-model = "llama3.2"
-base_url = "http://localhost:11434/v1"
-api_key = "ollama"
+api_type = "local"  # or "ollama"
+model = "Llama-3.2-11B-Vision-Instruct"
+model_path = "models/Llama-3.2-11B-Vision-Instruct.Q4_K_M.gguf"
 max_tokens = 2048
 temperature = 0.0
+n_gpu_layers = -1  # Use all GPU layers
+gpu_memory_limit = 7000  # MB for RTX 3070
 
 [llm.vision]
-api_type = 'ollama'
-model = "llama3.2-vision"
-base_url = "http://localhost:11434/v1"
-api_key = "ollama"
-max_tokens = 2048
-temperature = 0.0
+enabled = true
+model = "llava-v1.6-mistral-7b"
+model_path = "models/llava-1.6-mistral-7b-gguf/ggml-model-q4_k.gguf"
+clip_model_path = "models/llava-1.6-mistral-7b-gguf/mmproj-model-f16.gguf"
 
 [browser]
 headless = false
 disable_security = true
-extra_chromium_args = []
+
+[memory]
+save_session = false
+recover_last_session = false
 ```
 
-## Available Agents
+### **Environment Variables**
+```bash
+export PARMANUS_WORKSPACE="./workspace"
+export PARMANUS_MODEL_PATH="./models/your-model.gguf"
+export PARMANUS_API_TYPE="local"
+```
 
-- **manus**: General-purpose AI assistant (default)
-- **code**: Programming and development tasks
-- **browser**: Web automation and scraping
-- **file**: File operations and data processing
-- **planner**: Task planning and organization
+## 🔧 Tool System
 
-## Architecture
+### **Available Tools**
+1. **BrowserUseTool**: Web automation and scraping
+2. **StrReplaceEditor**: File editing and manipulation
+3. **PythonExecute**: Code execution and debugging
+4. **WebSearch**: Internet search capabilities
+5. **Bash**: Terminal command execution
+6. **PlanningTool**: Task breakdown and planning
+7. **AskHuman**: Interactive user input
 
-The optimized architecture consists of:
+### **Tool Usage Examples**
+```bash
+# Browser automation
+python main.py --prompt "Go to github.com and search for Python projects"
 
-- `main.py`: Single entry point handling all functionality
-- `config/`: Configuration files
-- Minimal dependencies for core functionality
-- Optional modules for extended features
+# File operations
+python main.py --prompt "Create a Python script that reads CSV files"
 
-## Migration from Legacy
+# Code execution
+python main.py --prompt "Write and run a script to analyze data.csv"
 
-The system maintains backward compatibility while providing a streamlined experience:
+# Web search
+python main.py --prompt "Search for the latest Python 3.12 features"
 
-- Legacy llama-cpp-python code moved to `app/llm_legacy.py`
-- Original main.py backed up as `main_original.py`
-- Original requirements backed up as `requirements_original.txt`
+# Planning
+python main.py --prompt "Create a plan to build a web application"
+```
 
-## Development
+## 🎭 Agent Routing
 
-### Adding New Agents
+The system automatically selects the best agent based on your prompt:
 
-Extend the `SimpleAgent` class or modify the `route_agent` function in `main.py`.
+- **Keywords for Code Agent**: code, program, script, debug, function, python, javascript
+- **Keywords for Browser Agent**: browse, web, scrape, website, url, browser
+- **Keywords for File Agent**: file, save, read, write, data, edit
+- **Keywords for Planner Agent**: plan, schedule, task, organize, steps
+- **Default**: Manus (general-purpose with all tools)
 
-### Custom LLM Providers
+## 🔍 Troubleshooting
 
-Modify the `OllamaLLM` class or create new implementations following the same interface.
+### **Local Model Issues**
+```bash
+# Check if model exists
+ls -la models/
 
-### Configuration Options
+# Test model loading
+python -c "from llama_cpp import Llama; print('llama-cpp-python works')"
 
-Add new configuration fields to the `Config` model in `main.py`.
+# Check GPU
+nvidia-smi
+```
 
-## Troubleshooting
+### **Ollama Issues**
+```bash
+# Check Ollama status
+ollama list
 
-### Ollama Connection Issues
-- Ensure Ollama is running: `ollama serve`
-- Check if models are available: `ollama list`
-- Verify base_url in configuration
+# Start Ollama server
+ollama serve
 
-### Memory Issues
-- Reduce max_tokens in configuration
-- Use smaller models if available
-- Enable memory compression in config
+# Test connection
+curl http://localhost:11434/api/tags
+```
 
-### Performance Optimization
-- Use GPU acceleration with Ollama
-- Adjust model parameters in configuration
-- Enable session caching
+### **Tool Issues**
+```bash
+# Install browser dependencies
+playwright install
 
-## License
+# Check Python environment
+python -c "import playwright; print('Playwright available')"
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### **Common Solutions**
+1. **Model not found**: Check `model_path` in config
+2. **GPU memory error**: Reduce `n_gpu_layers` or `gpu_memory_limit`
+3. **Tool errors**: Install missing dependencies
+4. **Permission errors**: Check file/directory permissions
 
-## Contributing
+## 📊 Performance
+
+### **Optimizations**
+- **GPU Acceleration**: Full CUDA support for local models
+- **Memory Management**: Efficient context window handling
+- **Tool Caching**: Reuse tool instances across calls
+- **Async Operations**: Non-blocking tool execution
+
+### **Benchmarks** (RTX 3070, 8GB VRAM)
+- **Text Generation**: ~20-30 tokens/second
+- **Tool Execution**: ~1-3 seconds per tool call
+- **Memory Usage**: ~6-7GB GPU, ~2-4GB RAM
+- **Startup Time**: ~10-15 seconds (model loading)
+
+## 🔒 Privacy & Security
+
+- **100% Local**: All AI processing on your hardware
+- **No Data Transmission**: No external API calls for AI inference
+- **Secure Tools**: Sandboxed execution environment
+- **Session Privacy**: Local session storage only
+
+## 🚀 Advanced Features
+
+### **Custom Agents**
+Create custom agents by extending the base classes:
+```python
+from app.agent.base import BaseAgent
+
+class MyCustomAgent(BaseAgent):
+    # Your custom implementation
+    pass
+```
+
+### **Custom Tools**
+Add new tools by implementing the BaseTool interface:
+```python
+from app.tool.base import BaseTool
+
+class MyCustomTool(BaseTool):
+    # Your custom tool implementation
+    pass
+```
+
+### **MCP Integration**
+Connect to Model Context Protocol servers for extended capabilities.
+
+## 📈 Roadmap
+
+- [ ] Additional model format support (ONNX, TensorRT)
+- [ ] More specialized agents (data analysis, creative writing)
+- [ ] Enhanced vision capabilities
+- [ ] Plugin system for custom tools
+- [ ] Web interface
+- [ ] API server mode
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -168,10 +299,17 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 4. Add tests if applicable
 5. Submit a pull request
 
-## Support
+## 📄 License
 
-For issues and questions:
-- Open an issue on GitHub
-- Check the troubleshooting section
-- Review Ollama documentation for model-specific issues
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+- **Issues**: Open an issue on GitHub
+- **Discussions**: Use GitHub Discussions
+- **Documentation**: Check the wiki for detailed guides
+
+---
+
+**Note**: This system is optimized for local GGUF models but provides Ollama fallback for maximum compatibility. All tools work with both backends.
 

@@ -1,6 +1,6 @@
 """
-Hybrid ParManus AI Agent - Supports both Local GGUF models and Ollama
-Optimized main entry point handling all functionality.
+Complete ParManus AI Agent System with Full Tool Integration
+Optimized for local GGUF models while maintaining all functionality.
 """
 
 import argparse
@@ -17,25 +17,7 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 import tomllib
 
-# Conditional imports based on availability
-try:
-    import httpx
-    HTTPX_AVAILABLE = True
-except ImportError:
-    HTTPX_AVAILABLE = False
-
-try:
-    from openai import AsyncOpenAI
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-
-try:
-    from llama_cpp import Llama
-    LLAMA_CPP_AVAILABLE = True
-except ImportError:
-    LLAMA_CPP_AVAILABLE = False
-
+# Conditional imports
 try:
     from loguru import logger
 except ImportError:
@@ -43,9 +25,23 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
+# Import ParManus components
+try:
+    from app.llm_complete import create_llm_with_tools
+    from app.agent.manus import Manus
+    from app.agent.code import CodeAgent
+    from app.agent.browser import BrowserAgent
+    from app.config import Config as ParManusConfig
+    from app.memory import Memory
+    from app.schema import Message, AgentState
+    PARMANUS_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"ParManus components not fully available: {e}")
+    PARMANUS_AVAILABLE = False
+
 
 class Config(BaseModel):
-    """Unified configuration model supporting both local and Ollama."""
+    """Unified configuration model."""
     
     # LLM Configuration
     api_type: str = Field(default="local", description="API type: local, ollama")
@@ -66,228 +62,38 @@ class Config(BaseModel):
     vision_model_path: str = Field(default="models/llava-1.6-mistral-7b-gguf/ggml-model-q4_k.gguf", description="Vision model path")
     vision_clip_path: str = Field(default="models/llava-1.6-mistral-7b-gguf/mmproj-model-f16.gguf", description="CLIP model path")
     
-    # Other configurations
-    voice_enabled: bool = Field(default=False, description="Enable voice")
+    # Workspace and paths
+    workspace_root: str = Field(default="./workspace", description="Workspace directory")
+    
+    # Agent settings
+    max_steps: int = Field(default=20, description="Maximum agent steps")
+    max_observe: int = Field(default=10000, description="Maximum observation length")
+    
+    # Memory settings
     save_session: bool = Field(default=False, description="Save sessions")
     recover_last_session: bool = Field(default=False, description="Recover last session")
+    
+    # Browser settings
     headless: bool = Field(default=False, description="Headless browser")
-
-
-class TokenCounter:
-    """Simple token counter."""
+    disable_security: bool = Field(default=True, description="Disable browser security")
     
-    def __init__(self):
-        self.prompt_tokens = 0
-        self.completion_tokens = 0
-        self.total_tokens = 0
-    
-    def update(self, prompt_tokens: int, completion_tokens: int):
-        self.prompt_tokens += prompt_tokens
-        self.completion_tokens += completion_tokens
-        self.total_tokens = self.prompt_tokens + self.completion_tokens
-
-
-class LocalLLM:
-    """Local GGUF model implementation using llama-cpp-python."""
-    
-    def __init__(self, config: Config):
-        if not LLAMA_CPP_AVAILABLE:
-            raise ImportError("llama-cpp-python not available. Install with: pip install llama-cpp-python")
-        
-        self.config = config
-        self.token_counter = TokenCounter()
-        
-        # Load main model
-        if Path(config.model_path).exists():
-            logger.info(f"Loading local model: {config.model_path}")
-            self.model = Llama(
-                model_path=config.model_path,
-                n_gpu_layers=config.n_gpu_layers,
-                n_ctx=4096,
-                verbose=False
-            )
-        else:
-            raise FileNotFoundError(f"Model not found: {config.model_path}")
-        
-        # Load vision model if enabled
-        self.vision_model = None
-        if config.vision_enabled and Path(config.vision_model_path).exists():
-            logger.info(f"Loading vision model: {config.vision_model_path}")
-            try:
-                self.vision_model = Llama(
-                    model_path=config.vision_model_path,
-                    clip_model_path=config.vision_clip_path,
-                    n_gpu_layers=config.n_gpu_layers,
-                    n_ctx=2048,
-                    verbose=False
-                )
-            except Exception as e:
-                logger.warning(f"Failed to load vision model: {e}")
-    
-    def _format_prompt(self, messages: List[Dict[str, Any]]) -> str:
-        """Format messages for llama prompt."""
-        prompt = ""
-        for msg in messages:
-            role = msg.get('role', 'user')
-            content = msg.get('content', '')
-            if role == 'system':
-                prompt += f"<|system|>\n{content}\n"
-            elif role == 'user':
-                prompt += f"<|user|>\n{content}\n"
-            elif role == 'assistant':
-                prompt += f"<|assistant|>\n{content}\n"
-        prompt += "<|assistant|>\n"
-        return prompt
-    
-    async def ask(self, messages: Union[str, List[Dict[str, Any]]], **kwargs) -> str:
-        """Ask the local model."""
-        try:
-            if isinstance(messages, str):
-                messages = [{"role": "user", "content": messages}]
-            
-            prompt = self._format_prompt(messages)
-            
-            # Run in thread to avoid blocking
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.model(
-                    prompt,
-                    max_tokens=self.config.max_tokens,
-                    temperature=self.config.temperature,
-                    stop=["<|user|>", "<|system|>"],
-                    **kwargs
-                )
-            )
-            
-            content = response['choices'][0]['text'].strip()
-            
-            # Update token counter
-            usage = response.get('usage', {})
-            self.token_counter.update(
-                usage.get('prompt_tokens', 0),
-                usage.get('completion_tokens', 0)
-            )
-            
-            return content
-            
-        except Exception as e:
-            logger.error(f"Error in local LLM: {e}")
-            raise
-    
-    async def ask_vision(self, messages: Union[str, List[Dict[str, Any]]], images: List[str] = None, **kwargs) -> str:
-        """Ask the vision model."""
-        if not self.vision_model:
-            raise ValueError("Vision model not available")
-        
-        try:
-            if isinstance(messages, str):
-                prompt = messages
-            else:
-                prompt = self._format_prompt(messages)
-            
-            # Run in thread to avoid blocking
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.vision_model(
-                    prompt,
-                    max_tokens=self.config.max_tokens,
-                    temperature=self.config.temperature,
-                    **kwargs
-                )
-            )
-            
-            content = response['choices'][0]['text'].strip()
-            
-            # Update token counter
-            usage = response.get('usage', {})
-            self.token_counter.update(
-                usage.get('prompt_tokens', 0),
-                usage.get('completion_tokens', 0)
-            )
-            
-            return content
-            
-        except Exception as e:
-            logger.error(f"Error in vision model: {e}")
-            raise
-
-
-class OllamaLLM:
-    """Ollama API implementation."""
-    
-    def __init__(self, config: Config):
-        if not OPENAI_AVAILABLE:
-            raise ImportError("openai package not available. Install with: pip install openai")
-        
-        self.config = config
-        self.token_counter = TokenCounter()
-        
-        self.client = AsyncOpenAI(
-            base_url=config.base_url,
-            api_key=config.api_key,
-        )
-        
-        logger.info(f"Initialized Ollama LLM: {config.base_url}")
-    
-    def _format_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Format messages for OpenAI API."""
-        formatted = []
-        for msg in messages:
-            if isinstance(msg, str):
-                formatted.append({"role": "user", "content": msg})
-            elif isinstance(msg, dict):
-                formatted.append(msg)
-            else:
-                formatted.append({"role": "user", "content": str(msg)})
-        return formatted
-    
-    async def ask(self, messages: Union[str, List[Dict[str, Any]]], **kwargs) -> str:
-        """Ask Ollama."""
-        try:
-            if isinstance(messages, str):
-                messages = [{"role": "user", "content": messages}]
-            
-            formatted_messages = self._format_messages(messages)
-            
-            response = await self.client.chat.completions.create(
-                model=self.config.model,
-                messages=formatted_messages,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
-                **kwargs
-            )
-            
-            content = response.choices[0].message.content
-            
-            if hasattr(response, 'usage') and response.usage:
-                self.token_counter.update(
-                    response.usage.prompt_tokens,
-                    response.usage.completion_tokens
-                )
-            
-            return content
-            
-        except Exception as e:
-            logger.error(f"Error in Ollama: {e}")
-            raise
-    
-    async def ask_vision(self, messages: Union[str, List[Dict[str, Any]]], images: List[str] = None, **kwargs) -> str:
-        """Ask Ollama vision model."""
-        return await self.ask(messages, **kwargs)  # Ollama handles vision in unified API
+    # Voice settings
+    voice_enabled: bool = Field(default=False, description="Enable voice")
+    speak: bool = Field(default=False, description="Enable TTS")
+    listen: bool = Field(default=False, description="Enable STT")
 
 
 class SimpleAgent:
-    """Simplified agent implementation."""
+    """Simplified agent for basic functionality when ParManus is not available."""
     
-    def __init__(self, name: str, llm: Union[LocalLLM, OllamaLLM], config: Config):
+    def __init__(self, name: str, llm, config: Config):
         self.name = name
         self.llm = llm
         self.config = config
+        self.messages = []
     
     async def run(self, prompt: str) -> str:
-        """Run the agent."""
+        """Run the agent with a simple prompt."""
         try:
             system_prompt = self._get_system_prompt()
             messages = [
@@ -299,7 +105,7 @@ class SimpleAgent:
             return response
             
         except Exception as e:
-            logger.error(f"Error in agent {self.name}: {e}")
+            logger.error(f"Error in simple agent {self.name}: {e}")
             return f"Error: {e}"
     
     def _get_system_prompt(self) -> str:
@@ -312,6 +118,57 @@ class SimpleAgent:
             "planner": "You are a planning assistant. Help break down tasks and create actionable plans."
         }
         return prompts.get(self.name, prompts["manus"])
+
+
+class ParManusAgentWrapper:
+    """Wrapper for full ParManus agents."""
+    
+    def __init__(self, agent_class, llm, config: Config):
+        self.agent_class = agent_class
+        self.llm = llm
+        self.config = config
+        self.agent = None
+    
+    async def run(self, prompt: str) -> str:
+        """Run the ParManus agent."""
+        try:
+            if not self.agent:
+                # Create ParManus config
+                parmanus_config = self._create_parmanus_config()
+                
+                # Initialize agent
+                if self.agent_class == Manus:
+                    self.agent = await Manus.create()
+                else:
+                    self.agent = self.agent_class()
+                
+                # Set LLM
+                self.agent.llm = self.llm
+            
+            # Run agent
+            result = await self.agent.run(prompt)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in ParManus agent: {e}")
+            return f"Error: {e}"
+        finally:
+            # Cleanup
+            if self.agent and hasattr(self.agent, 'cleanup'):
+                try:
+                    await self.agent.cleanup()
+                except Exception as e:
+                    logger.warning(f"Error during agent cleanup: {e}")
+    
+    def _create_parmanus_config(self):
+        """Create ParManus config from our config."""
+        # This would map our config to ParManus config format
+        # For now, return a basic config
+        return type('Config', (), {
+            'workspace_root': self.config.workspace_root,
+            'max_steps': self.config.max_steps,
+            'max_observe': self.config.max_observe,
+        })()
 
 
 class Memory:
@@ -396,6 +253,14 @@ def load_config(config_path: Optional[str] = None) -> Config:
                     "recover_last_session": memory_config.get("recover_last_session", False),
                 })
             
+            # Browser config
+            if "browser" in config_dict:
+                browser_config = config_dict["browser"]
+                flat_config.update({
+                    "headless": browser_config.get("headless", False),
+                    "disable_security": browser_config.get("disable_security", True),
+                })
+            
             return Config(**flat_config)
             
         except Exception as e:
@@ -412,15 +277,15 @@ def load_config(config_path: Optional[str] = None) -> Config:
     return Config()
 
 
-def route_agent(prompt: str) -> str:
-    """Simple agent routing."""
+def route_agent(prompt: str, use_full_agents: bool = True) -> str:
+    """Route to appropriate agent based on prompt."""
     prompt_lower = prompt.lower()
     
-    if any(word in prompt_lower for word in ["code", "program", "script", "debug", "function"]):
+    if any(word in prompt_lower for word in ["code", "program", "script", "debug", "function", "python", "javascript"]):
         return "code"
-    elif any(word in prompt_lower for word in ["browse", "web", "scrape", "website", "url"]):
+    elif any(word in prompt_lower for word in ["browse", "web", "scrape", "website", "url", "browser"]):
         return "browser"
-    elif any(word in prompt_lower for word in ["file", "save", "read", "write", "data"]):
+    elif any(word in prompt_lower for word in ["file", "save", "read", "write", "data", "edit"]):
         return "file"
     elif any(word in prompt_lower for word in ["plan", "schedule", "task", "organize", "steps"]):
         return "planner"
@@ -428,49 +293,81 @@ def route_agent(prompt: str) -> str:
         return "manus"
 
 
+def create_agent(agent_name: str, llm, config: Config):
+    """Create appropriate agent based on name and availability."""
+    if PARMANUS_AVAILABLE:
+        # Use full ParManus agents
+        agent_map = {
+            "manus": Manus,
+            "code": CodeAgent if 'CodeAgent' in globals() else None,
+            "browser": BrowserAgent if 'BrowserAgent' in globals() else None,
+        }
+        
+        agent_class = agent_map.get(agent_name)
+        if agent_class:
+            return ParManusAgentWrapper(agent_class, llm, config)
+    
+    # Fallback to simple agent
+    return SimpleAgent(agent_name, llm, config)
+
+
 async def main():
-    """Main entry point."""
-    parser = argparse.ArgumentParser(description="ParManus AI Agent - Hybrid Local/Ollama")
+    """Main entry point with full functionality."""
+    parser = argparse.ArgumentParser(description="ParManus AI Agent - Complete System")
     parser.add_argument("--config", type=str, help="Path to configuration file")
     parser.add_argument("--prompt", type=str, help="Input prompt")
     parser.add_argument("--no-wait", action="store_true", help="Exit immediately if no prompt")
     parser.add_argument("--agent", type=str, help="Specify agent (manus, code, browser, file, planner)")
     parser.add_argument("--api-type", type=str, choices=["local", "ollama"], help="Override API type")
+    parser.add_argument("--simple", action="store_true", help="Use simple agents only")
+    parser.add_argument("--workspace", type=str, help="Workspace directory")
+    parser.add_argument("--max-steps", type=int, help="Maximum agent steps")
     args = parser.parse_args()
     
     try:
         # Load configuration
         config = load_config(args.config)
         
-        # Override API type if specified
+        # Override settings from command line
         if args.api_type:
             config.api_type = args.api_type
+        if args.workspace:
+            config.workspace_root = args.workspace
+        if args.max_steps:
+            config.max_steps = args.max_steps
         
-        # Initialize LLM based on API type
-        if config.api_type == "local":
-            if not LLAMA_CPP_AVAILABLE:
-                logger.error("llama-cpp-python not available. Install with: pip install llama-cpp-python")
-                logger.info("Falling back to Ollama if available...")
+        # Create workspace directory
+        os.makedirs(config.workspace_root, exist_ok=True)
+        
+        # Initialize LLM
+        try:
+            llm = create_llm_with_tools(config)
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM: {e}")
+            # Try fallback
+            if config.api_type == "local":
+                logger.info("Trying Ollama fallback...")
                 config.api_type = "ollama"
-            else:
                 try:
-                    llm = LocalLLM(config)
-                except Exception as e:
-                    logger.error(f"Failed to initialize local LLM: {e}")
-                    logger.info("Falling back to Ollama...")
-                    config.api_type = "ollama"
-        
-        if config.api_type == "ollama":
-            if not OPENAI_AVAILABLE:
-                logger.error("openai package not available. Install with: pip install openai")
+                    llm = create_llm_with_tools(config)
+                except Exception as e2:
+                    logger.error(f"Fallback also failed: {e2}")
+                    sys.exit(1)
+            else:
                 sys.exit(1)
-            llm = OllamaLLM(config)
         
         # Initialize memory
         memory = Memory(config)
         
-        logger.info(f"ParManus AI Agent ready! Using {config.api_type} backend")
-        logger.info(f"Model: {config.model}")
+        # Display startup info
+        logger.info("🚀 ParManus AI Agent System Ready!")
+        logger.info(f"🧠 Backend: {config.api_type}")
+        logger.info(f"🤖 Model: {config.model}")
+        logger.info(f"📁 Workspace: {config.workspace_root}")
+        if PARMANUS_AVAILABLE and not args.simple:
+            logger.info("🛠️ Full tool system available")
+        else:
+            logger.info("⚡ Simple mode active")
         
         # Track command line prompt processing
         processed_cmd_prompt = False
@@ -483,14 +380,14 @@ async def main():
             if not processed_cmd_prompt and args.prompt:
                 prompt = args.prompt
                 processed_cmd_prompt = True
-                logger.info(f"Using command line prompt: {prompt[:100]}...")
+                logger.info(f"📝 Processing: {prompt[:100]}...")
             else:
                 if sys.stdin.isatty():
                     try:
-                        prompt = input("Enter your prompt (or 'quit' to exit): ")
-                        if prompt.lower() in ["quit", "exit", "bye"]:
+                        prompt = input("\n💬 Enter your prompt (or 'quit' to exit): ")
+                        if prompt.lower() in ["quit", "exit", "bye", "q"]:
                             break
-                    except EOFError:
+                    except (EOFError, KeyboardInterrupt):
                         if args.no_wait:
                             break
                         continue
@@ -508,19 +405,32 @@ async def main():
             
             try:
                 # Route to agent
-                agent_name = args.agent if args.agent else route_agent(prompt)
-                agent = SimpleAgent(agent_name, llm, config)
+                agent_name = args.agent if args.agent else route_agent(prompt, not args.simple)
                 
-                logger.info(f"Processing with {agent.name} agent...")
+                # Create agent
+                agent = create_agent(agent_name, llm, config)
+                
+                logger.info(f"🎯 Using {agent_name} agent...")
                 
                 # Process request
+                start_time = time.time()
                 result = await agent.run(prompt)
+                end_time = time.time()
                 
                 # Add result to memory
                 memory.push("assistant", result)
                 
-                # Output result
-                print(f"\n{agent.name.title()} Response:\n{result}\n")
+                # Display result
+                print(f"\n🤖 {agent_name.title()} Response:")
+                print("=" * 50)
+                print(result)
+                print("=" * 50)
+                print(f"⏱️ Completed in {end_time - start_time:.2f} seconds")
+                
+                # Show token usage if available
+                if hasattr(llm, 'get_token_count'):
+                    tokens = llm.get_token_count()
+                    print(f"🔢 Tokens: {tokens['total_tokens']} (prompt: {tokens['prompt_tokens']}, completion: {tokens['completion_tokens']})")
                 
                 # Save session
                 memory.save_session()
@@ -532,15 +442,18 @@ async def main():
             except Exception as e:
                 error_msg = f"Error processing request: {e}"
                 logger.error(error_msg, exc_info=True)
-                print(f"Error: {error_msg}")
+                print(f"\n❌ Error: {error_msg}")
+                
+                # Add error to memory
+                memory.push("assistant", f"Error: {error_msg}")
     
     except KeyboardInterrupt:
-        logger.info("Operation interrupted")
+        logger.info("\n👋 Operation interrupted by user")
     except Exception as e:
-        logger.error(f"Critical error: {e}", exc_info=True)
-        print(f"Critical error: {e}")
+        logger.error(f"💥 Critical error: {e}", exc_info=True)
+        print(f"\n💥 Critical error: {e}")
     finally:
-        logger.info("ParManus AI Agent shutdown complete")
+        logger.info("🛑 ParManus AI Agent shutdown complete")
 
 
 if __name__ == "__main__":
