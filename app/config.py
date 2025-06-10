@@ -18,36 +18,33 @@ WORKSPACE_ROOT = PROJECT_ROOT / "workspace"
 class VisionSettings(BaseModel):
     """Vision model configuration."""
 
+    api_type: str = Field(default="ollama", description="API type for vision model")
     enabled: bool = Field(default=False, description="Enable vision capabilities")
-    model: str = Field(default="llava-v1.6-mistral-7b", description="Vision model name")
-    model_path: str = Field(
-        default="models/llava-model.gguf", description="Path to vision model"
-    )
-    clip_model_path: str = Field(
-        default="models/mmproj-model.gguf", description="Path to CLIP model"
-    )
+    model: str = Field(default="llama3.2-vision", description="Vision model name")
+    base_url: str = Field(default="http://localhost:11434/v1", description="API endpoint URL for vision")
+    api_key: str = Field(default="ollama", description="API key for vision model")
     max_tokens: int = Field(default=2048, description="Maximum tokens for vision model")
-    temperature: float = Field(default=0.1, description="Temperature for vision model")
-    n_gpu_layers: int = Field(
-        default=0, description="Number of GPU layers for vision model"
-    )
+    temperature: float = Field(default=0.0, description="Temperature for vision model")
+    # Legacy fields for backward compatibility
+    model_path: Optional[str] = Field(default=None, description="Path to vision model (legacy)")
+    clip_model_path: Optional[str] = Field(default=None, description="Path to CLIP model (legacy)")
+    n_gpu_layers: int = Field(default=-1, description="Number of GPU layers for vision model")
 
 
 class LLMSettings(BaseModel):
     """LLM configuration."""
 
-    model: str = Field(default="llama-jb", description="Main model name")
-    model_path: str = Field(
-        default="models/llama-jb.gguf", description="Path to main model"
-    )
+    api_type: str = Field(default="ollama", description="API type (ollama, openai, anthropic, etc.)")
+    model: str = Field(default="llama3.2", description="Main model name")
+    base_url: str = Field(default="http://localhost:11434/v1", description="API endpoint URL")
+    api_key: str = Field(default="ollama", description="API key")
     max_tokens: int = Field(default=2048, description="Maximum tokens for generation")
     temperature: float = Field(default=0.0, description="Temperature for generation")
-    n_gpu_layers: int = Field(
-        default=0, description="Number of GPU layers for main model"
-    )
-    vision: VisionSettings = Field(
-        default_factory=VisionSettings, description="Vision model settings"
-    )
+    n_gpu_layers: int = Field(default=-1, description="Number of GPU layers for main model")
+    gpu_memory_limit: int = Field(default=7000, description="GPU memory limit in MB")
+    # Legacy fields for backward compatibility
+    model_path: Optional[str] = Field(default=None, description="Path to main model (legacy)")
+    vision: Optional["VisionSettings"] = Field(default=None, description="Vision model settings")
 
 
 class ProxySettings(BaseModel):
@@ -243,22 +240,27 @@ def load_config(config_path: Optional[str] = None) -> Config:
 
         # Create default vision settings
         vision_settings = VisionSettings(
+            api_type="ollama",
             enabled=False,
-            model="llava-v1.6-mistral-7b",
-            model_path="models/llava-model.gguf",
-            clip_model_path="models/mmproj-model.gguf",
+            model="llama3.2-vision",
+            base_url="http://localhost:11434/v1",
+            api_key="ollama",
             max_tokens=2048,
-            temperature=0.1,
-            n_gpu_layers=0,
+            temperature=0.0,
+            n_gpu_layers=-1,
         )
 
         # Create default LLM settings
         llm_settings = LLMSettings(
-            model="llama-jb",
-            model_path="models/llama-jb.gguf",
+            api_type="ollama",
+            model="llama3.2",
+            base_url="http://localhost:11434/v1",
+            api_key="ollama",
             max_tokens=2048,
             temperature=0.0,
-            vision=vision_settings,  # Pass VisionSettings instance
+            n_gpu_layers=-1,
+            gpu_memory_limit=7000,
+            vision=vision_settings,
         )
 
         # Return default config

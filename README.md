@@ -1,174 +1,177 @@
-# 👋 ParManus
+# ParManus AI Agent with Ollama Integration
 
-[![GitHub stars](https://img.shields.io/github/stars/mrarejimmyz/parmanus?style=social)](https://github.com/mrarejimmyz/parmanus/stargazers)
-[![Demo](https://img.shields.io/badge/Demo-Hugging%20Face-yellow)](https://huggingface.co/spaces/lyh-917/ParManusDemo)
+A streamlined AI agent system using Ollama for local LLM inference with Llama 3.2 support.
 
-> **ParManus: Optimized Local LLM Agent Framework**
->
-> ParManus is an optimized fork of the original OpenManus project, featuring significant performance improvements and enhanced tool-calling capabilities.
+## Features
 
-Manus is amazing, but ParManus can realize any idea *without invitation code*! 🛫
+- **Ollama Integration**: Native support for Ollama API with Llama 3.2 models
+- **Vision Support**: Multi-modal capabilities with vision models
+- **Streamlined Architecture**: Single main.py handles all functionality
+- **Memory System**: Session persistence and recovery
+- **Agent Routing**: Automatic agent selection based on query type
+- **Voice Support**: Optional TTS/STT integration
+- **Optimized Dependencies**: Minimal required packages
 
-Enjoy your agent journey with ParManus!
+## Quick Start
 
-## ✨ Optimized Features
+### Prerequisites
 
-ParManus includes several key optimizations over the original framework:
-
-- **Persistent Model Caching**: Eliminates 9-10 second loading time on subsequent runs
-- **Enhanced Tool-Calling**: Fixed critical issues with tool execution
-- **Improved Timeout Handling**: Returns partial results when possible
-- **Resource Management**: Proper cleanup procedures and memory optimization
-- **Interrupt Handling**: Graceful shutdown with proper resource cleanup
-
-<video src="https://private-user-images.githubusercontent.com/61239030/420168772-6dcfd0d2-9142-45d9-b74e-d10aa75073c6.mp4" controls="controls" muted="muted" class="d-block rounded-bottom-2 border-top width-fit" style="max-height:640px; min-height: 200px"></video>
-
-## Installation
-
-We provide two installation methods. Method 2 (using uv) is recommended for faster installation and better dependency management.
-
-### Method 1: Using conda
-
-1. Create a new conda environment:
+1. Install Ollama:
 ```bash
-conda create -n parmanus python=3.12
-conda activate parmanus
+curl -fsSL https://ollama.ai/install.sh | sh
 ```
 
-2. Clone the repository:
+2. Pull Llama 3.2 models:
 ```bash
-git clone https://github.com/mrarejimmyz/parmanus.git
-cd parmanus
+ollama pull llama3.2
+ollama pull llama3.2-vision  # Optional for vision support
 ```
 
-3. Install dependencies:
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/mrarejimmyz/ParManusAI.git
+cd ParManusAI
+```
+
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-### Method 2: Using uv (Recommended)
-
-1. Install uv (A fast Python package installer and resolver):
+3. Configure (optional):
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+cp config/config.toml config/config.toml.local
+# Edit config/config.toml.local as needed
 ```
 
-2. Clone the repository:
+### Usage
+
+#### Basic Usage
 ```bash
-git clone https://github.com/mrarejimmyz/parmanus.git
-cd parmanus
+python main.py --prompt "Hello, how are you?"
 ```
 
-3. Create a new virtual environment and activate it:
+#### Interactive Mode
 ```bash
-uv venv --python 3.12
-source .venv/bin/activate  # On Unix/macOS
-# Or on Windows:
-# .venv\Scripts\activate
+python main.py
 ```
 
-4. Install dependencies:
+#### Specify Agent
 ```bash
-uv pip install -r requirements.txt
+python main.py --agent code --prompt "Write a Python function to calculate fibonacci"
 ```
 
-### Browser Automation Tool (Optional)
+#### With Custom Config
 ```bash
-playwright install
+python main.py --config config/config.toml.local --prompt "Analyze this image"
+```
+
+#### Voice Mode (requires voice dependencies)
+```bash
+python main.py --voice
 ```
 
 ## Configuration
 
-ParManus requires configuration for the LLM APIs it uses. Follow these steps to set up your configuration:
+The system uses TOML configuration files. Default configuration:
 
-1. Create a `config.toml` file in the `config` directory (you can copy from the example):
-```bash
-cp config/config.example.toml config/config.toml
-```
-
-2. Edit `config/config.toml` to add your API keys and customize settings:
 ```toml
-# Global LLM configuration
 [llm]
-model = "gpt-4o"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
-max_tokens = 4096
+api_type = 'ollama'
+model = "llama3.2"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 2048
 temperature = 0.0
 
-# Optional configuration for specific LLM models
 [llm.vision]
-model = "gpt-4o"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
+api_type = 'ollama'
+model = "llama3.2-vision"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 2048
+temperature = 0.0
+
+[browser]
+headless = false
+disable_security = true
+extra_chromium_args = []
 ```
 
-## Quick Start
+## Available Agents
 
-One line for run ParManus:
-```bash
-python main.py --prompt "your prompt here"
-```
+- **manus**: General-purpose AI assistant (default)
+- **code**: Programming and development tasks
+- **browser**: Web automation and scraping
+- **file**: File operations and data processing
+- **planner**: Task planning and organization
 
-Then input your idea via terminal!
+## Architecture
 
-For MCP tool version, you can run:
-```bash
-python run_mcp.py
-```
+The optimized architecture consists of:
 
-For unstable multi-agent version, you also can run:
-```bash
-python run_flow.py
-```
+- `main.py`: Single entry point handling all functionality
+- `config/`: Configuration files
+- Minimal dependencies for core functionality
+- Optional modules for extended features
 
-## How to contribute
+## Migration from Legacy
 
-We welcome any friendly suggestions and helpful contributions! Just create issues or submit pull requests.
+The system maintains backward compatibility while providing a streamlined experience:
 
-Or contact @mrarejimmyz via GitHub issues.
+- Legacy llama-cpp-python code moved to `app/llm_legacy.py`
+- Original main.py backed up as `main_original.py`
+- Original requirements backed up as `requirements_original.txt`
 
-**Note**: Before submitting a pull request, please use the pre-commit tool to check your changes. Run `pre-commit run --all-files` to execute the checks.
+## Development
 
-## Community Group
+### Adding New Agents
 
-Join our networking group on Feishu and share your experience with other developers!
+Extend the `SimpleAgent` class or modify the `route_agent` function in `main.py`.
 
-<div align="center" style="display: flex; gap: 20px;">
-    <img src="assets/community_group.jpg" alt="ParManus Community Group" width="300" />
-</div>
+### Custom LLM Providers
 
-## Star History
+Modify the `OllamaLLM` class or create new implementations following the same interface.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=mrarejimmyz/parmanus&type=Date)](https://star-history.com/#mrarejimmyz/parmanus&Date)
+### Configuration Options
 
-## Sponsors
+Add new configuration fields to the `Config` model in `main.py`.
 
-Thanks to [PPIO](https://ppinfra.com/user/register?invited_by=OCPKCN&utm_source=github_parmanus&utm_medium=github_readme&utm_campaign=link) for computing source support.
+## Troubleshooting
 
-> PPIO: The most affordable and easily-integrated MaaS and GPU cloud solution.
+### Ollama Connection Issues
+- Ensure Ollama is running: `ollama serve`
+- Check if models are available: `ollama list`
+- Verify base_url in configuration
 
-## Acknowledgement
+### Memory Issues
+- Reduce max_tokens in configuration
+- Use smaller models if available
+- Enable memory compression in config
 
-ParManus is maintained by [@mrarejimmyz](https://github.com/mrarejimmyz) with significant performance optimizations and tool-calling enhancements.
+### Performance Optimization
+- Use GPU acceleration with Ollama
+- Adjust model parameters in configuration
+- Enable session caching
 
-Thanks to all previous contributors from the original OpenManus project, including contributors from MetaGPT.
+## License
 
-Additional thanks to [anthropic-computer-use](https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo)
-and [browser-use](https://github.com/browser-use/browser-use) for providing basic support for this project!
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-We are also grateful to [AAAJ](https://github.com/metauto-ai/agent-as-a-judge), [MetaGPT](https://github.com/geekan/MetaGPT), [OpenHands](https://github.com/All-Hands-AI/OpenHands) and [SWE-agent](https://github.com/SWE-agent/SWE-agent).
+## Contributing
 
-We also thank stepfun(阶跃星辰) for supporting our Hugging Face demo space.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-## Cite
+## Support
 
-```bibtex
-@misc{parmanus2025,
-  author = {MrareJimmy, Jimmy Zhang and Xinbin Liang and Jinyu Xiang and Zhaoyang Yu and Jiayi Zhang and Sirui Hong and Sheng Fan and Xiao Tang},
-  title = {ParManus: An optimized framework for building general AI agents},
-  year = {2025},
-  publisher = {GitHub},
-  url = {https://github.com/mrarejimmyz/parmanus},
-}
-```
+For issues and questions:
+- Open an issue on GitHub
+- Check the troubleshooting section
+- Review Ollama documentation for model-specific issues
+

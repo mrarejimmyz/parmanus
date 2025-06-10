@@ -1,67 +1,28 @@
-# Core ParManus dependencies
+# Hybrid ParManus dependencies - supports both local GGUF and Ollama
 pydantic~=2.10.6
-openai~=1.66.3
-tenacity~=9.0.0
-pyyaml~=6.0.2
-loguru~=0.7.3
-numpy
-datasets~=3.4.1
-fastapi~=0.115.11
-tiktoken~=0.9.0
-html2text~=2024.2.26
-gymnasium~=1.1.1
-pillow~=11.1.0
-browsergym~=0.13.3
-uvicorn~=0.34.0
-unidiff~=0.7.5
-browser-use~=0.1.40
-googlesearch-python~=1.3.0
-baidusearch~=1.0.3
-duckduckgo_search~=7.5.3
-aiofiles~=24.1.0
-pydantic_core~=2.27.2
-colorama~=0.4.6
-playwright~=1.51.0
-docker~=7.1.0
-pytest~=8.3.5
-pytest-asyncio~=0.25.3
-mcp~=1.5.0
-httpx>=0.27.0
-tomli>=2.0.0
-boto3~=1.37.18
-requests~=2.32.3
-beautifulsoup4~=4.13.3
-huggingface-hub~=0.29.2
-setuptools~=75.8.0
+
+# For local GGUF models (your current setup)
 llama-cpp-python>=0.2.56
 
-# Parmanus integration dependencies
-# Voice interaction
-pyttsx3~=2.90
-gtts~=2.5.1
-SpeechRecognition~=3.10.4
-pyaudio~=0.2.14
-soundfile~=0.12.1
-sounddevice~=0.4.7
+# For Ollama API (optional fallback)
+openai~=1.66.3
+httpx>=0.27.0
 
-# Code execution and interpreters
-subprocess32~=3.5.4; python_version < "3.0"
+# Configuration and logging
+tomli>=2.0.0; python_version < "3.11"
+loguru~=0.7.3
 
-# Enhanced browser automation
-selenium~=4.26.1
-undetected-chromedriver~=3.5.5
+# Optional: Voice interaction (uncomment if needed)
+# pyttsx3~=2.90
+# SpeechRecognition~=3.10.4
 
-# Additional utilities
-psutil~=6.1.0
-pathlib2~=2.3.7; python_version < "3.4"
+# Optional: Browser automation (uncomment if needed)
+# playwright~=1.51.0
+# selenium~=4.26.1
 
-# Optional: Whisper for advanced STT
-# openai-whisper~=20240930
+# Optional: Advanced features (uncomment if needed)
+# fastapi~=0.115.11
+# uvicorn~=0.34.0
+# numpy
+# pillow~=11.1.0
 
-# Optional: Additional TTS engines
-espeak~=1.48.15; sys_platform == "linux"
-
-
-# GPU optimization dependencies
-torch>=2.0.0
-loguru>=0.7.0
