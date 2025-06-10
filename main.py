@@ -27,7 +27,7 @@ except ImportError:
 
 # Import ParManus components
 try:
-    from app.llm_ollama_only import create_llm_with_tools
+    from app.llm_hybrid import create_llm_with_tools
     from app.agent.manus import Manus
     from app.agent.code import CodeAgent
     from app.agent.browser import BrowserAgent
@@ -349,11 +349,12 @@ async def main():
         
         # Display startup info
         logger.info("🚀 ParManus AI Agent System Ready!")
-        logger.info(f"🧠 Backend: Ollama")
-        logger.info(f"🤖 Model: {config.model}")
+        logger.info(f"🧠 Backend: Ollama (Hybrid)")
+        logger.info(f"🛠️ Tools Model: llama3.2")
+        logger.info(f"👁️ Vision Model: llama3.2-vision")
         logger.info(f"📁 Workspace: {config.workspace_root}")
         if PARMANUS_AVAILABLE and not args.simple:
-            logger.info("🛠️ Full tool system available")
+            logger.info("🛠️ Full tool system + vision available")
         else:
             logger.info("⚡ Simple mode active")
         

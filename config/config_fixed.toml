@@ -1,0 +1,33 @@
+# ParManus AI Configuration - Fixed Model Name
+[llm]
+api_type = "ollama"
+model = "llama3.2-vision"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 2048
+temperature = 0.0
+
+[llm.vision]
+enabled = true
+api_type = "ollama"
+model = "llama3.2-vision"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 2048
+temperature = 0.0
+
+[browser]
+headless = false
+disable_security = true
+extra_chromium_args = []
+
+[memory]
+save_session = false
+recover_last_session = false
+memory_compression = false
+
+[voice]
+speak = false
+listen = false
+agent_name = "Friday"
+
