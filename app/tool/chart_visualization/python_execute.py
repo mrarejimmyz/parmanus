@@ -6,7 +6,9 @@ class NormalPythonExecute(PythonExecute):
     """A tool for executing Python code with timeout and safety restrictions."""
 
     name: str = "python_execute"
-    description: str = """Execute Python code for in-depth data analysis / data report(task conclusion) / other normal task without direct visualization."""
+    description: str = (
+        """Execute Python code for in-depth data analysis / data report(task conclusion) / other normal task without direct visualization."""
+    )
     parameters: dict = {
         "type": "object",
         "properties": {

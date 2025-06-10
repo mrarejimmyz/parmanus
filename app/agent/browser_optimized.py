@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 class BrowserContextHelper:
     """Helper class for managing browser context and state."""
-    
+
     def __init__(self, agent: "BaseAgent"):
         self.agent = agent
         self._current_base64_image: Optional[str] = None
@@ -34,24 +34,24 @@ class BrowserContextHelper:
             if result.error:
                 logger.debug(f"Browser state error: {result.error}")
                 return self._last_successful_state
-            
+
             # Parse and validate state
             state = json.loads(result.output)
             if not isinstance(state, dict):
                 logger.warning("Invalid browser state format")
                 return self._last_successful_state
-            
+
             # Cache successful state
             self._last_successful_state = state
-            
+
             # Handle base64 image
             if hasattr(result, "base64_image") and result.base64_image:
                 self._current_base64_image = result.base64_image
             else:
                 self._current_base64_image = None
-                
+
             return state
-            
+
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse browser state JSON: {e}")
             return self._last_successful_state
@@ -67,15 +67,15 @@ class BrowserContextHelper:
 
         if browser_state and not browser_state.get("error"):
             # Format URL and title info
-            url = browser_state.get('url', 'N/A')
-            title = browser_state.get('title', 'N/A')
+            url = browser_state.get("url", "N/A")
+            title = browser_state.get("title", "N/A")
             url_info = f"\n   URL: {url}\n   Title: {title}"
-            
+
             # Format tabs info
             tabs = browser_state.get("tabs", [])
             if tabs:
                 tabs_info = f"\n   {len(tabs)} tab(s) available"
-            
+
             # Format content info
             pixels_above = browser_state.get("pixels_above", 0)
             pixels_below = browser_state.get("pixels_below", 0)
@@ -120,7 +120,7 @@ class BrowserAgent(ToolCallAgent):
     A browser agent that uses the browser_use library to control a browser.
     This agent can navigate web pages, interact with elements, fill forms,
     extract content, and perform other browser-based actions to accomplish tasks.
-    
+
     Features:
     - Robust error handling and recovery
     - Browser state caching and validation
@@ -134,7 +134,7 @@ class BrowserAgent(ToolCallAgent):
     next_step_prompt: str = NEXT_STEP_PROMPT
     max_observe: int = 10000
     max_steps: int = 20
-    
+
     # Configure the available tools
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(BrowserUseTool(), Terminate())
@@ -150,12 +150,14 @@ class BrowserAgent(ToolCallAgent):
     async def create(cls, **kwargs) -> "BrowserAgent":
         """Factory method to create and properly initialize a BrowserAgent instance."""
         instance = cls(**kwargs)
-        
+
         # Validate browser tool availability
         browser_tool = instance.available_tools.get_tool(BrowserUseTool().name)
         if not browser_tool:
-            logger.warning("BrowserUseTool not available, browser functionality may be limited")
-        
+            logger.warning(
+                "BrowserUseTool not available, browser functionality may be limited"
+            )
+
         return instance
 
     @model_validator(mode="after")
@@ -169,11 +171,13 @@ class BrowserAgent(ToolCallAgent):
         try:
             # Update next step prompt with current browser state
             if self.browser_context_helper:
-                self.next_step_prompt = await self.browser_context_helper.format_next_step_prompt()
-            
+                self.next_step_prompt = (
+                    await self.browser_context_helper.format_next_step_prompt()
+                )
+
             # Call parent think method
             return await super().think()
-            
+
         except Exception as e:
             logger.error(f"Error in browser agent think method: {e}")
             # Fallback to basic thinking without browser state
@@ -184,26 +188,26 @@ class BrowserAgent(ToolCallAgent):
         try:
             if self.browser_context_helper:
                 await self.browser_context_helper.cleanup_browser()
-            
+
             # Call parent cleanup if available
-            if hasattr(super(), 'cleanup'):
+            if hasattr(super(), "cleanup"):
                 await super().cleanup()
-                
+
         except Exception as e:
             logger.error(f"Error during browser agent cleanup: {e}")
 
     async def handle_browser_error(self, error: Exception) -> bool:
         """
         Handle browser-specific errors with recovery strategies.
-        
+
         Args:
             error: The error that occurred
-            
+
         Returns:
             True if recovery was successful, False otherwise
         """
         logger.warning(f"Browser error encountered: {error}")
-        
+
         # Try to recover browser state
         if self.browser_context_helper:
             try:
@@ -213,11 +217,10 @@ class BrowserAgent(ToolCallAgent):
                     return True
             except Exception as recovery_error:
                 logger.error(f"Failed to recover browser state: {recovery_error}")
-        
+
         return False
 
     def is_browser_available(self) -> bool:
         """Check if browser functionality is available."""
         browser_tool = self.available_tools.get_tool(BrowserUseTool().name)
         return browser_tool is not None
-

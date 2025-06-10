@@ -13,12 +13,10 @@ logger = logging.getLogger(__name__)
 
 class TokenLimitExceeded(Exception):
     """Exception raised when token limit is exceeded."""
-    pass
 
 
 class ModelTimeoutError(Exception):
     """Exception raised when model completion times out."""
-    pass
 
 
 async def ask_tool(
@@ -51,10 +49,10 @@ async def ask_tool(
     # Adaptive timeout based on message length and complexity
     if timeout is None:
         timeout = _calculate_adaptive_timeout(messages, tools)
-    
+
     start_time = time.time()
     last_exception = None
-    
+
     for attempt in range(max_retries + 1):
         try:
             # Apply safe max tokens limit
@@ -81,7 +79,9 @@ async def ask_tool(
 
             # Log attempt info (reduced verbosity)
             if attempt > 0:
-                logger.warning(f"Model completion retry {attempt}/{max_retries} (timeout: {timeout}s)")
+                logger.warning(
+                    f"Model completion retry {attempt}/{max_retries} (timeout: {timeout}s)"
+                )
             else:
                 logger.debug(f"Model completion attempt (timeout: {timeout}s)")
 
@@ -133,7 +133,7 @@ async def ask_tool(
         except asyncio.TimeoutError as e:
             last_exception = e
             elapsed = time.time() - start_time
-            
+
             if attempt < max_retries:
                 # Increase timeout for retry
                 timeout = min(timeout * 1.5, 180)  # Cap at 3 minutes
@@ -152,9 +152,17 @@ async def ask_tool(
                     "content": f"[Response incomplete due to timeout after {elapsed:.1f}s and {max_retries + 1} attempts]",
                     "tool_calls": [],
                     "usage": {
-                        "prompt_tokens": self.count_tokens(enhanced_prompt) if 'enhanced_prompt' in locals() else 0,
+                        "prompt_tokens": (
+                            self.count_tokens(enhanced_prompt)
+                            if "enhanced_prompt" in locals()
+                            else 0
+                        ),
                         "completion_tokens": 0,
-                        "total_tokens": self.count_tokens(enhanced_prompt) if 'enhanced_prompt' in locals() else 0,
+                        "total_tokens": (
+                            self.count_tokens(enhanced_prompt)
+                            if "enhanced_prompt" in locals()
+                            else 0
+                        ),
                     },
                     "elapsed_time": elapsed,
                     "attempts": attempt + 1,
@@ -164,7 +172,7 @@ async def ask_tool(
         except Exception as e:
             last_exception = e
             elapsed = time.time() - start_time
-            
+
             if attempt < max_retries and not isinstance(e, TokenLimitExceeded):
                 logger.warning(f"Model completion error on attempt {attempt + 1}: {e}")
                 continue
@@ -179,16 +187,16 @@ async def ask_tool(
 def _calculate_adaptive_timeout(messages: List, tools: Optional[List] = None) -> int:
     """Calculate adaptive timeout based on input complexity."""
     base_timeout = 30  # Base timeout in seconds
-    
+
     # Calculate message complexity
     total_chars = sum(len(str(msg)) for msg in messages)
     message_factor = min(total_chars / 1000, 5)  # Max 5x multiplier for messages
-    
+
     # Calculate tool complexity
     tool_factor = 0
     if tools:
         tool_factor = min(len(tools) * 0.5, 3)  # Max 3x multiplier for tools
-    
+
     # Calculate final timeout
     timeout = int(base_timeout + (message_factor * 10) + (tool_factor * 5))
     return min(timeout, 120)  # Cap at 2 minutes
@@ -198,7 +206,7 @@ def _format_tool_definitions(tools: Optional[List[Dict[str, Any]]]) -> str:
     """Format tool definitions with optimized output."""
     if not tools:
         return ""
-    
+
     tool_definitions = "Available tools:\n"
     for tool in tools:
         tool_name = tool.get("name", "unnamed_tool")
@@ -217,7 +225,7 @@ def _format_tool_definitions(tools: Optional[List[Dict[str, Any]]]) -> str:
                     tool_definitions += f"  Parameters: Available\n"
             except Exception:
                 tool_definitions += f"  Parameters: Available\n"
-    
+
     return tool_definitions + "\n"
 
 
@@ -252,7 +260,7 @@ def _parse_tool_calls(self, text: str) -> List[Dict[str, Any]]:
                 # Try to parse arguments as JSON
                 if args_str.strip():
                     # Handle both object and key-value formats
-                    if not args_str.strip().startswith('{'):
+                    if not args_str.strip().startswith("{"):
                         args_str = f"{{{args_str}}}"
                     args = json.loads(args_str)
                 else:
@@ -294,24 +302,24 @@ def _parse_simple_args(args_str: str) -> Dict[str, Any]:
     args = {}
     try:
         # Split by comma and parse key=value pairs
-        for pair in args_str.split(','):
-            if '=' in pair:
-                key, value = pair.split('=', 1)
-                key = key.strip().strip('"\'')
-                value = value.strip().strip('"\'')
-                
+        for pair in args_str.split(","):
+            if "=" in pair:
+                key, value = pair.split("=", 1)
+                key = key.strip().strip("\"'")
+                value = value.strip().strip("\"'")
+
                 # Try to convert to appropriate type
-                if value.lower() in ['true', 'false']:
-                    value = value.lower() == 'true'
+                if value.lower() in ["true", "false"]:
+                    value = value.lower() == "true"
                 elif value.isdigit():
                     value = int(value)
-                elif value.replace('.', '').isdigit():
+                elif value.replace(".", "").isdigit():
                     value = float(value)
-                
+
                 args[key] = value
     except Exception:
         pass
-    
+
     return args
 
 
@@ -344,4 +352,3 @@ __all__ = ["patch_llm_class", "ask_tool", "_parse_tool_calls", "ModelTimeoutErro
 
 # Execute the patch immediately when this module is imported
 patch_llm_class()
-

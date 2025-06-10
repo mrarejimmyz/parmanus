@@ -7,7 +7,6 @@ from typing import Dict, List, Literal, Optional
 
 import boto3
 
-
 # Global variables to track the current tool use ID across function calls
 # Tmp solution
 CURRENT_TOOLUSE_ID = None
@@ -173,9 +172,9 @@ class ChatCompletions:
                         "role": bedrock_response.get("output", {})
                         .get("message", {})
                         .get("role", "assistant"),
-                        "tool_calls": openai_tool_calls
-                        if openai_tool_calls != []
-                        else None,
+                        "tool_calls": (
+                            openai_tool_calls if openai_tool_calls != [] else None
+                        ),
                         "function_call": None,
                     },
                 }

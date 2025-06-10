@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional
 
 from app.agent.toolcall import ToolCallAgent
 from app.logger import logger
-from app.memory import Memory
 from app.tool.base import BaseTool
 from app.tool.python_execute import PythonExecute
 

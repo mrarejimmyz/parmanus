@@ -1,21 +1,15 @@
 import asyncio
-import base64
 import gc
 import json
 import os
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
-from io import BytesIO
 from typing import Any, Dict, Generator, List, Optional, Union
 
-import tiktoken
 from llama_cpp import Llama
-from pydantic import BaseModel, Field
 
-from app.config import LLMSettings, config
-from app.exceptions import ParManusError, TokenLimitExceeded
+from app.config import LLMSettings
+from app.exceptions import TokenLimitExceeded
 
 # Handle GPU manager imports gracefully
 try:
@@ -42,14 +36,7 @@ except ImportError:
 
 
 from app.logger import logger
-from app.schema import (
-    ROLE_VALUES,
-    TOOL_CHOICE_TYPE,
-    TOOL_CHOICE_VALUES,
-    Function,
-    Message,
-    ToolChoice,
-)
+from app.schema import Message, ToolChoice
 
 # Define models that support vision capabilities
 MULTIMODAL_MODELS = ["qwen-vl-7b"]
@@ -279,7 +266,7 @@ class LLMOptimized:
         """Load text model with GPU optimization."""
         try:
             # Check GPU availability
-            model_size = os.path.getsize(self.model_path) / (1024**3)
+            os.path.getsize(self.model_path) / (1024**3)
             use_gpu = bool(self.gpu_manager.should_use_gpu)  # Access as property
             gpu_layers = 35 if use_gpu else 0
 

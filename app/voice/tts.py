@@ -3,7 +3,6 @@
 import asyncio
 import os
 import tempfile
-from pathlib import Path
 from typing import Optional
 
 from app.logger import logger
@@ -96,7 +95,7 @@ class TextToSpeech:
                 logger.info("espeak TTS engine initialized")
             else:
                 raise Exception("espeak not found")
-        except Exception as e:
+        except Exception:
             logger.error(
                 "espeak not available. Install with: sudo apt-get install espeak"
             )

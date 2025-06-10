@@ -588,11 +588,10 @@ class BrowserUseTool(BaseTool, Generic[Context]):
             state = await ctx.get_state()
 
             # Create a viewport_info dictionary if it doesn't exist
-            viewport_height = 0
             if hasattr(state, "viewport_info") and state.viewport_info:
-                viewport_height = state.viewport_info.height
+                state.viewport_info.height
             elif hasattr(ctx, "config") and hasattr(ctx.config, "browser_window_size"):
-                viewport_height = ctx.config.browser_window_size.get("height", 0)
+                ctx.config.browser_window_size.get("height", 0)
 
             # Get the current page
             page = await ctx.get_current_page()

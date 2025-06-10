@@ -1,6 +1,6 @@
 """Agent routing system based on Parmanus's Interaction class."""
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from app.agent.base import BaseAgent
 from app.agent.manus import Manus
@@ -63,7 +63,7 @@ class AgentRouter:
             The name of the best agent for this query.
         """
         query_lower = query.lower()
-        
+
         # Log the query for debugging
         logger.info(f"Analyzing query for routing: {query}")
 
@@ -88,7 +88,7 @@ class AgentRouter:
                 "rate",
                 "feedback",
                 "visit",
-                "page"
+                "page",
             ]
         ):
             logger.info("Routing to browser agent based on web keywords")

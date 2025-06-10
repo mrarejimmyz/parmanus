@@ -1,28 +1,16 @@
 import asyncio
-import base64
-import json
 import os
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
-from io import BytesIO
 from typing import Any, Dict, Generator, List, Optional, Union
 
-import tiktoken
 from llama_cpp import Llama
 from pydantic import BaseModel
 
 from app.config import LLMSettings, config
 from app.exceptions import TokenLimitExceeded
 from app.logger import logger
-from app.schema import (
-    ROLE_VALUES,
-    TOOL_CHOICE_TYPE,
-    TOOL_CHOICE_VALUES,
-    Message,
-    ToolChoice,
-)
+from app.schema import ROLE_VALUES, Message
 
 # Define models that support vision capabilities
 MULTIMODAL_MODELS = ["qwen-vl-7b"]

@@ -1,34 +1,18 @@
 import asyncio
-import base64
-import gc
-import json
 import os
 
 os.environ["PYTHONIOENCODING"] = "utf-8"
 os.environ["LANG"] = "C.UTF-8"
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
-from io import BytesIO
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
-import psutil
-import tiktoken
 from llama_cpp import Llama
-from pydantic import BaseModel
 
 from app.config import LLMSettings, config
-from app.exceptions import TokenLimitExceeded
-from app.gpu_manager import CUDAGPUManager, get_gpu_manager
+from app.gpu_manager import CUDAGPUManager
 from app.logger import logger
-from app.schema import (
-    ROLE_VALUES,
-    TOOL_CHOICE_TYPE,
-    TOOL_CHOICE_VALUES,
-    Message,
-    ToolChoice,
-)
+from app.schema import Message
 
 # Define models that support vision capabilities
 MULTIMODAL_MODELS = ["Llama-3.2-11B-Vision-Instruct"]
