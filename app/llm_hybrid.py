@@ -218,14 +218,32 @@ class HybridOllamaLLM:
             # Format tool calls
             formatted_tool_calls = []
             for tool_call in tool_calls:
-                formatted_tool_calls.append({
-                    "id": tool_call.id,
-                    "type": "function",
-                    "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments
-                    }
-                })
+                # Handle both object and dict formats
+                if hasattr(tool_call, 'id'):
+                    # OpenAI object format
+                    formatted_tool_calls.append({
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_call.function.name,
+                            "arguments": tool_call.function.arguments
+                        }
+                    })
+                elif isinstance(tool_call, dict):
+                    # Dict format - ensure proper structure
+                    if 'function' in tool_call:
+                        formatted_tool_calls.append({
+                            "id": tool_call.get('id', f"call_{len(formatted_tool_calls)}"),
+                            "type": "function",
+                            "function": {
+                                "name": tool_call['function'].get('name', ''),
+                                "arguments": tool_call['function'].get('arguments', '{}')
+                            }
+                        })
+                    else:
+                        # Handle malformed tool call
+                        logger.warning(f"Malformed tool call: {tool_call}")
+                        continue
             
             return {
                 "content": content,
@@ -239,6 +257,8 @@ class HybridOllamaLLM:
             
         except Exception as e:
             logger.error(f"Error in Hybrid Ollama ask_tool: {e}")
+            logger.error(f"Tool calls format: {tool_calls if 'tool_calls' in locals() else 'Not available'}")
+            logger.error(f"Response format: {type(response) if 'response' in locals() else 'Not available'}")
             raise
     
     async def ask_vision(self, messages: Union[str, List[Dict[str, Any]]], images: List[str] = None, **kwargs) -> str:
