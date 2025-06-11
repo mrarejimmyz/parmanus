@@ -200,10 +200,20 @@ cython_debug/
 
 # node
 node_modules
-models/llava-model.gguf
-models/llama-jb.gguf
-models/llava-vision.gguf
-models/mmproj-model.gguf
+
+# Model files (large files that should not be in Git)
+models/
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.h5
+*.pkl
+*.model
+*.weights
+*.ckpt
+*.pb
 examples/cat.png
 .vs/parmanus/v17/.wsuo
 .vs/parmanus/CopilotIndices/17.14.719.50355/CodeChunks.db
