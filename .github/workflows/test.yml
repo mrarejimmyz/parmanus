@@ -1,0 +1,109 @@
+name: ParManus AI Computer Control Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        python-version: [3.11, 3.12]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest black flake8 mypy
+        pip install pyautogui pygetwindow pyperclip opencv-python screeninfo mss winshell
+
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Type check with mypy
+      run: |
+        mypy app/ --ignore-missing-imports
+
+    - name: Format check with black
+      run: |
+        black --check app/
+
+    - name: Test computer control tool structure
+      run: |
+        python -c "from app.tool.computer_control import ComputerControlTool; print('✅ Computer control tool imports successfully')"
+
+    - name: Validate action names
+      run: |
+        python test_action_names_validation.py
+
+    - name: Test tool parameters
+      run: |
+        python -c "
+        from app.tool.computer_control import ComputerControlTool
+        tool = ComputerControlTool()
+        actions = tool.parameters['properties']['action']['enum']
+        expected_count = 29
+        actual_count = len(actions)
+        assert actual_count == expected_count, f'Expected {expected_count} actions, got {actual_count}'
+        print(f'✅ All {actual_count} computer control actions validated')
+        "
+
+    # Note: Full computer control tests are skipped in CI as they require GUI access
+    # These should be run locally before pushing
+
+    - name: Test imports and basic functionality
+      run: |
+        python -c "
+        import sys
+        try:
+            from app.agent.manus import Manus
+            from app.tool.computer_control import ComputerControlTool
+            from app.tool.automation import AutomationTool
+            print('✅ All core modules import successfully')
+
+            # Test tool instantiation
+            computer_tool = ComputerControlTool()
+            automation_tool = AutomationTool()
+            print('✅ All tools instantiate successfully')
+
+            print('✅ Basic functionality test passed')
+        except Exception as e:
+            print(f'❌ Test failed: {e}')
+            sys.exit(1)
+        "
+
+  security-check:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    - name: Install security tools
+      run: |
+        pip install safety bandit
+
+    - name: Check for security vulnerabilities
+      run: |
+        safety check
+        bandit -r app/ -f json || true

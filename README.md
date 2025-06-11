@@ -1,70 +1,116 @@
-# 👋 ParManus
+# 🤖 ParManus AI - Autonomous Computer Control Agent
 
 [![GitHub stars](https://img.shields.io/github/stars/mrarejimmyz/parmanus?style=social)](https://github.com/mrarejimmyz/parmanus/stargazers)
-[![Demo](https://img.shields.io/badge/Demo-Hugging%20Face-yellow)](https://huggingface.co/spaces/lyh-917/ParManusDemo)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Windows](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **ParManus: Optimized Local LLM Agent Framework**
+> **ParManus AI: Advanced Autonomous Computer Control Agent**
 >
-> ParManus is an optimized fork of the original OpenManus project, featuring significant performance improvements and enhanced tool-calling capabilities.
+> Enhanced fork with comprehensive computer automation capabilities powered by Llama 3.2 11B Vision. Take complete control of your computer using natural language commands.
 
-Manus is amazing, but ParManus can realize any idea *without invitation code*! 🛫
+🚀 **ParManus can now autonomously control your entire computer system!** 🖥️
 
-Enjoy your agent journey with ParManus!
+## ⚡ Quick Start
 
-## ✨ Optimized Features
+```powershell
+# Clone and setup in 3 commands
+git clone https://github.com/yourusername/ParManusAI.git
+cd ParManusAI
+python setup_parmanus.py
+```
 
-ParManus includes several key optimizations over the original framework:
+**Then start using it:**
+```powershell
+python main.py --prompt "Take a screenshot and organize my desktop"
+```
 
+## 🌟 **NEW: Full Computer Control Capabilities**
+
+### 🖥️ **What ParManus AI Can Do**
+- **📸 Screen Analysis** - Take screenshots and understand visual content
+- **🖱️ Mouse Control** - Click, drag, scroll anywhere on screen with pixel precision
+- **⌨️ Keyboard Automation** - Type text, send keys, execute shortcuts
+- **📱 App Management** - Launch, close, and control any application
+- **🪟 Window Control** - Move, resize, minimize, maximize windows
+- **👁️ Computer Vision** - Find and interact with UI elements automatically
+- **📋 Clipboard Operations** - Read and write clipboard content
+- **🔧 System Monitoring** - Get system info, process lists, performance data
+- **⚡ Complex Workflows** - Execute multi-step automation sequences
+
+### 🎯 **Example Commands**
+```
+"Take a screenshot and tell me what applications are running"
+"Open calculator and compute 15% of 250"
+"Find all PDF files in Downloads and organize them by date"
+"Take control of my browser and search for AI news"
+"Show me system performance and running processes"
+"Automate creating a backup of my Documents folder"
+```
+
+## ✨ Enhanced Features
+
+ParManus includes several key optimizations and revolutionary computer control capabilities:
+
+### 🚀 **Core Optimizations**
 - **Persistent Model Caching**: Eliminates 9-10 second loading time on subsequent runs
 - **Enhanced Tool-Calling**: Fixed critical issues with tool execution
 - **Improved Timeout Handling**: Returns partial results when possible
 - **Resource Management**: Proper cleanup procedures and memory optimization
 - **Interrupt Handling**: Graceful shutdown with proper resource cleanup
 
+### 🤖 **Computer Control Features**
+- **29 Automation Actions**: Complete computer control toolkit
+- **Visual AI Integration**: Llama 3.2 Vision for screenshot analysis
+- **Safety Mechanisms**: Built-in safeguards and error recovery
+- **Natural Language Interface**: Control your computer with plain English
+- **Cross-Application Support**: Works with any Windows application
+
+## 📚 Complete Documentation
+
+For detailed installation, configuration, and usage instructions, see:
+- **[📖 Installation & Usage Guide](INSTALLATION_AND_USAGE_GUIDE.md)** - Complete setup and usage documentation
+- **[🎯 Computer Control Actions Guide](COMPUTER_CONTROL_ACTIONS_GUIDE.md)** - All 29 available automation actions
+- **[✅ Computer Control Completion Report](COMPUTER_CONTROL_COMPLETION_REPORT.md)** - Technical implementation details
+
 <video src="https://private-user-images.githubusercontent.com/61239030/420168772-6dcfd0d2-9142-45d9-b74e-d10aa75073c6.mp4" controls="controls" muted="muted" class="d-block rounded-bottom-2 border-top width-fit" style="max-height:640px; min-height: 200px"></video>
 
-## Installation
+## 🚀 Installation
 
-We provide two installation methods. Method 2 (using uv) is recommended for faster installation and better dependency management.
+### Method 1: Quick Setup (Recommended)
+```powershell
+# Clone repository
+git clone https://github.com/yourusername/ParManusAI.git
+cd ParManusAI
 
-### Method 1: Using conda
-
-1. Create a new conda environment:
-```bash
-conda create -n parmanus python=3.12
-conda activate parmanus
+# Run automated setup script
+python setup_parmanus.py
 ```
 
-2. Clone the repository:
-```bash
-git clone https://github.com/mrarejimmyz/parmanus.git
-cd parmanus
-```
+### Method 2: Manual Installation
 
-3. Install dependencies:
-```bash
+#### Prerequisites
+- Windows 10/11
+- Python 3.11+
+- [Ollama](https://ollama.ai) installed
+
+#### Step-by-step Setup
+```powershell
+# 1. Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# 2. Install dependencies
 pip install -r requirements.txt
-```
 
-### Method 2: Using uv (Recommended)
+# 3. Install computer control dependencies
+pip install pyautogui pygetwindow pyperclip opencv-python screeninfo mss
 
-1. Install uv (A fast Python package installer and resolver):
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+# 4. Download AI model
+ollama pull llama3.2-vision:11b
 
-2. Clone the repository:
-```bash
-git clone https://github.com/mrarejimmyz/parmanus.git
-cd parmanus
-```
-
-3. Create a new virtual environment and activate it:
-```bash
-uv venv --python 3.12
-source .venv/bin/activate  # On Unix/macOS
-# Or on Windows:
-# .venv\Scripts\activate
+# 5. Run tests
+python test_computer_control_actions_async.py
 ```
 
 4. Install dependencies:
@@ -72,63 +118,110 @@ source .venv/bin/activate  # On Unix/macOS
 uv pip install -r requirements.txt
 ```
 
-### Browser Automation Tool (Optional)
-```bash
-playwright install
-```
+## ⚙️ Configuration
 
-## Configuration
+ParManus AI automatically creates a `config.toml` file during setup. You can customize settings:
 
-ParManus requires configuration for the LLM APIs it uses. Follow these steps to set up your configuration:
-
-1. Create a `config.toml` file in the `config` directory (you can copy from the example):
-```bash
-cp config/config.example.toml config/config.toml
-```
-
-2. Edit `config/config.toml` to add your API keys and customize settings:
 ```toml
-# Global LLM configuration
 [llm]
-model = "gpt-4o"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
-max_tokens = 4096
-temperature = 0.0
+model = "llama3.2-vision:11b"
+base_url = "http://localhost:11434"
+temperature = 0.1
+max_tokens = 2048
 
-# Optional configuration for specific LLM models
-[llm.vision]
-model = "gpt-4o"
-base_url = "https://api.openai.com/v1"
-api_key = "sk-..."  # Replace with your actual API key
+[computer_control]
+safety_mode = true
+screenshot_quality = "high"
+mouse_speed = "normal"
 ```
 
-## Quick Start
+## 🎯 Usage
 
-One line for run ParManus:
-```bash
-python main.py --prompt "your prompt here"
+### Interactive Mode
+```powershell
+python main.py
 ```
 
-Then input your idea via terminal!
+### Command Line Mode
+```powershell
+# Single command execution
+python main.py --prompt "Take a screenshot and tell me what's on screen"
 
-For MCP tool version, you can run:
-```bash
+# Computer control tasks
+python main.py --prompt "Open calculator and compute 25 * 47"
+
+# File operations
+python main.py --prompt "Organize my Downloads folder by file type"
+```
+
+### Specific Agent Modes
+```powershell
+# Computer control agent
+python main.py --agent manus --prompt "Control my desktop applications"
+
+# Browser automation
+python main.py --agent browser --prompt "Navigate to google.com"
+
+# File operations
+python main.py --agent file --prompt "Analyze my documents"
+```
+
+### Advanced Features
+```powershell
+# MCP tool version
 python run_mcp.py
-```
 
-For unstable multi-agent version, you also can run:
-```bash
+# Multi-agent workflows
 python run_flow.py
 ```
 
-## How to contribute
+## 🧪 Testing
 
-We welcome any friendly suggestions and helpful contributions! Just create issues or submit pull requests.
+Verify your installation:
+```powershell
+# Test computer control actions
+python test_computer_control_actions_async.py
 
-Or contact @mrarejimmyz via GitHub issues.
+# Validate action names
+python test_action_names_validation.py
 
-**Note**: Before submitting a pull request, please use the pre-commit tool to check your changes. Run `pre-commit run --all-files` to execute the checks.
+# Integration test
+python test_manus_computer_control_integration.py
+```
+
+## 🛡️ Safety & Security
+
+- **Built-in Safety**: PyAutoGUI failsafe and command filtering
+- **Safe Mode**: Additional confirmations for destructive actions
+- **Whitelisted Commands**: Only safe system commands allowed
+- **Error Recovery**: Intelligent error handling and recovery
+
+## 📖 Documentation
+
+- **[Complete Installation Guide](INSTALLATION_AND_USAGE_GUIDE.md)** - Detailed setup instructions
+- **[Computer Control Actions](COMPUTER_CONTROL_ACTIONS_GUIDE.md)** - All 29 automation actions
+- **[Technical Report](COMPUTER_CONTROL_COMPLETION_REPORT.md)** - Implementation details
+
+## 🤝 Contributing
+
+We welcome contributions! To contribute:
+
+1. **Fork the repository**
+2. **Create feature branch**: `git checkout -b feature/amazing-feature`
+3. **Run tests**: `python test_computer_control_actions_async.py`
+4. **Submit pull request**
+
+### Development Setup
+```powershell
+# Install development dependencies
+pip install pytest black flake8 mypy
+
+# Run tests
+pytest tests/
+
+# Format code
+black app/
+```
 
 ## Community Group
 

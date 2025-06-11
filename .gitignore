@@ -252,3 +252,6 @@ app/llm_tool_patch.py.backup_1749501059
 app/llm_tool_patch.py.backup_1749501994
 parsu.html
 test_webpage_creation.py
+input.txt
+user_request.txt
+assets/logo.jpg

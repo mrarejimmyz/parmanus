@@ -8,6 +8,18 @@ from app.tool.terminate import Terminate
 from app.tool.tool_collection import ToolCollection
 from app.tool.web_search import WebSearch
 
+# Import computer control tools after base tools to avoid circular imports
+try:
+    from app.tool.automation import AutomationTool
+    from app.tool.computer_control import ComputerControlTool
+
+    _computer_tools_available = True
+except ImportError as e:
+    print(f"Warning: Computer control tools not available: {e}")
+    ComputerControlTool = None
+    AutomationTool = None
+    _computer_tools_available = False
+
 
 __all__ = [
     "BaseTool",
@@ -20,3 +32,6 @@ __all__ = [
     "CreateChatCompletion",
     "PlanningTool",
 ]
+
+if _computer_tools_available:
+    __all__.extend(["ComputerControlTool", "AutomationTool"])

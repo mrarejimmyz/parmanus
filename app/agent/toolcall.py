@@ -215,29 +215,81 @@ class ToolCallAgent(ReActAgent):
 
     async def execute_tool(self, command: ToolCall) -> str:
         """Execute a single tool call with robust error handling"""
-        # Handle both dict and object formats
-        if isinstance(command, dict):
-            if "function" not in command or "name" not in command["function"]:
-                return "Error: Invalid command format"
-            name = command["function"]["name"]
-            arguments = command["function"].get("arguments", "{}")
-        elif hasattr(command, "function") and hasattr(command.function, "name"):
-            if not command or not command.function or not command.function.name:
-                return "Error: Invalid command format"
-            name = command.function.name
-            arguments = command.function.arguments or "{}"
-        else:
-            return "Error: Invalid command format"
-
-        if name not in self.available_tools.tool_map:
-            return f"Error: Unknown tool '{name}'"
+        # Handle both dict and object formats with better error handling
+        name = None
+        arguments = "{}"
 
         try:
-            # Parse arguments
-            args = json.loads(arguments)
+            if isinstance(command, dict):
+                # Dict format: {"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}
+                if "function" in command and isinstance(command["function"], dict):
+                    name = command["function"].get("name")
+                    arguments = command["function"].get("arguments", "{}")
+                elif "name" in command:
+                    # Direct format: {"name": "...", "arguments": "..."}
+                    name = command.get("name")
+                    arguments = command.get("arguments", "{}")
+                else:
+                    logger.error(f"Invalid dict command format: {command}")
+                    return (
+                        "Error: Invalid dict command format - missing function or name"
+                    )
+
+            elif hasattr(command, "function"):
+                # Object format with function attribute
+                if hasattr(command.function, "name"):
+                    name = command.function.name
+                    arguments = getattr(command.function, "arguments", "{}")
+                else:
+                    logger.error(
+                        f"Invalid object command format: command.function has no name"
+                    )
+                    return "Error: Invalid object command format - function has no name"
+
+            elif hasattr(command, "name"):
+                # Direct object format
+                name = command.name
+                arguments = getattr(command, "arguments", "{}")
+            else:
+                logger.error(
+                    f"Unrecognized command format: {type(command)} - {command}"
+                )
+                return f"Error: Unrecognized command format: {type(command)}"
+
+            if not name or not isinstance(name, str):
+                logger.error(f"Tool name is invalid: '{name}' from command: {command}")
+                return f"Error: Invalid tool name: '{name}'"
+
+        except Exception as e:
+            logger.error(f"Error parsing tool command: {e}, command: {command}")
+            return f"Error parsing tool command: {str(e)}"
+
+        # Now execute the tool
+        if name not in self.available_tools.tool_map:
+            available_tools = list(self.available_tools.tool_map.keys())
+            logger.error(f"Unknown tool '{name}'. Available tools: {available_tools}")
+            return f"Error: Unknown tool '{name}'. Available tools: {available_tools}"
+
+        try:
+            # Parse arguments safely
+            if isinstance(arguments, str):
+                try:
+                    args = json.loads(arguments) if arguments.strip() else {}
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        f"Invalid JSON arguments for {name}: {arguments}. Error: {e}"
+                    )
+                    return f"Error: Invalid JSON arguments for {name}: {arguments}"
+            elif isinstance(arguments, dict):
+                args = arguments
+            else:
+                logger.error(
+                    f"Arguments must be string or dict, got {type(arguments)}: {arguments}"
+                )
+                return f"Error: Invalid arguments type {type(arguments)}"
 
             # Execute the tool
-            logger.info(f"🔧 Activating tool: '{name}'...")
+            logger.info(f"🔧 Activating tool: '{name}' with args: {args}")
             result = await self.available_tools.execute(name=name, tool_input=args)
 
             # Handle special tools
@@ -250,17 +302,16 @@ class ToolCallAgent(ReActAgent):
 
             # Format result for display (standard case)
             observation = (
-                f"Observed output of cmd `{name}` executed:\n{str(result)}"
+                f"✅ Tool `{name}` executed successfully:\n{str(result)}"
                 if result
-                else f"Cmd `{name}` completed with no output"
+                else f"✅ Tool `{name}` completed with no output"
             )
 
             return observation
+
         except json.JSONDecodeError:
             error_msg = f"Error parsing arguments for {name}: Invalid JSON format"
-            logger.error(
-                f"📝 Oops! The arguments for '{name}' don't make sense - invalid JSON, arguments:{arguments}"
-            )
+            logger.error(f"📝 Invalid JSON arguments for '{name}': {arguments}")
             return f"Error: {error_msg}"
         except Exception as e:
             error_msg = f"⚠️ Tool '{name}' encountered a problem: {str(e)}"

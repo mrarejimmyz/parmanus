@@ -1,0 +1,31 @@
+# ParManus AI Configuration - Fixed for Tool Calling
+[llm]
+backend = "ollama"
+model = "llama3.2"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 4000
+temperature = 0.0
+
+[llm.vision]
+enabled = true
+model = "llama3.2-vision"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 4000
+temperature = 0.0
+
+[browser]
+headless = false
+slow_mo = 0
+
+[workspace]
+root = "workspace"
+
+[memory]
+type = "simple"
+max_messages = 100
+
+[voice]
+stt_enabled = false
+tts_enabled = false
