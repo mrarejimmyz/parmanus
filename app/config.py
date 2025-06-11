@@ -62,18 +62,18 @@ class ProxySettings(BaseModel):
 
 
 class SearchSettings(BaseModel):
-    engine: str = Field(default="Google", description="Search engine the llm to use")
-    fallback_engines: List[str] = Field(default_factory=lambda: [])
-    retry_delay: int = Field(
-        default=60,
-        description="Seconds to wait before retrying all engines again after they all fail",
+    """Search configuration."""
+
+    lang: str = Field(default="en", description="Default language for search results")
+    country: str = Field(default="us", description="Default country for search results")
+    retry_delay: int = Field(default=60, description="Retry delay in seconds")
+    max_retries: int = Field(default=3, description="Maximum number of retries")
+    engine: str = Field(default="duckduckgo", description="Default search engine")
+    fallback_engines: List[str] = Field(
+        default_factory=lambda: ["google", "bing"],
+        description="Fallback search engines",
     )
-    max_retries: int = Field(
-        default=3,
-        description="Maximum number of times to retry all engines when all fail",
-    )
-    lang: str = Field(default="en", description="Language code for search results")
-    country: str = Field(default="us", description="Country code for search results")
+    fetch_content: bool = Field(default=False, description="Fetch content by default")
 
 
 class BrowserSettings(BaseModel):

@@ -4,35 +4,25 @@ import os
 import sys
 import time
 
-# Import agent router and voice modules
+# Import Manus agent
+from app.agent.manus import Manus
+
+# Import agent router
 from app.agent.router import AgentRouter
 
 # Import configuration
 from app.config import get_config
 from app.gpu_manager import get_gpu_manager
 
-# Import compatibility patch BEFORE LLM classes
-from app.llm_compatibility_patch import (
-    ModelCompatibilityError,
-    patch_llm_for_compatibility,
-)
-
-# Apply compatibility patches
-patch_llm_for_compatibility()
-
+# Import LLM factory and classes
 from app.llm_factory import create_llm_async
-
-# Import LLM classes AFTER patches are applied
 from app.llm_optimized import LLMOptimized
 
-# Import the main patch module FIRST to ensure all patches are applied
-from app.main_patch import logger
-from app.manus import Manus  # Add Manus import
+# Import logger
+from app.logger import logger
 
 # Import memory system
 from app.memory import Memory
-from app.voice.stt import SpeechToText
-from app.voice.tts import TextToSpeech
 
 
 async def main():
@@ -73,15 +63,10 @@ async def main():
             except Exception as e:
                 logger.error(f"Error processing request: {e}")
 
-    except ModelCompatibilityError as e:
-        logger.error(f"Model compatibility error: {e}")
-        print("\n🚨 Your Llama 3.2 Vision model requires newer software support.")
-        print("🔧 Please follow the suggestions above to use your model.")
-        print(
-            "💡 For immediate use, consider installing Ollama and using ollama backend."
-        )
     except Exception as e:
         logger.error(f"Application error: {e}")
+        print(f"\n🚨 Error: {e}")
+        print("💡 Please check your configuration and try again.")
     finally:
         await gpu_manager.cleanup()
 

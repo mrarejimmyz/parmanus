@@ -523,18 +523,34 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         },
                     }
 
-                    # Use LLM to extract content with required function calling
-                    response = await self.llm.ask_tool(
-                        messages,
-                        tools=[extraction_function],
-                        tool_choice="required",
-                    )
+                    # Use LLM to extract content - try ask_tool first, fallback to ask
+                    try:
+                        if hasattr(self.llm, "ask_tool"):
+                            response = await self.llm.ask_tool(
+                                messages,
+                                tools=[extraction_function],
+                                tool_choice="required",
+                            )
 
-                    if response and response.tool_calls:
-                        args = json.loads(response.tool_calls[0].function.arguments)
-                        extracted_content = args.get("extracted_content", {})
+                            if response and response.get("tool_calls"):
+                                args = json.loads(
+                                    response["tool_calls"][0]["function"]["arguments"]
+                                )
+                                extracted_content = args.get("extracted_content", {})
+                                return ToolResult(
+                                    output=f"Extracted from page:\n{extracted_content}\n"
+                                )
+                        else:
+                            # Fallback to simple content extraction without tool calling
+                            extraction_prompt = f"Extract content from this web page based on the goal: {goal}\n\nPage content: {page_content[:2000]}..."
+                            response = await self.llm.ask(extraction_prompt)
+                            return ToolResult(output=f"Extracted content: {response}")
+
+                    except Exception as e:
+                        logger.warning(f"Content extraction with LLM failed: {e}")
+                        # Simple fallback - return truncated page content
                         return ToolResult(
-                            output=f"Extracted from page:\n{extracted_content}\n"
+                            output=f"Simple content extraction for goal '{goal}':\n{page_content[:1000]}..."
                         )
 
                     return ToolResult(output="No content was extracted from the page.")

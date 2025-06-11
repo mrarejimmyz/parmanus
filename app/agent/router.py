@@ -8,6 +8,7 @@ from app.agent.manus import Manus
 from app.config import config
 from app.gpu_manager import GPUManager, get_gpu_manager
 from app.logger import logger
+from app.schema import AgentState
 
 
 class AgentRouter:
@@ -63,6 +64,20 @@ class AgentRouter:
                 self.current_agent = self.agents["browser"]
             else:
                 self.current_agent = self.agents[self.default_agent_name]
+
+            # Reset agent state if it's finished to allow reuse
+            if (
+                hasattr(self.current_agent, "state")
+                and self.current_agent.state != AgentState.IDLE
+            ):
+                logger.info(
+                    f"Resetting agent {self.current_agent.name} state from {self.current_agent.state} to IDLE"
+                )
+                self.current_agent.state = AgentState.IDLE
+                self.current_agent.current_step = 0
+                # Reset any stuck detection state
+                if hasattr(self.current_agent, "stuck_detector"):
+                    self.current_agent.stuck_detector.reset()
 
             # Process request through selected agent
             response = await self.current_agent.run(user_input)

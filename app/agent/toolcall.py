@@ -146,6 +146,52 @@ class ToolCallAgent(ReActAgent):
             if self.tool_choices == ToolChoice.AUTO and not self.tool_calls and content:
                 return True
 
+            # Don't return True for ask_human loops - check for repetitive patterns
+            if self.tool_calls and len(self.tool_calls) == 1:
+                tool_call = self.tool_calls[0]
+                tool_name = ""
+                if isinstance(tool_call, dict) and "function" in tool_call:
+                    tool_name = tool_call["function"].get("name", "")
+                elif hasattr(tool_call, "function") and hasattr(
+                    tool_call.function, "name"
+                ):
+                    tool_name = tool_call.function.name
+
+                # If it's ask_human and we have recent messages, check for repetition
+                if tool_name == "ask_human":
+                    recent_messages = (
+                        self.memory.messages[-5:]
+                        if hasattr(self, "memory") and self.memory.messages
+                        else []
+                    )
+                    ask_human_count = sum(
+                        1
+                        for msg in recent_messages
+                        if hasattr(msg, "tool_calls")
+                        and msg.tool_calls
+                        and any(
+                            tc.get("function", {}).get("name") == "ask_human"
+                            for tc in (
+                                msg.tool_calls
+                                if isinstance(msg.tool_calls, list)
+                                else []
+                            )
+                        )
+                    )
+
+                    if ask_human_count >= 2:
+                        logger.warning(
+                            "🔄 Detected ask_human loop - providing direct response instead"
+                        )
+                        self.memory.add_message(
+                            Message.assistant_message(
+                                "I understand you want me to search for trending AI safety research. Let me use the browser to search for this information instead of asking more questions."
+                            )
+                        )
+                        # Clear tool calls and return True to provide response
+                        self.tool_calls = []
+                        return True
+
             return bool(self.tool_calls)
         except Exception as e:
             logger.error(f"🚨 Oops! The {self.name}'s thinking process hit a snag: {e}")

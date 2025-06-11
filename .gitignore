@@ -255,3 +255,5 @@ test_webpage_creation.py
 input.txt
 user_request.txt
 assets/logo.jpg
+CALCULATOR_ISSUE_COMPLETION_REPORT.md
+optimize_gpu.sh

@@ -54,6 +54,59 @@ class ComputerControlTool(BaseTool):
         arbitrary_types_allowed = True
         extra = "allow"
 
+    # Action name mapping for common incorrect variations
+    ACTION_NAME_MAP: Dict[str, str] = {
+        # Screenshot variations
+        "capture_screenshot": "screenshot",
+        "take_screenshot": "screenshot",
+        "get_screenshot": "screenshot",
+        "screen_capture": "screenshot",
+        # Mouse action variations
+        "click_button": "mouse_click",
+        "click_mouse": "mouse_click",
+        "mouse_click_button": "mouse_click",
+        "click": "mouse_click",
+        "move_mouse": "mouse_move",
+        "mouse_movement": "mouse_move",
+        "drag_mouse": "mouse_drag",
+        "scroll_mouse": "mouse_scroll",
+        "get_mouse_pos": "get_mouse_position",
+        "mouse_pos": "get_mouse_position",
+        # Keyboard variations
+        "type": "type_text",
+        "input_text": "type_text",
+        "keyboard_input": "type_text",
+        "send_key": "send_keys",
+        "key_press": "send_keys",
+        "keyboard_press": "send_keys",
+        "key_combo": "key_combination",
+        "hotkey": "key_combination",
+        # Application variations
+        "launch_application": "launch_app",
+        "start_app": "launch_app",
+        "open_app": "launch_app",
+        "run_app": "launch_app",
+        "close_application": "close_app",
+        "stop_app": "close_app",
+        "terminate_app": "close_app",
+        "list_running_processes": "list_processes",
+        "get_processes": "list_processes",
+        "show_processes": "list_processes",
+        "terminate_process": "kill_process",
+        "stop_process": "kill_process",
+        # Window variations
+        "get_windows": "list_windows",
+        "show_windows": "list_windows",
+        "switch_window": "focus_window",
+        "activate_window": "focus_window",
+        "set_window_focus": "focus_window",
+        "window_move": "move_window",
+        "window_resize": "resize_window",
+        "window_minimize": "minimize_window",
+        "window_maximize": "maximize_window",
+        "window_close": "close_window",
+    }
+
     parameters: dict = {
         "type": "object",
         "properties": {
@@ -158,6 +211,67 @@ class ComputerControlTool(BaseTool):
         super().__init__()
         self.screenshot_sct = mss.mss()
 
+    def _map_action_name(self, action: str) -> str:
+        """Map common incorrect action name variations to correct ones"""
+        mapped_action = self.ACTION_NAME_MAP.get(action.lower(), action)
+        if mapped_action != action:
+            logger.info(f"🔄 Mapped action '{action}' to '{mapped_action}'")
+        return mapped_action
+
+    def _check_existing_app_instances(self, app_name: str) -> List[Dict[str, Any]]:
+        """Check for existing instances of an application"""
+        existing_instances = []  # Map app name to process name
+        app_process_map = {
+            "calculator": "CalculatorApp.exe",
+            "calc": "CalculatorApp.exe",
+            "notepad": "notepad.exe",
+            "paint": "mspaint.exe",
+            "chrome": "chrome.exe",
+            "firefox": "firefox.exe",
+            "edge": "msedge.exe",
+        }
+
+        process_name = app_process_map.get(app_name.lower(), f"{app_name.lower()}.exe")
+
+        for proc in psutil.process_iter(["pid", "name", "create_time"]):
+            try:
+                if process_name.lower() in proc.info["name"].lower():
+                    existing_instances.append(
+                        {
+                            "pid": proc.info["pid"],
+                            "name": proc.info["name"],
+                            "create_time": proc.info["create_time"],
+                        }
+                    )
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        return existing_instances
+
+    def _focus_existing_calculator(self, instances: List[Dict[str, Any]]) -> bool:
+        """Focus on existing calculator window if available"""
+        try:
+            # Try to find calculator windows and focus them
+            calculator_windows = []
+            for window in gw.getAllWindows():
+                if (
+                    "calculator" in window.title.lower()
+                    or "calc" in window.title.lower()
+                ):
+                    calculator_windows.append(window)
+
+            if calculator_windows:
+                # Focus the most recent calculator window
+                calculator_windows[0].activate()
+                logger.info(
+                    f"✅ Focused existing calculator window: {calculator_windows[0].title}"
+                )
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"Could not focus existing calculator: {e}")
+            return False
+
     async def execute(
         self,
         action: str,
@@ -177,12 +291,43 @@ class ComputerControlTool(BaseTool):
         parameters: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> ToolResult:
-        """Execute enhanced computer control actions"""
+        """Execute enhanced computer control actions with smart workflows"""
         try:
             if parameters is None:
                 parameters = {}
 
+            # Map action name to handle common variations
+            original_action = action
+            action = self._map_action_name(action)
+
             logger.info(f"🖥️ Computer control action: {action}")
+
+            # Smart Calculator Workflow - Check for existing instances before launching
+            if (
+                action == "launch_app"
+                and target
+                and target.lower() in ["calculator", "calc"]
+            ):
+                existing_instances = self._check_existing_app_instances(target)
+
+                if existing_instances:
+                    logger.info(
+                        f"📱 Found {len(existing_instances)} existing calculator instance(s)"
+                    )
+
+                    # Try to focus existing calculator
+                    if self._focus_existing_calculator(existing_instances):
+                        return ToolResult(
+                            output=f"✅ Used existing calculator instance (PID: {existing_instances[0]['pid']}) instead of launching new one"
+                        )
+                    else:
+                        logger.warning(
+                            "Could not focus existing calculator, will launch new one"
+                        )
+                else:
+                    logger.info(
+                        "🆕 No existing calculator found, launching new instance"
+                    )
 
             # Screenshot actions
             if action == "screenshot":

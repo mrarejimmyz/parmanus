@@ -1,0 +1,83 @@
+# ParManus AI GPU Runtime Optimization Configuration
+# Optimized for RTX 4060 8GB - Maximum performance with efficient memory usage
+
+[llm]
+backend = "ollama"
+model = "llama3.2"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 2048                      # Optimized for memory efficiency
+temperature = 0.0
+
+[llm.vision]
+enabled = true
+model = "llama3.2-vision"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+max_tokens = 1024                      # Reduced context for vision tasks
+temperature = 0.0
+
+[browser]
+headless = true # Reduce memory usage
+slow_mo = 0
+
+[workspace]
+root = "workspace"
+
+[memory]
+type = "simple"
+max_messages = 50 # Reduced for memory efficiency
+
+[voice]
+stt_enabled = false
+tts_enabled = false
+
+# GPU Optimization Settings
+[gpu]
+force_cuda = true
+force_gpu_layers = 35
+memory_threshold = 0.75    # More aggressive memory management
+cleanup_threshold = 0.85
+auto_cleanup = true
+fallback_to_cpu = true
+enable_monitoring = true
+monitoring_interval = 15.0 # More frequent monitoring
+
+# Model allocation strategy for RTX 4060
+text_model_priority = "high"
+vision_model_priority = "medium"
+max_gpu_layers_text = -1         # Use all available layers
+max_gpu_layers_vision = 25       # Conservative for vision
+
+# Performance optimization
+enable_quantization = false
+mixed_precision = true
+context_optimization = true
+batch_optimization = true
+
+# CUDA-specific settings for RTX 4060
+[cuda]
+memory_fraction = 0.85        # Use 85% of GPU memory
+enable_memory_pool = true
+synchronize_operations = true
+stream_optimization = true
+
+# Model loading optimization
+[models]
+lazy_loading = true
+preload_text_model = false  # Load on demand
+unload_unused_models = true
+model_cache_size = 1        # Keep only one model in memory
+
+# Agent optimization
+[agent]
+max_steps = 15                # Reduced for faster execution
+duplicate_threshold = 2
+enable_circuit_breaker = true
+stuck_detection = true
+
+# Tools optimization
+[tools]
+browser_timeout = 30
+file_operation_timeout = 10
+python_execution_timeout = 60

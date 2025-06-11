@@ -663,3 +663,151 @@ class LLMOptimized:
         except Exception as e:
             logger.error(f"Error in ask: {e}")
             raise
+
+    async def ask_tool(
+        self,
+        messages: List[Union[Message, Dict[str, Any]]],
+        system_msgs: Optional[List[Union[Message, Dict[str, Any]]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Union[str, ToolChoice] = ToolChoice.AUTO,
+        temp: float = None,
+        timeout: Optional[int] = None,
+        max_retries: int = 2,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Ask the model with tool calling support."""
+        if timeout is None:
+            timeout = 120  # Default timeout for tool calls
+
+        start_time = time.time()
+        last_exception = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                # Format messages
+                formatted_messages = []
+                if system_msgs:
+                    formatted_messages.extend(
+                        [
+                            msg if isinstance(msg, dict) else msg.to_dict()
+                            for msg in system_msgs
+                        ]
+                    )
+                formatted_messages.extend(
+                    [
+                        msg if isinstance(msg, dict) else msg.to_dict()
+                        for msg in messages
+                    ]
+                )
+
+                # Create enhanced prompt with tool information
+                prompt = self._format_prompt_for_llama(formatted_messages)
+
+                # Add tool definitions if provided
+                if tools:
+                    tool_definitions = "\n\nAvailable tools:\n"
+                    for tool in tools:
+                        tool_definitions += f"- {tool['name']}: {tool['description']}\n"
+                    prompt += tool_definitions
+
+                    # Add tool choice instructions
+                    if tool_choice == ToolChoice.AUTO:
+                        prompt += "\nYou may use these tools if appropriate to help answer the user's question.\n"
+                    elif tool_choice == ToolChoice.REQUIRED:
+                        prompt += "\nYou must use one of these tools to answer the user's question.\n"
+
+                # Get model and set temperature
+                model = self.text_model
+                temperature = temp if temp is not None else self.temperature
+
+                # Calculate safe max tokens
+                prompt_tokens = self.count_tokens(prompt)
+                safe_max_tokens = min(
+                    self.max_tokens, self.DEFAULT_CONTEXT_SIZE - prompt_tokens - 100
+                )
+
+                if safe_max_tokens <= 0:
+                    raise TokenLimitExceeded("Prompt too long for available context")
+
+                # Run model with timeout
+                completion = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        self._executor,
+                        lambda: model.create_completion(
+                            prompt=prompt,
+                            max_tokens=safe_max_tokens,
+                            temperature=temperature,
+                            stop=["<|user|>", "<|system|>", "<|eot_id|>"],
+                            **kwargs,
+                        ),
+                    ),
+                    timeout=timeout,
+                )
+
+                # Extract completion text
+                completion_text = completion["choices"][0]["text"].strip()
+
+                # Parse tool calls from response
+                tool_calls = self._parse_tool_calls(completion_text) if tools else []
+
+                # Update token counter
+                completion_tokens = self.count_tokens(completion_text)
+                self.update_token_count(prompt_tokens, completion_tokens)
+
+                # Return structured response
+                return {
+                    "content": completion_text,
+                    "tool_calls": tool_calls or [],
+                    "usage": {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens,
+                    },
+                    "elapsed_time": time.time() - start_time,
+                    "attempts": attempt + 1,
+                }
+
+            except asyncio.TimeoutError as e:
+                last_exception = e
+                elapsed = time.time() - start_time
+
+                if attempt < max_retries:
+                    # Increase timeout for retry
+                    timeout = min(timeout * 1.5, 180)  # Cap at 3 minutes
+                    logger.warning(
+                        f"Tool call timed out after {elapsed:.1f}s, "
+                        f"retrying with {timeout}s timeout (attempt {attempt + 1}/{max_retries})"
+                    )
+                    continue
+                else:
+                    logger.error(
+                        f"Tool call failed after {max_retries + 1} attempts "
+                        f"(total time: {elapsed:.1f}s)"
+                    )
+                    # Return partial result with timeout indication
+                    return {
+                        "content": f"[Response incomplete due to timeout after {elapsed:.1f}s and {max_retries + 1} attempts]",
+                        "tool_calls": [],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
+                        "elapsed_time": elapsed,
+                        "attempts": attempt + 1,
+                        "error": "timeout",
+                    }
+
+            except Exception as e:
+                last_exception = e
+                elapsed = time.time() - start_time
+
+                if attempt < max_retries and not isinstance(e, TokenLimitExceeded):
+                    logger.warning(f"Tool call error on attempt {attempt + 1}: {e}")
+                    continue
+                else:
+                    logger.error(f"Tool call failed permanently: {e}")
+                    raise
+
+        # This should not be reached, but just in case
+        raise last_exception or RuntimeError("Unexpected tool call failure")

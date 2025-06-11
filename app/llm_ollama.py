@@ -21,6 +21,27 @@ from app.logger import logger
 from app.schema import Message, ToolChoice
 
 
+class TokenCounter:
+    """Track token usage across requests."""
+
+    def __init__(self):
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+
+    def update(self, prompt_tokens: int, completion_tokens: int):
+        """Update token counts."""
+        self.prompt_tokens += prompt_tokens
+        self.completion_tokens += completion_tokens
+        self.total_tokens = self.prompt_tokens + self.completion_tokens
+
+    def reset(self):
+        """Reset all counters."""
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.total_tokens = 0
+
+
 class OllamaLLMSettings(BaseModel):
     """Ollama-specific LLM settings."""
 
@@ -57,13 +78,14 @@ class OllamaLLM:
         self.max_tokens = settings.max_tokens
         self.temperature = settings.temperature
         self.base_url = settings.base_url
-        self.timeout = settings.timeout
-
-        # Initialize Ollama client
+        self.timeout = settings.timeout  # Initialize Ollama client
         self.client = ollama.Client(host=self.base_url)
 
         # Vision capabilities
         self.vision_enabled = True  # Ollama supports vision models
+
+        # Token counter for compatibility with agents
+        self.token_counter = TokenCounter()
 
         logger.info(f"Initialized Ollama LLM: {self.model} at {self.base_url}")
 
@@ -294,22 +316,25 @@ class OllamaLLM:
             response = await self._generate_single_response(request_params, timeout)
 
             # Parse tool calls from response
-            tool_calls = self._parse_tool_calls(response) if tools else []
+            tool_calls = (
+                self._parse_tool_calls(response) if tools else []
+            )  # Calculate token usage
+            prompt_tokens = sum(
+                self.count_tokens(msg.get("content", "")) for msg in formatted_messages
+            )
+            completion_tokens = self.count_tokens(response)
+            total_tokens = prompt_tokens + completion_tokens
+
+            # Update token counter
+            self.token_counter.update(prompt_tokens, completion_tokens)
 
             result = {
                 "content": response,
                 "tool_calls": tool_calls,
                 "usage": {
-                    "prompt_tokens": sum(
-                        self.count_tokens(msg.get("content", ""))
-                        for msg in formatted_messages
-                    ),
-                    "completion_tokens": self.count_tokens(response),
-                    "total_tokens": sum(
-                        self.count_tokens(msg.get("content", ""))
-                        for msg in formatted_messages
-                    )
-                    + self.count_tokens(response),
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
                 },
                 "elapsed_time": time.time() - start_time,
                 "attempts": 1,
@@ -390,11 +415,43 @@ class OllamaLLM:
             func_name = match.group(1)
             args_str = match.group(2)
 
+            # Skip if this looks like regular text, not a tool call
+            if func_name.lower() in [
+                "if",
+                "for",
+                "while",
+                "def",
+                "class",
+                "print",
+                "len",
+                "str",
+                "int",
+                "float",
+                "bool",
+                "list",
+                "dict",
+                "set",
+                "tuple",
+            ]:
+                continue
+
             # Parse arguments
             args = {}
             if args_str.strip():
                 # Simple argument parsing (could be improved)
                 try:
+                    # Handle the case where it's malformed like 'import requests; import json; response = requests.get('
+                    if (
+                        "=" in args_str
+                        and not args_str.endswith('"')
+                        and not args_str.endswith("'")
+                    ):
+                        # This looks like incomplete code, skip it
+                        logger.warning(
+                            f"Skipping malformed tool call: {func_name}({args_str})"
+                        )
+                        continue
+
                     # Try to parse as key=value pairs
                     for arg_pair in args_str.split(","):
                         if "=" in arg_pair:
@@ -404,6 +461,11 @@ class OllamaLLM:
                             args[key] = value
                 except:
                     # If parsing fails, treat the whole string as a single argument
+                    if len(args_str.strip()) > 100:  # Skip very long malformed strings
+                        logger.warning(
+                            f"Skipping overly long malformed argument: {args_str[:50]}..."
+                        )
+                        continue
                     args = {"input": args_str.strip()}
 
             tool_call = {
@@ -419,13 +481,29 @@ class OllamaLLM:
         """Check if the specified model is available in Ollama."""
         try:
             models = self.client.list()
-            # Handle both possible response formats
+            # Handle the response format
             if hasattr(models, "models"):
-                available_models = [model.name for model in models.models]
+                available_models = [
+                    model.model for model in models.models
+                ]  # Use .model instead of .name
             elif isinstance(models, dict) and "models" in models:
-                available_models = [model.get("name", "") for model in models["models"]]
+                available_models = [
+                    model.get("model", "") for model in models["models"]
+                ]  # Use "model" instead of "name"
             else:
                 available_models = []
+
+            logger.debug(f"Available models: {available_models}")
+            logger.debug(f"Looking for model: {self.model}")
+
+            return self.model in available_models
+        except Exception as e:
+            logger.error(f"Error checking model availability: {e}")
+            return False
+
+            logger.debug(f"Available models: {available_models}")
+            logger.debug(f"Looking for model: {self.model}")
+
             return self.model in available_models
         except Exception as e:
             logger.error(f"Error checking model availability: {e}")
