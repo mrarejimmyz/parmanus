@@ -297,20 +297,18 @@ class Manus(ToolCallAgent):
         """Enhanced thinking process with improved state management"""
         try:
             if not self.current_plan:
-                # Check for completed state first
+                # Check if task is already complete
                 if self.browser_state and self.browser_state.get("plan_completed"):
-                    # Only log once per completion
-                    if not hasattr(self, "_completion_logged"):
-                        logger.info(
-                            "✅ Task completed successfully - ready for new tasks"
-                        )
-                        self._completion_logged = True
-                    # Raise StopIteration to properly terminate the agent
                     from app.exceptions import AgentTaskComplete
 
-                    raise AgentTaskComplete("Website review completed successfully")
+                    # Log completion once and terminate
+                    if not hasattr(self, "_completion_logged"):
+                        logger.info("✅ Task completed successfully")
+                        self._completion_logged = True
+                        raise AgentTaskComplete("Website review completed successfully")
+                    return False
 
-                # Post-completion cooldown check (will only reach here for new tasks)
+                # Post-completion cooldown check for new tasks
                 if hasattr(self, "last_completion_time"):
                     time_since_completion = time.time() - self.last_completion_time
                     if time_since_completion < 2:
@@ -318,16 +316,6 @@ class Manus(ToolCallAgent):
                             f"In post-completion cooldown ({time_since_completion:.1f}s remaining)"
                         )
                         return False
-
-                # Prevent new plan if previous one just completed
-                if self.browser_state and self.browser_state.get("plan_completed"):
-                    # Only log once per completion
-                    if not hasattr(self, "_completion_logged"):
-                        logger.info(
-                            "✅ Task completed successfully - ready for new tasks"
-                        )
-                        self._completion_logged = True
-                    return False
 
                 # Get user request from recent messages
                 user_messages = [

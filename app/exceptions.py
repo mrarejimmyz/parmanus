@@ -11,3 +11,11 @@ class ParManusError(Exception):
 
 class TokenLimitExceeded(ParManusError):
     """Exception raised when the token limit is exceeded"""
+
+
+class AgentTaskComplete(ParManusError):
+    """Exception raised when an agent has completed its task and should terminate."""
+
+    def __init__(self, message="Task completed successfully"):
+        self.message = message
+        super().__init__(self.message)
