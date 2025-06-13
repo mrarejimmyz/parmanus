@@ -295,40 +295,63 @@ class Manus(ToolCallAgent):
 
     async def think(self) -> bool:
         """Enhanced thinking process with improved state management"""
-        if not self.current_plan:
-            # Get user request from recent messages
-            user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
-            if not user_messages:
-                logger.error("No user request found in memory")
-                return False
-            user_request = user_messages[-1].content
+        try:
+            if not self.current_plan:
+                # Get user request from recent messages
+                user_messages = [
+                    msg for msg in self.memory.messages if msg.role == "user"
+                ]
+                if not user_messages:
+                    logger.error("No user request found in memory")
+                    return False
+                user_request = user_messages[-1].content
 
-            self.current_plan = await self.create_task_plan(user_request)
-            await self.create_todo_list(self.current_plan)
-            return True
-
-        task_type = self.current_plan.get("task_type")
-        if task_type == "website_review":
-            current_phase = self.current_plan["phases"][self.current_phase]
-            current_step = current_phase["steps"][self.current_step]
-
-            next_action = await self.handle_browser_task(current_step)
-            if next_action:
-                self.tool_calls = [{"name": "browser_use", "arguments": next_action}]
+                self.current_plan = await self.create_task_plan(user_request)
+                await self.create_todo_list(self.current_plan)
                 return True
 
-            # Check if we're done
-            if (
-                self.current_phase >= len(self.current_plan["phases"]) - 1
-                and self.current_step >= len(current_phase["steps"]) - 1
-            ):
-                logger.info("✅ Website review completed successfully")
-                return False
+            task_type = self.current_plan.get("task_type")
+            if task_type == "website_review":
+                # Validate current phase and step
+                if self.current_phase >= len(self.current_plan["phases"]):
+                    logger.error("Current phase index out of range")
+                    return False
 
-            # Continue to next step
-            return True
+                current_phase = self.current_plan["phases"][self.current_phase]
+                if not current_phase.get("steps") or self.current_step >= len(
+                    current_phase["steps"]
+                ):
+                    logger.error("Current step index out of range")
+                    await self.progress_to_next_step()
+                    return True
 
-        return await super().think()
+                current_step = current_phase["steps"][self.current_step]
+                logger.debug(f"Processing step: {current_step}")
+
+                next_action = await self.handle_browser_task(current_step)
+                if next_action:
+                    self.tool_calls = [
+                        {"name": "browser_use", "arguments": next_action}
+                    ]
+                    return True
+
+                # Check if we're done
+                if (
+                    self.current_phase >= len(self.current_plan["phases"]) - 1
+                    and self.current_step >= len(current_phase["steps"]) - 1
+                ):
+                    logger.info("✅ Website review completed successfully")
+                    return False
+
+                # Progress to next step if no action was needed
+                await self.progress_to_next_step()
+                return True
+
+            return await super().think()
+
+        except Exception as e:
+            logger.error(f"Error in think(): {str(e)}")
+            return False
 
     async def handle_browser_task(self, step: str) -> Optional[Dict]:
         """Advanced browser task handling with state management"""
@@ -458,59 +481,12 @@ class Manus(ToolCallAgent):
 Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "In Progress"}
 """
 
-    async def handle_browser_task(self, url: str, steps: List[str]) -> None:
-        """Handle browser-based tasks with improved error handling and state management"""
-        try:
-            # Initialize browser state if needed
-            if not hasattr(self, "browser_state"):
-                self.browser_state = {
-                    "current_step": 0,
-                    "completed_steps": set(),
-                    "url": url,
-                    "is_ready": False,
-                }
-
-            # Validate URL
-            if not url.startswith(("http://", "https://")):
-                raise ValueError(f"Invalid URL format: {url}")
-
-            # Reset state if URL changed
-            if self.browser_state["url"] != url:
-                self.browser_state = {
-                    "current_step": 0,
-                    "completed_steps": set(),
-                    "url": url,
-                    "is_ready": False,
-                }
-
-            # Validate steps
-            if not steps or not isinstance(steps, list):
-                raise ValueError("Steps must be a non-empty list")
-
-            # Execute steps with proper bounds checking
-            while self.browser_state["current_step"] < len(steps):
-                current_step = steps[self.browser_state["current_step"]]
-
-                # Skip if step already completed
-                if current_step in self.browser_state["completed_steps"]:
-                    self.browser_state["current_step"] += 1
-                    continue
-
-                # Execute step
-                try:
-                    await self.execute_browser_step(current_step)
-                    self.browser_state["completed_steps"].add(current_step)
-                    self.browser_state["current_step"] += 1
-                except Exception as step_error:
-                    logger.error(
-                        f"Error executing step {current_step}: {str(step_error)}"
-                    )
-                    raise
-
-        except Exception as e:
-            logger.error(f"Browser task error: {str(e)}")
-            self.browser_state["is_ready"] = False
-            raise
+    async def ensure_page_ready(self) -> None:
+        """Ensure the page is ready for interaction"""
+        if not self.browser_state.get("page_ready"):
+            logger.warning("Page not ready, waiting for navigation to complete")
+            # Add any additional page readiness checks here
+            await asyncio.sleep(1)  # Brief wait for page load
 
     async def execute_browser_step(self, step: str) -> None:
         """Execute a single browser step with validation and retries"""
@@ -598,6 +574,21 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
             await self.update_todo_progress()
         except Exception as e:
             logger.error(f"Error progressing to next step: {str(e)}")
+
+    def parse_review_parameters(self, step: str) -> Dict:
+        """Parse review step parameters"""
+        params = {"element": None}
+
+        if "main content" in step.lower():
+            params["element"] = "main,article,#content,.content,body"
+        elif "header" in step.lower():
+            params["element"] = "header,#header,.header"
+        elif "navigation" in step.lower():
+            params["element"] = "nav,#nav,.nav,.navigation"
+        elif "footer" in step.lower():
+            params["element"] = "footer,#footer,.footer"
+
+        return params
 
     def generate_analysis_report(self) -> str:
         """Generate a detailed analysis report of the website"""
