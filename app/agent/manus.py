@@ -97,8 +97,8 @@ class Manus(ToolCallAgent):
         todo_content += f"**Estimated Duration:** {plan['estimated_duration']}\n\n"
         
         for i, phase in enumerate(plan['phases']):
-            status = "🔄 CURRENT" if i == self.current_phase else "⏳ PENDING" if i > self.current_phase else "✅ COMPLETE"
-            todo_content += f"## Phase {phase['id']}: {phase['title']} {status}\n\n"
+            status = "CURRENT" if i == self.current_phase else "PENDING" if i > self.current_phase else "COMPLETE"
+            todo_content += f"## Phase {phase['id']}: {phase['title']} [{status}]\n\n"
             todo_content += f"**Description:** {phase['description']}\n\n"
             todo_content += f"**Success Criteria:** {phase['success_criteria']}\n\n"
             todo_content += f"**Tools Needed:** {', '.join(phase['tools_needed'])}\n\n"
@@ -115,13 +115,21 @@ class Manus(ToolCallAgent):
             
             todo_content += "\n"
         
-        # Save todo list
+        # Save todo list with UTF-8 encoding
         try:
-            with open(self.todo_file_path, 'w') as f:
+            with open(self.todo_file_path, 'w', encoding='utf-8') as f:
                 f.write(todo_content)
             logger.info(f"Todo list saved to {self.todo_file_path}")
         except Exception as e:
             logger.warning(f"Could not save todo list: {e}")
+            # Fallback: try with ASCII-only content
+            try:
+                ascii_content = todo_content.encode('ascii', 'ignore').decode('ascii')
+                with open(self.todo_file_path, 'w', encoding='ascii') as f:
+                    f.write(ascii_content)
+                logger.info(f"Todo list saved with ASCII encoding to {self.todo_file_path}")
+            except Exception as e2:
+                logger.error(f"Failed to save todo list even with ASCII: {e2}")
         
         return todo_content
     
@@ -133,7 +141,7 @@ class Manus(ToolCallAgent):
         try:
             # Read current todo
             if os.path.exists(self.todo_file_path):
-                with open(self.todo_file_path, 'r') as f:
+                with open(self.todo_file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
                 # Update phase status
@@ -145,15 +153,15 @@ class Manus(ToolCallAgent):
                     if line.startswith("## Phase"):
                         phase_num = int(line.split()[2].rstrip(':'))
                         if phase_num <= self.current_phase + 1:
-                            if "⏳ PENDING" in line:
-                                line = line.replace("⏳ PENDING", "🔄 CURRENT" if phase_num == self.current_phase + 1 else "✅ COMPLETE")
-                            elif "🔄 CURRENT" in line and phase_num < self.current_phase + 1:
-                                line = line.replace("🔄 CURRENT", "✅ COMPLETE")
+                            if "[PENDING]" in line:
+                                line = line.replace("[PENDING]", "[CURRENT]" if phase_num == self.current_phase + 1 else "[COMPLETE]")
+                            elif "[CURRENT]" in line and phase_num < self.current_phase + 1:
+                                line = line.replace("[CURRENT]", "[COMPLETE]")
                     
                     updated_lines.append(line)
                 
-                # Save updated content
-                with open(self.todo_file_path, 'w') as f:
+                # Save updated content with UTF-8 encoding
+                with open(self.todo_file_path, 'w', encoding='utf-8') as f:
                     f.write('\n'.join(updated_lines))
                     
         except Exception as e:
