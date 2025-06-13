@@ -331,145 +331,165 @@ class Manus(ToolCallAgent):
 
                 # Create task plan and todo list
                 user_request = user_messages[-1].content
-                plan = await self.create_task_plan(user_request)
-                todo_list = await self.create_todo_list(plan)
+                try:
+                    plan = await self.create_task_plan(user_request)
+                    todo_list = await self.create_todo_list(plan)
 
-                # Initialize first navigation if URL is present
-                if self.browser_state and not self.browser_state.get("current_url"):
+                    # Extract and validate URL
                     url = self._extract_url_from_request(user_request)
                     if url:
+                        logger.info(f"Initiating navigation to {url}")
                         self.tool_calls = [
                             {
                                 "name": "browser_use",
-                                "arguments": {"action": "go_to_url", "url": url},
+                                "arguments": {
+                                    "action": "go_to_url",
+                                    "url": url,
+                                    "options": {
+                                        "waitUntil": "networkidle0",
+                                        "timeout": 30000,
+                                    },
+                                },
                             }
                         ]
-
-                return True
-
-            task_type = self.current_plan.get("task_type")
-            if task_type == "website_review":
-                if not self.browser_state:
-                    self.browser_state = {
-                        "current_url": None,
-                        "content_extracted": False,
-                        "analysis_complete": False,
-                        "screenshots_taken": False,
-                        "last_action": None,
-                        "page_ready": False,
-                        "structure_analyzed": False,
-                        "summary_complete": False,
-                    }
-
-                # Check for task completion
-                if self.browser_state.get(
-                    "analysis_complete"
-                ) and self.browser_state.get("summary_complete"):
-                    logger.info("✅ Website review completed")
-                    await self.mark_plan_complete()
-                    return False
-
-                # Validate and get current step
-                if self.current_phase >= len(self.current_plan["phases"]):
-                    logger.info("✅ Website review completed - all phases done")
-                    await self.mark_plan_complete()
-                    return False
-
-                current_phase = self.current_plan["phases"][self.current_phase]
-                if not current_phase.get("steps"):
-                    logger.warning("Current phase has no steps")
-                    await self.progress_to_next_step()
-                    return True
-
-                # Handle phase/step progression
-                if self.current_step >= len(current_phase["steps"]):
-                    if self.current_phase + 1 < len(self.current_plan["phases"]):
-                        self.current_phase += 1
-                        self.current_step = 0
-                        logger.info(f"Moving to phase {self.current_phase}")
-                        await self.update_todo_progress()
-                        return True
+                        self.browser_state["current_url"] = url
                     else:
-                        self.browser_state["analysis_complete"] = True
-                        self.browser_state["summary_complete"] = True
-                        await self.mark_plan_complete()
-                        logger.info("✅ Website review completed successfully")
+                        logger.error("No valid URL found in request")
                         return False
 
-                # Get current step
-                current_step = current_phase["steps"][self.current_step]
-                logger.info(f"Processing step: {current_step}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Error in think(): {str(e)}")
+                    return False
 
-                # Handle navigation and page readiness
-                if "navigate" in current_step.lower():
-                    if not self.browser_state.get("current_url"):
+            # Process current step
+            try:
+                task_type = self.current_plan.get("task_type")
+                if task_type == "website_review":
+                    if not self.browser_state:
+                        self.browser_state = {
+                            "current_url": None,
+                            "content_extracted": False,
+                            "analysis_complete": False,
+                            "screenshots_taken": False,
+                            "last_action": None,
+                            "page_ready": False,
+                            "structure_analyzed": False,
+                            "summary_complete": False,
+                        }
+
+                    # Check for task completion
+                    if self.browser_state.get(
+                        "analysis_complete"
+                    ) and self.browser_state.get("summary_complete"):
+                        logger.info("✅ Website review completed")
+                        await self.mark_plan_complete()
+                        return False
+
+                    # Validate and get current step
+                    if self.current_phase >= len(self.current_plan["phases"]):
+                        logger.info("✅ Website review completed - all phases done")
+                        await self.mark_plan_complete()
+                        return False
+
+                    current_phase = self.current_plan["phases"][self.current_phase]
+                    if not current_phase.get("steps"):
+                        logger.warning("Current phase has no steps")
+                        await self.progress_to_next_step()
+                        return True
+
+                    # Handle phase/step progression
+                    if self.current_step >= len(current_phase["steps"]):
+                        if self.current_phase + 1 < len(self.current_plan["phases"]):
+                            self.current_phase += 1
+                            self.current_step = 0
+                            logger.info(f"Moving to phase {self.current_phase}")
+                            await self.update_todo_progress()
+                            return True
+                        else:
+                            self.browser_state["analysis_complete"] = True
+                            self.browser_state["summary_complete"] = True
+                            await self.mark_plan_complete()
+                            logger.info("✅ Website review completed successfully")
+                            return False
+
+                    # Get current step
+                    current_step = current_phase["steps"][self.current_step]
+                    logger.info(f"Processing step: {current_step}")
+
+                    # Handle navigation and page readiness
+                    if "navigate" in current_step.lower():
+                        if not self.browser_state.get("current_url"):
+                            next_action = await self.handle_browser_task(current_step)
+                            if next_action:
+                                self.tool_calls = [
+                                    {"name": "browser_use", "arguments": next_action}
+                                ]
+                                self.browser_state["last_action"] = "navigate"
+                                return True
+                            return False
+
+                        if not self.browser_state.get("page_ready"):
+                            # Wait for load to complete after navigation
+                            self.tool_calls = [
+                                {
+                                    "name": "browser_use",
+                                    "arguments": {"action": "wait_for_load"},
+                                }
+                            ]
+                            self.browser_state["page_ready"] = True
+                            return True
+
+                        # Navigation and page load complete, move on
+                        await self.progress_to_next_step()
+                        return True
+
+                    # Ensure page is ready before other actions
+                    if not self.browser_state.get("page_ready"):
+                        logger.info("Waiting for page to be ready before next action")
+                        return True
+
+                    # Execute the current step
+                    if (
+                        "summary.md" in current_step.lower()
+                        or "analysis.md" in current_step.lower()
+                    ):
+                        # These steps don't require page readiness
+                        self.browser_state["page_ready"] = True
                         next_action = await self.handle_browser_task(current_step)
                         if next_action:
                             self.tool_calls = [
                                 {"name": "browser_use", "arguments": next_action}
                             ]
-                            self.browser_state["last_action"] = "navigate"
-                            return True
-                        return False
-
-                    if not self.browser_state.get("page_ready"):
-                        # Wait for load to complete after navigation
-                        self.tool_calls = [
-                            {
-                                "name": "browser_use",
-                                "arguments": {"action": "wait_for_load"},
-                            }
-                        ]
-                        self.browser_state["page_ready"] = True
+                        self.browser_state["last_action"] = current_step
+                        await self.progress_to_next_step()
                         return True
+                    else:
+                        # Normal step execution
+                        next_action = await self.handle_browser_task(current_step)
+                        if next_action:
+                            # Avoid repeating the same action
+                            if self.browser_state.get("last_action") != current_step:
+                                self.tool_calls = [
+                                    {"name": "browser_use", "arguments": next_action}
+                                ]
+                                self.browser_state["last_action"] = current_step
+                                return True
 
-                    # Navigation and page load complete, move on
+                    # Move to next step if current one is complete or has no action
                     await self.progress_to_next_step()
                     return True
 
-                # Ensure page is ready before other actions
-                if not self.browser_state.get("page_ready"):
-                    logger.info("Waiting for page to be ready before next action")
-                    return True
+                return await super().think()
 
-                # Execute the current step
-                if (
-                    "summary.md" in current_step.lower()
-                    or "analysis.md" in current_step.lower()
-                ):
-                    # These steps don't require page readiness
-                    self.browser_state["page_ready"] = True
-                    next_action = await self.handle_browser_task(current_step)
-                    if next_action:
-                        self.tool_calls = [
-                            {"name": "browser_use", "arguments": next_action}
-                        ]
-                    self.browser_state["last_action"] = current_step
-                    await self.progress_to_next_step()
-                    return True
-                else:
-                    # Normal step execution
-                    next_action = await self.handle_browser_task(current_step)
-                    if next_action:
-                        # Avoid repeating the same action
-                        if self.browser_state.get("last_action") != current_step:
-                            self.tool_calls = [
-                                {"name": "browser_use", "arguments": next_action}
-                            ]
-                            self.browser_state["last_action"] = current_step
-                            return True
-
-                # Move to next step if current one is complete or has no action
-                await self.progress_to_next_step()
-                return True
-
-            return await super().think()
+            except Exception as e:
+                logger.error(f"Error processing step: {str(e)}")
+                return False
 
         except AgentTaskComplete as e:
             # Allow task completion exception to propagate
             raise
         except Exception as e:
-            # Handle other errors
             logger.error(f"Error in think(): {str(e)}")
             return False
 
@@ -982,3 +1002,59 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
             self.current_step = 0
             if self.browser_state:
                 self.browser_state["plan_completed"] = True
+
+    def _extract_url_from_request(self, request: str) -> Optional[str]:
+        """Extract URL from user request with enhanced validation."""
+        try:
+            # Common URL patterns
+            import re
+
+            url_patterns = [
+                r'https?://[^\s<>"]+|www\.[^\s<>"]+',  # Standard URLs
+                r'(?<=review\s)[^\s<>"]+',  # URLs after "review"
+                r'(?<=visit\s)[^\s<>"]+',  # URLs after "visit"
+                r'(?<=open\s)[^\s<>"]+',  # URLs after "open"
+                r'(?<=goto\s)[^\s<>"]+',  # URLs after "goto"
+            ]
+
+            # Try each pattern
+            url = None
+            for pattern in url_patterns:
+                matches = re.findall(pattern, request, re.IGNORECASE)
+                if matches:
+                    url = matches[0]
+                    break
+
+            # Fallback to last word if no URL found
+            if not url:
+                words = request.split()
+                url = words[-1].strip(".,\"' ")
+
+            # Clean and normalize URL
+            url = url.rstrip(".,")
+            if not url.startswith(("http://", "https://")):
+                if url.startswith("www."):
+                    url = f"https://{url}"
+                else:
+                    url = f"https://www.{url}"
+
+            # Additional validation
+            valid_tlds = [
+                ".com",
+                ".org",
+                ".net",
+                ".edu",
+                ".gov",
+                ".io",
+                ".ai",
+                ".co",
+            ]
+            if not any(url.lower().endswith(tld) for tld in valid_tlds):
+                url += ".com"  # Default to .com if no valid TLD found
+
+            logger.info(f"Extracted URL from request: {url}")
+            return url
+
+        except Exception as e:
+            logger.error(f"Error extracting URL from request: {str(e)}")
+            return None
