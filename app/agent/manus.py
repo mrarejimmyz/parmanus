@@ -297,7 +297,20 @@ class Manus(ToolCallAgent):
         """Enhanced thinking process with improved state management"""
         try:
             if not self.current_plan:
-                # Post-completion cooldown check
+                # Check for completed state first
+                if self.browser_state and self.browser_state.get("plan_completed"):
+                    # Only log once per completion
+                    if not hasattr(self, "_completion_logged"):
+                        logger.info(
+                            "✅ Task completed successfully - ready for new tasks"
+                        )
+                        self._completion_logged = True
+                    # Raise StopIteration to properly terminate the agent
+                    from app.exceptions import AgentTaskComplete
+
+                    raise AgentTaskComplete("Website review completed successfully")
+
+                # Post-completion cooldown check (will only reach here for new tasks)
                 if hasattr(self, "last_completion_time"):
                     time_since_completion = time.time() - self.last_completion_time
                     if time_since_completion < 2:
@@ -952,9 +965,6 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
                 self.current_phase = 0
                 self.current_step = 0
                 self.tool_calls = []
-
-                # Clear any pending messages or actions
-                self.memory.clear_temp()
 
                 # Log completion with URL info
                 if completed_url:
