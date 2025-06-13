@@ -354,16 +354,19 @@ class Manus(ToolCallAgent):
                     ]
                     return True
 
-                # Check if we're done
+                # Check if we're done with all phases and steps
                 if (
                     self.current_phase >= len(self.current_plan["phases"]) - 1
                     and self.current_step >= len(current_phase["steps"]) - 1
                 ):
                     logger.info("✅ Website review completed successfully")
+                    self.browser_state["analysis_complete"] = True
+                    self.browser_state["summary_complete"] = True
                     return False
 
-                # Progress to next step if no action was needed
-                await self.progress_to_next_step()
+                # Only progress if we're not waiting for page readiness
+                if self.browser_state.get("page_ready"):
+                    await self.progress_to_next_step()
                 return True
 
             return await super().think()
@@ -394,26 +397,25 @@ class Manus(ToolCallAgent):
                         logger.error("No user request found in memory")
                         return None
 
+                    # Get URL from user request and verify it
                     url = user_messages[-1].content.split()[-1]
                     logger.info(f"Navigating to URL: {url}")
 
+                    # Update state and initiate navigation
                     self.browser_state.update(
                         {
                             "current_url": url,
-                            "page_ready": False,  # Will be set to True after navigation completes
+                            "page_ready": False,
                             "last_action": step,
                         }
                     )
                     return {"action": "go_to_url", "url": url}
                 elif not self.browser_state.get("page_ready"):
-                    # Wait for navigation to complete
-                    logger.debug("Waiting for page to be ready...")
-                    return None
-                else:
-                    # Already navigated and ready
-                    logger.debug("Already navigated to website")
+                    # Navigation is complete, mark page as ready
+                    self.browser_state["page_ready"] = True
+                    logger.info("Navigation completed successfully")
                     await self.progress_to_next_step()
-                    return None
+                return None
 
             # Only proceed with other steps if page is ready and we've navigated
             if not self.browser_state.get("current_url"):
