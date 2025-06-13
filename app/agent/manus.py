@@ -297,6 +297,21 @@ class Manus(ToolCallAgent):
         """Enhanced thinking process with improved state management"""
         try:
             if not self.current_plan:
+                # Check if we just completed a plan
+                if (
+                    hasattr(self, "last_completion_time")
+                    and time.time() - self.last_completion_time < 2
+                ):
+                    logger.debug(
+                        "Waiting after plan completion before starting new one"
+                    )
+                    return False
+
+                # Check if browser tasks just completed
+                if self.browser_state and self.browser_state.get("plan_completed"):
+                    logger.debug("Browser tasks already completed, no new plan needed")
+                    return False
+
                 # Get user request from recent messages
                 user_messages = [
                     msg for msg in self.memory.messages if msg.role == "user"
@@ -903,24 +918,46 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
                 # Update todo list one final time
                 await self.update_todo_progress()
 
+                # Ensure all browser actions are complete
+                if self.browser_state and not all(
+                    [
+                        self.browser_state.get("content_extracted", False),
+                        self.browser_state.get("analysis_complete", False),
+                        self.browser_state.get("screenshots_taken", False),
+                        self.browser_state.get("structure_analyzed", False),
+                        self.browser_state.get("summary_complete", False),
+                    ]
+                ):
+                    logger.warning(
+                        "Some browser tasks are incomplete, completing them now"
+                    )
+                    return
+
+                # Mark completion time to prevent immediate restart
+                self.last_completion_time = time.time()
+
                 # Reset state
                 self.current_plan = None
                 self.current_phase = 0
                 self.current_step = 0
 
-                # Clear browser state for website reviews
+                # Clear browser state for website reviews with completion flag
                 if self.browser_state:
                     self.browser_state = {
                         "current_url": None,
-                        "content_extracted": False,
-                        "analysis_complete": False,
-                        "screenshots_taken": False,
+                        "content_extracted": True,
+                        "analysis_complete": True,
+                        "screenshots_taken": True,
                         "last_action": None,
-                        "page_ready": False,
-                        "structure_analyzed": False,
-                        "summary_complete": False,
+                        "page_ready": True,
+                        "structure_analyzed": True,
+                        "summary_complete": True,
+                        "plan_completed": True,
                     }
 
                 logger.info("✅ Plan completed and state reset")
+
+                # Force a small delay before next plan
+                await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Error marking plan complete: {str(e)}")
