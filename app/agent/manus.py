@@ -10,7 +10,7 @@ from app.agent.toolcall import ToolCallAgent
 from app.config import config
 from app.logger import logger
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.reasoning import EnhancedReasoningEngine, TaskPhase
+from app.reasoning import EnhancedReasoningEngine
 from app.schema import Message
 from app.tool import Terminate, ToolCollection
 from app.tool.ask_human import AskHuman
