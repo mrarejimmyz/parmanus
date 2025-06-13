@@ -346,21 +346,26 @@ class Manus(ToolCallAgent):
                 current_step = current_phase["steps"][self.current_step]
                 logger.debug(f"Processing step {self.current_step}: {current_step}")
 
-                # Handle navigation as a special case
+                # Handle any navigation step immediately
                 if (
                     "navigate" in current_step.lower()
                     or current_step == "Navigate to website"
                 ):
+                    logger.info(f"Beginning navigation step: {current_step}")
                     next_action = await self.handle_browser_task(current_step)
                     if next_action:
                         self.tool_calls = [
                             {"name": "browser_use", "arguments": next_action}
                         ]
                         return True
-                    return True
 
-                # For non-navigation steps, require page readiness
+                # For non-navigation steps, require and verify page readiness
                 if not self.browser_state.get("page_ready"):
+                    if self.browser_state.get("current_url"):
+                        # Navigation happened but page not ready yet
+                        self.browser_state["page_ready"] = True
+                        logger.info("Navigation complete, marking page as ready")
+                        await self.progress_to_next_step()
                     logger.debug("Waiting for page to be ready")
                     return True
 
@@ -418,18 +423,40 @@ class Manus(ToolCallAgent):
                         return None
 
                     # Extract URL from user request
-                    message = user_messages[-1].content
-                    url = message.split()[-1].strip()
+                    message = user_messages[-1].content.lower()
+                    words = message.split()
+
+                    # Try to find the URL after "review" or at the end
+                    url = None
+                    try:
+                        if "review" in words:
+                            url_index = words.index("review") + 1
+                            if url_index < len(words):
+                                url = words[url_index]
+                        if not url:
+                            # Fallback to last word
+                            url = words[-1]
+                    except:
+                        url = words[-1]  # Fallback
+
+                    # Normalize URL
+                    if not url:
+                        logger.error("No URL found in user request")
+                        return None
+
+                    # Clean up URL
+                    url = url.rstrip(".")
                     if not url.startswith(("http://", "https://")):
                         url = f"https://{url}"
-                    logger.info(f"Navigating to URL: {url}")
+
+                    logger.info(f"Extracted and navigating to URL: {url}")
 
                     # Update state and initiate navigation
                     self.browser_state.update(
                         {
                             "current_url": url,
                             "page_ready": False,
-                            "last_action": step,
+                            "last_action": None,  # Reset to allow retry if needed
                         }
                     )
                     return {"action": "go_to_url", "url": url}
