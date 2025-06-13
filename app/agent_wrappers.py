@@ -56,10 +56,10 @@ class ParManusAgentWrapper:
         try:
             if not self.agent:
                 # Initialize agent
-                # Manus agent uses the global config directly for workspace_root
-                # max_steps and max_observe are class attributes of Manus
                 if self.agent_class == Manus:
+                    logger.debug("Attempting to create Manus agent...")
                     self.agent = await Manus.create()
+                    logger.debug("Manus agent created successfully.")
                 else:
                     self.agent = self.agent_class()
                 
@@ -71,7 +71,9 @@ class ParManusAgentWrapper:
             return result
             
         except Exception as e:
-            logger.error(f"Error in ParManus agent: {e}")
+            logger.error(f"Error in ParManus agent: {e}", exc_info=True)
+            logger.error(f"Type of error: {type(e)}")
+            logger.error(f"Representation of error: {repr(e)}")
             return f"Error: {e}"
         finally:
             # Cleanup
@@ -100,7 +102,5 @@ def create_agent(agent_name: str, llm, config: Config):
     
     # Fallback to simple agent
     return SimpleAgent(agent_name, llm, config)
-
-
 
 

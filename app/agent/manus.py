@@ -17,7 +17,7 @@ from app.tool.ask_human import AskHuman
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.mcp import MCPClients, MCPClientTool
 from app.tool.python_execute import PythonExecute
-from app.tool.str_replace_editor import StrReplaceEditor
+# from app.tool.str_replace_editor import StrReplaceEditor # Removed
 from app.planning_utils import TaskAnalyzer, PlanGenerator # Import new utilities
 
 
@@ -50,7 +50,7 @@ class Manus(ToolCallAgent):
         default_factory=lambda: ToolCollection(
             PythonExecute(),
             BrowserUseTool(),
-            StrReplaceEditor(),
+            # StrReplaceEditor(), # Removed
             AskHuman(),
             Terminate(),
         )
@@ -196,23 +196,13 @@ class Manus(ToolCallAgent):
 
             todo_content += "\n"
 
-        # Save todo list with UTF-8 encoding
+        # Use direct file write for todo.md
         try:
             with open(self.todo_file_path, "w", encoding="utf-8") as f:
                 f.write(todo_content)
-            logger.info(f"Todo list saved to {self.todo_file_path}")
+            logger.info(f"Todo list saved to {self.todo_file_path}.")
         except Exception as e:
-            logger.warning(f"Could not save todo list: {e}")
-            # Fallback: try with ASCII-only content
-            try:
-                ascii_content = todo_content.encode("ascii", "ignore").decode("ascii")
-                with open(self.todo_file_path, "w", encoding="ascii") as f:
-                    f.write(ascii_content)
-                logger.info(
-                    f"Todo list saved with ASCII encoding to {self.todo_file_path}"
-                )
-            except Exception as e2:
-                logger.error(f"Failed to save todo list even with ASCII: {e2}")
+            logger.error(f"Error saving todo list: {e}", exc_info=True)
 
         return todo_content
 
@@ -222,20 +212,19 @@ class Manus(ToolCallAgent):
             return
 
         try:
-            # Read current todo
+            # Read current todo content directly
             if os.path.exists(self.todo_file_path):
                 with open(self.todo_file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                    current_content = f.read()
 
-                # Update phase status
-                lines = content.split("\n")
+                # Update phase status and step checkboxes in memory
+                lines = current_content.split("\n")
                 updated_lines = []
 
                 for line in lines:
                     # Update phase status indicators
                     if line.startswith("## Phase"):
                         try:
-                            # EMERGENCY FIX: Add bounds checking
                             phase_parts = line.split()
                             if len(phase_parts) >= 3:
                                 phase_num = int(phase_parts[2].rstrip(":"))
@@ -264,17 +253,15 @@ class Manus(ToolCallAgent):
                                         updated_lines[k] = line.replace(old_checkbox, new_checkbox)
                                         break
 
-                updated_content = "\n".join(updated_lines)
+                new_todo_content = "\n".join(updated_lines)
 
+                # Use direct file write to update the file
                 with open(self.todo_file_path, "w", encoding="utf-8") as f:
-                    f.write(updated_content)
-                logger.info(f"Todo list updated at {self.todo_file_path}")
-
+                    f.write(new_todo_content)
+                logger.info(f"Todo list updated at {self.todo_file_path}.")
             else:
-                logger.warning(f"Todo file not found at {self.todo_file_path}")
+                logger.warning(f"Todo file not found at {self.todo_file_path}, cannot update.")
         except Exception as e:
-            logger.error(f"Error updating todo list: {e}")
-
-
+            logger.error(f"Error updating todo list: {e}", exc_info=True)
 
 
