@@ -134,7 +134,7 @@ class Manus(ToolCallAgent):
         return todo_content
     
     async def update_todo_progress(self):
-        """Update todo list to reflect current progress"""
+        """Update todo list to reflect current progress - FIXED VERSION"""
         if not self.current_plan:
             return
         
@@ -151,12 +151,20 @@ class Manus(ToolCallAgent):
                 for line in lines:
                     # Update phase status indicators
                     if line.startswith("## Phase"):
-                        phase_num = int(line.split()[2].rstrip(':'))
-                        if phase_num <= self.current_phase + 1:
-                            if "[PENDING]" in line:
-                                line = line.replace("[PENDING]", "[CURRENT]" if phase_num == self.current_phase + 1 else "[COMPLETE]")
-                            elif "[CURRENT]" in line and phase_num < self.current_phase + 1:
-                                line = line.replace("[CURRENT]", "[COMPLETE]")
+                        try:
+                            # EMERGENCY FIX: Add bounds checking
+                            phase_parts = line.split()
+                            if len(phase_parts) >= 3:
+                                phase_num = int(phase_parts[2].rstrip(':'))
+                                # EMERGENCY FIX: Check bounds before accessing phases
+                                if phase_num <= len(self.current_plan['phases']):
+                                    if phase_num <= self.current_phase + 1:
+                                        if "[PENDING]" in line:
+                                            line = line.replace("[PENDING]", "[CURRENT]" if phase_num == self.current_phase + 1 else "[COMPLETE]")
+                                        elif "[CURRENT]" in line and phase_num < self.current_phase + 1:
+                                            line = line.replace("[CURRENT]", "[COMPLETE]")
+                        except (ValueError, IndexError) as e:
+                            logger.warning(f"Could not parse phase number from line: {line}, error: {e}")
                     
                     updated_lines.append(line)
                 
@@ -166,6 +174,23 @@ class Manus(ToolCallAgent):
                     
         except Exception as e:
             logger.warning(f"Could not update todo progress: {e}")
+            # EMERGENCY FIX: Create a simple fallback todo update
+            try:
+                fallback_content = f"""# Task Progress Update
+
+## Current Status:
+- Phase: {self.current_phase + 1}/{len(self.current_plan['phases'])}
+- Step: {self.current_step + 1}
+- Goal: {self.current_plan.get('goal', 'Unknown')}
+
+## Progress:
+Task is running but todo update failed. Check logs for details.
+"""
+                with open(self.todo_file_path, 'w', encoding='utf-8') as f:
+                    f.write(fallback_content)
+                logger.info(f"Created fallback todo update at {self.todo_file_path}")
+            except Exception as e2:
+                logger.error(f"Even fallback todo update failed: {e2}")
     
     async def get_current_phase_guidance(self) -> str:
         """Get guidance for the current phase"""
@@ -182,11 +207,21 @@ class Manus(ToolCallAgent):
         )
     
     async def advance_step(self):
-        """Advance to the next step or phase"""
+        """Advance to the next step or phase - FIXED VERSION"""
         if not self.current_plan:
             return
         
+        # EMERGENCY FIX: Add bounds checking for phases
+        if self.current_phase >= len(self.current_plan['phases']):
+            logger.info("All phases completed - no more phases to advance to")
+            return
+        
         current_phase_info = self.current_plan['phases'][self.current_phase]
+        
+        # EMERGENCY FIX: Add bounds checking for steps
+        if 'steps' not in current_phase_info:
+            logger.warning(f"Phase {self.current_phase + 1} has no steps defined")
+            return
         
         # Check if current phase is complete
         if self.current_step >= len(current_phase_info['steps']) - 1:

@@ -308,15 +308,34 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         """
         async with self.lock:
             try:
-                # Action deduplication check to prevent loops
+                # Action deduplication check to prevent loops - ENHANCED VERSION
                 current_time = time.time()
                 current_action_key = f"{action}:{url or ''}"
                 
+                # EMERGENCY FIX: Enhanced rate limiting for browser actions
                 if (self.last_action == current_action_key and 
                     current_time - self.last_action_time < self.action_cooldown):
+                    # Add exponential backoff for repeated actions
+                    wait_time = min(self.action_cooldown * 2, 10)  # Max 10 seconds
                     return ToolResult(
-                        error=f"Action '{action}' was just performed. Please try a different approach or wait before retrying."
+                        error=f"Action '{action}' was just performed. Please wait {wait_time:.1f} seconds before retrying or try a different approach."
                     )
+                
+                # EMERGENCY FIX: Detect infinite loops of same action
+                if hasattr(self, 'action_history'):
+                    self.action_history.append(current_action_key)
+                    # Keep only last 5 actions
+                    if len(self.action_history) > 5:
+                        self.action_history.pop(0)
+                    
+                    # Check for repeated patterns
+                    if len(self.action_history) >= 3:
+                        if all(action_key == current_action_key for action_key in self.action_history[-3:]):
+                            return ToolResult(
+                                error=f"Detected infinite loop: action '{action}' repeated 3+ times. Please try a completely different approach."
+                            )
+                else:
+                    self.action_history = [current_action_key]
                 
                 # Update action tracking
                 self.last_action = current_action_key
