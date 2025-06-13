@@ -43,7 +43,7 @@ async def initialize_system(args) -> tuple[Config, Any, Any]:
         logger.error("And the model is available: ollama pull llama3.2-vision")
         sys.exit(1)
 
-    memory = Memory(config)
+    memory = Memory() # Removed config as initial_prompt
     return config, llm, memory
 
 
