@@ -7,11 +7,12 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.exceptions import AgentTaskComplete
+from app.intelligent_error_handler import AdaptiveRecoverySystem
 from app.llm import LLM
 from app.logger import logger
 from app.sandbox.client import SANDBOX_CLIENT
 from app.schema import ROLE_TYPE, AgentState, Memory, Message
-from app.intelligent_error_handler import AdaptiveRecoverySystem
 
 
 class CircuitBreaker:
@@ -201,7 +202,9 @@ class BaseAgent(BaseModel, ABC):
     # Enhanced reliability features
     circuit_breaker: CircuitBreaker = Field(default_factory=CircuitBreaker)
     stuck_detector: StuckStateDetector = Field(default_factory=StuckStateDetector)
-    adaptive_recovery: AdaptiveRecoverySystem = Field(default_factory=AdaptiveRecoverySystem)
+    adaptive_recovery: AdaptiveRecoverySystem = Field(
+        default_factory=AdaptiveRecoverySystem
+    )
     performance_metrics: Dict[str, Any] = Field(default_factory=dict)
 
     class Config:
@@ -304,6 +307,12 @@ class BaseAgent(BaseModel, ABC):
                         logger.error(
                             f"Step {self.current_step} timed out after 60 seconds"
                         )
+                    except AgentTaskComplete as e:
+                        # Handle successful task completion
+                        logger.info(f"✅ Agent {self.name} task completed: {e.message}")
+                        self.state = AgentState.FINISHED
+                        results.append(f"Task completed: {e.message}")
+                        return "\n".join(results)
                     except Exception as step_error:
                         step_result = f"Step {self.current_step} failed with error: {str(step_error)}"
                         logger.error(
@@ -321,22 +330,24 @@ class BaseAgent(BaseModel, ABC):
                     self.performance_metrics["successful_steps"] += 1
                     self.circuit_breaker.call_succeeded()
 
-                    # Add to stuck detector
-                    self.stuck_detector.add_response(step_result)
+                    # Skip stuck detection for completed tasks
+                    if self.state != AgentState.FINISHED:
+                        # Add to stuck detector
+                        self.stuck_detector.add_response(step_result)
 
-                    # Check for stuck state
-                    if self.stuck_detector.is_stuck():
-                        logger.warning(
-                            f"Stuck state detected in step {self.current_step}"
-                        )
-                        recovery_success = await self.handle_stuck_state_advanced()
-                        if recovery_success:
-                            self.performance_metrics["stuck_recoveries"] += 1
-                        else:
-                            logger.error(
-                                "Failed to recover from stuck state, terminating"
+                        # Check for stuck state
+                        if self.stuck_detector.is_stuck():
+                            logger.warning(
+                                f"Stuck state detected in step {self.current_step}"
                             )
-                            break
+                            recovery_success = await self.handle_stuck_state_advanced()
+                            if recovery_success:
+                                self.performance_metrics["stuck_recoveries"] += 1
+                            else:
+                                logger.error(
+                                    "Failed to recover from stuck state, terminating"
+                                )
+                                break
 
                     results.append(f"Step {self.current_step}: {step_result}")
 
@@ -346,7 +357,17 @@ class BaseAgent(BaseModel, ABC):
                             f"Step {self.current_step} took {step_duration:.1f}s"
                         )
 
+                except AgentTaskComplete as e:
+                    # Handle successful task completion in outer block
+                    logger.info(f"✅ Agent {self.name} task completed: {e.message}")
+                    self.state = AgentState.FINISHED
+                    self.performance_metrics["successful_steps"] += 1
+                    results.append(f"Task completed: {e.message}")
+                    return "\n".join(results)
                 except Exception as e:
+                    # Don't treat AgentTaskComplete as an error
+                    if isinstance(e, AgentTaskComplete):
+                        raise
                     logger.error(f"Step {self.current_step} failed: {e}", exc_info=True)
                     self.performance_metrics["failed_steps"] += 1
                     self.circuit_breaker.call_failed()
@@ -392,16 +413,23 @@ class BaseAgent(BaseModel, ABC):
         # Analyze recent actions to determine recovery strategy
         recent_responses = list(self.stuck_detector.recent_responses)
         recent_actions = list(self.stuck_detector.recent_actions)
-        
+
         # Strategy 1: Browser tool specific recovery
-        browser_actions = ["go_to_url", "extract_content", "click_element", "input_text"]
+        browser_actions = [
+            "go_to_url",
+            "extract_content",
+            "click_element",
+            "input_text",
+        ]
         if any(action in str(recent_actions) for action in browser_actions):
-            logger.info("Detected browser tool stuck state, applying browser-specific recovery")
-            
+            logger.info(
+                "Detected browser tool stuck state, applying browser-specific recovery"
+            )
+
             # Clear browser-related memory
             if len(self.memory.messages) > 5:
                 self.memory.messages = self.memory.messages[:-2]
-            
+
             # Add browser-specific guidance
             browser_recovery_prompts = [
                 "The browser tool seems to be having issues. Try using basic page content extraction instead of complex extraction goals.",
@@ -409,38 +437,49 @@ class BaseAgent(BaseModel, ABC):
                 "Content extraction is not working. Try scrolling the page or waiting for it to load completely before extracting content.",
                 "Switch to a different browser action or try the same action with different parameters.",
             ]
-            
+
             import random
+
             recovery_prompt = random.choice(browser_recovery_prompts)
-            self.next_step_prompt = f"{recovery_prompt}\n\nOriginal task: {self.next_step_prompt}"
-            
+            self.next_step_prompt = (
+                f"{recovery_prompt}\n\nOriginal task: {self.next_step_prompt}"
+            )
+
         # Strategy 2: Tool failure recovery
-        elif "failed" in str(recent_responses).lower() or "error" in str(recent_responses).lower():
-            logger.info("Detected tool failure pattern, applying tool-specific recovery")
-            
+        elif (
+            "failed" in str(recent_responses).lower()
+            or "error" in str(recent_responses).lower()
+        ):
+            logger.info(
+                "Detected tool failure pattern, applying tool-specific recovery"
+            )
+
             # More aggressive memory clearing for tool failures
             if len(self.memory.messages) > 8:
                 self.memory.messages = self.memory.messages[:-4]
-            
+
             tool_recovery_prompts = [
                 "The current tool approach is not working. Try using a completely different tool or method.",
                 "Tool execution is failing repeatedly. Break down the task into smaller steps using different tools.",
                 "Switch to a manual approach or use simpler tool operations.",
                 "The current strategy is not effective. Try a fundamentally different approach to achieve the same goal.",
             ]
-            
+
             import random
+
             recovery_prompt = random.choice(tool_recovery_prompts)
-            self.next_step_prompt = f"{recovery_prompt}\n\nOriginal task: {self.next_step_prompt}"
-            
+            self.next_step_prompt = (
+                f"{recovery_prompt}\n\nOriginal task: {self.next_step_prompt}"
+            )
+
         # Strategy 3: Generic stuck state recovery (fallback)
         else:
             logger.info("Applying generic stuck state recovery")
-            
+
             # Standard memory clearing
             if len(self.memory.messages) > 10:
                 self.memory.messages = self.memory.messages[:-3]
-            
+
             # Generic recovery prompts
             randomization_prompts = [
                 "Try a completely different approach to solve this problem.",
@@ -449,16 +488,21 @@ class BaseAgent(BaseModel, ABC):
                 "Use a different strategy or tool to make progress.",
                 "Break down the problem into smaller, different steps.",
             ]
-            
+
             import random
+
             random_prompt = random.choice(randomization_prompts)
-            self.next_step_prompt = f"{random_prompt}\n\nOriginal task: {self.next_step_prompt}"
+            self.next_step_prompt = (
+                f"{random_prompt}\n\nOriginal task: {self.next_step_prompt}"
+            )
 
         # Strategy 4: Lower circuit breaker threshold temporarily
-        if hasattr(self, 'circuit_breaker'):
+        if hasattr(self, "circuit_breaker"):
             original_threshold = self.circuit_breaker.failure_threshold
             self.circuit_breaker.failure_threshold = max(1, original_threshold - 1)
-            logger.info(f"Temporarily lowered circuit breaker threshold from {original_threshold} to {self.circuit_breaker.failure_threshold}")
+            logger.info(
+                f"Temporarily lowered circuit breaker threshold from {original_threshold} to {self.circuit_breaker.failure_threshold}"
+            )
 
         # Strategy 5: Reset stuck detector
         self.stuck_detector.reset()
