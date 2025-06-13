@@ -312,18 +312,24 @@ class Manus(ToolCallAgent):
 
             task_type = self.current_plan.get("task_type")
             if task_type == "website_review":
+                # Check completion state first
+                if self.browser_state.get(
+                    "analysis_complete"
+                ) and self.browser_state.get("summary_complete"):
+                    logger.info("✅ Website review already completed")
+                    return False
+
                 # Validate current phase and step
                 if self.current_phase >= len(self.current_plan["phases"]):
-                    logger.error("Current phase index out of range")
+                    logger.info("✅ Website review completed - all phases done")
                     return False
 
                 current_phase = self.current_plan["phases"][self.current_phase]
 
-                # Check if we need to move to the next phase
+                # Check if current phase is complete
                 if not current_phase.get("steps") or self.current_step >= len(
                     current_phase["steps"]
                 ):
-                    logger.debug("Reached end of current phase steps")
                     if self.current_phase + 1 < len(self.current_plan["phases"]):
                         self.current_phase += 1
                         self.current_step = 0
@@ -331,9 +337,9 @@ class Manus(ToolCallAgent):
                         await self.update_todo_progress()
                         return True
                     else:
-                        logger.info(
-                            "✅ Website review completed successfully - all phases done"
-                        )
+                        self.browser_state["analysis_complete"] = True
+                        self.browser_state["summary_complete"] = True
+                        logger.info("✅ Website review completed successfully")
                         return False
 
                 # Get current step
@@ -392,9 +398,21 @@ class Manus(ToolCallAgent):
                 )
                 return {"action": "go_to_url", "url": url}
 
-            # Only proceed if page is ready
-            if not self.browser_state.get("page_ready"):
-                logger.warning("Page not ready, waiting for navigation")
+            # Handle initial navigation step specially
+            if step == "Navigate to website":
+                if not self.browser_state["page_ready"]:
+                    url = user_messages[-1].content.split()[-1]
+                    self.browser_state.update(
+                        {"current_url": url, "page_ready": True, "last_action": step}
+                    )
+                    return {"action": "go_to_url", "url": url}
+                return None  # Already navigated
+
+            # Only proceed with other steps if page is ready and we've navigated
+            if not self.browser_state.get("page_ready") or not self.browser_state.get(
+                "current_url"
+            ):
+                logger.warning("Page not ready or no URL set, waiting for navigation")
                 return None
 
             # Validate current phase and step
@@ -407,7 +425,8 @@ class Manus(ToolCallAgent):
             if not current_phase.get("steps") or self.current_step >= len(
                 current_phase["steps"]
             ):
-                logger.error("Current step index out of range")
+                logger.debug("Current step index out of range, moving to next phase")
+                await self.progress_to_next_step()
                 return None
 
             # Skip duplicate actions
