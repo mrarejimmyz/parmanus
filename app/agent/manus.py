@@ -408,15 +408,31 @@ class Manus(ToolCallAgent):
                     return True
 
                 # Execute the current step
-                next_action = await self.handle_browser_task(current_step)
-                if next_action:
-                    # Avoid repeating the same action
-                    if self.browser_state.get("last_action") != current_step:
+                if (
+                    "summary.md" in current_step.lower()
+                    or "analysis.md" in current_step.lower()
+                ):
+                    # These steps don't require page readiness
+                    self.browser_state["page_ready"] = True
+                    next_action = await self.handle_browser_task(current_step)
+                    if next_action:
                         self.tool_calls = [
                             {"name": "browser_use", "arguments": next_action}
                         ]
-                        self.browser_state["last_action"] = current_step
-                        return True
+                    self.browser_state["last_action"] = current_step
+                    await self.progress_to_next_step()
+                    return True
+                else:
+                    # Normal step execution
+                    next_action = await self.handle_browser_task(current_step)
+                    if next_action:
+                        # Avoid repeating the same action
+                        if self.browser_state.get("last_action") != current_step:
+                            self.tool_calls = [
+                                {"name": "browser_use", "arguments": next_action}
+                            ]
+                            self.browser_state["last_action"] = current_step
+                            return True
 
                 # Move to next step if current one is complete or has no action
                 await self.progress_to_next_step()
