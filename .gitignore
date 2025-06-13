@@ -220,3 +220,4 @@ models/llava-1.6-mistral-7b-gguf
 verify_gpy.py
 
 models/Llama-3.2-11B-Vision-Instruct.Q4_K_M.gguf
+sessions/last_session.json

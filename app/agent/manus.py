@@ -297,43 +297,63 @@ class Manus(ToolCallAgent):
             await self.create_todo_list(self.current_plan)
             return True
 
-        current_phase = self.current_plan["phases"][self.current_phase]
-        current_step = current_phase["steps"][self.current_step]
+        task_type = self.current_plan.get("task_type")
+        if task_type == "website_review":
+            current_phase = self.current_plan["phases"][self.current_phase]
+            current_step = current_phase["steps"][self.current_step]
 
-        # Handle website reviews with improved state management
-        if self.current_plan.get("task_type") == "website_review":
             next_action = await self.handle_browser_task(current_step)
             if next_action:
                 self.tool_calls = [{"name": "browser_use", "arguments": next_action}]
                 return True
-            else:
-                # Move to next step/phase
-                if self.current_step + 1 < len(current_phase["steps"]):
-                    self.current_step += 1
-                elif self.current_phase + 1 < len(self.current_plan["phases"]):
-                    self.current_phase += 1
-                    self.current_step = 0
-                else:
-                    logger.info("✅ Website review completed successfully")
-                    return False
+
+            # Check if we're done
+            if (
+                self.current_phase >= len(self.current_plan["phases"]) - 1
+                and self.current_step >= len(current_phase["steps"]) - 1
+            ):
+                logger.info("✅ Website review completed successfully")
+                return False
+
+            # Continue to next step
+            return True
 
         return await super().think()
 
     async def handle_browser_task(self, step: str) -> Optional[Dict]:
         """Advanced browser task handling with state management"""
-        # Skip if same action was just performed
+        logger.debug(f"Handling browser task: {step}")
+        logger.debug(f"Current browser state: {self._browser_state}")
+
+        # Reset if we're starting a new review
+        if step == "Navigate to website" and not self._browser_state["page_ready"]:
+            url = self.memory.get_user_request().split()[-1]
+            self._browser_state.update(
+                {"current_url": url, "page_ready": True, "last_action": step}
+            )
+            return {"action": "go_to_url", "url": url}
+
+        # Only proceed if page is ready
+        if not self._browser_state.get("page_ready"):
+            logger.warning("Page not ready, waiting for navigation")
+            return None
+
+        # Skip duplicate actions
         if self._browser_state.get("last_action") == step:
+            logger.debug(f"Skipping duplicate action: {step}")
+            # Move to next step
+            current_phase = self.current_plan["phases"][self.current_phase]
+            if self.current_step + 1 < len(current_phase["steps"]):
+                self.current_step += 1
+            elif self.current_phase + 1 < len(self.current_plan["phases"]):
+                self.current_phase += 1
+                self.current_step = 0
             return None
 
         self._browser_state["last_action"] = step
 
-        if step == "Navigate to website":
-            if not self._browser_state["current_url"]:
-                url = self.memory.get_user_request().split()[-1]
-                self._browser_state["current_url"] = url
-                return {"action": "go_to_url", "url": url}
-
-        elif (
+        # Handle each step appropriately
+        if (
             step == "Extract main content"
             and not self._browser_state["content_extracted"]
         ):
@@ -353,29 +373,59 @@ class Manus(ToolCallAgent):
                 "path": os.path.join(config.workspace_root, "screenshots"),
             }
 
-        elif "analysis.md" in step and not self._browser_state["analysis_complete"]:
+        elif step == "Analyze page structure" and not self._browser_state.get(
+            "structure_analyzed"
+        ):
+            self._browser_state["structure_analyzed"] = True
+            content_path = os.path.join(config.workspace_root, "analysis")
+            os.makedirs(content_path, exist_ok=True)
+            return {"action": "analyze_structure", "output_path": content_path}
+
+        elif (
+            "Generate analysis.md" in step
+            and not self._browser_state["analysis_complete"]
+        ):
             self._browser_state["analysis_complete"] = True
-            return {
-                "action": "create_file",
-                "path": os.path.join(config.workspace_root, "analysis.md"),
-                "content": self.generate_analysis_report(),
-            }
+            analysis_path = os.path.join(config.workspace_root, "analysis.md")
+            report = self.generate_analysis_report()
+            with open(analysis_path, "w", encoding="utf-8") as f:
+                f.write(report)
+            logger.info(f"Analysis report generated at {analysis_path}")
+            return None
+
+        elif "Create summary.md" in step and not self._browser_state.get(
+            "summary_complete"
+        ):
+            self._browser_state["summary_complete"] = True
+            summary_path = os.path.join(config.workspace_root, "summary.md")
+            with open(summary_path, "w", encoding="utf-8") as f:
+                f.write(self.generate_summary())
+            logger.info(f"Summary generated at {summary_path}")
+            return None
+
+        # Move to next step if current one is complete
+        current_phase = self.current_plan["phases"][self.current_phase]
+        if self.current_step + 1 < len(current_phase["steps"]):
+            self.current_step += 1
+        elif self.current_phase + 1 < len(self.current_plan["phases"]):
+            self.current_phase += 1
+            self.current_step = 0
 
         return None
 
-    def generate_analysis_report(self) -> str:
-        """Generate a comprehensive analysis report"""
-        content = f"# Website Analysis Report\n\n"
-        content += f"## Overview\n"
-        content += f"URL: {self._browser_state.get('current_url')}\n"
-        content += f"Analysis Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    def generate_summary(self) -> str:
+        """Generate a concise summary of the website review"""
+        return f"""# Website Review Summary
 
-        if self._browser_state.get("content_extracted"):
-            content += "## Content Analysis\n"
-            content += "Main content has been extracted and analyzed.\n\n"
+## Overview
+- URL: {self._browser_state.get('current_url')}
+- Review Date: {time.strftime('%Y-%m-%d %H:%M:%S')}
 
-        if self._browser_state.get("screenshots_taken"):
-            content += "## Visual Documentation\n"
-            content += "Screenshots have been captured and saved.\n"
+## Key Findings
+- Content Extraction: {"Complete" if self._browser_state.get('content_extracted') else "Pending"}
+- Visual Documentation: {"Complete" if self._browser_state.get('screenshots_taken') else "Pending"}
+- Structure Analysis: {"Complete" if self._browser_state.get('structure_analyzed') else "Pending"}
 
-        return content
+## Status
+Review Status: {"Complete" if self._browser_state.get('analysis_complete') else "In Progress"}
+"""
