@@ -162,7 +162,7 @@ class Manus(ToolCallAgent):
         self.current_step = 0
 
         logger.info(
-            f"🚀 STRATEGIC EXECUTION PLAN READY: {len(plan["phases"])} optimized phases"
+            "🚀 STRATEGIC EXECUTION PLAN READY: {} optimized phases".format(len(plan["phases"]))
         )
         return plan
 
