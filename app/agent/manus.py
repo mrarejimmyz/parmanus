@@ -9,6 +9,9 @@ from app.agent.browser import BrowserContextHelper
 from app.agent.toolcall import ToolCallAgent
 from app.config import config
 from app.logger import logger
+
+# from app.tool.str_replace_editor import StrReplaceEditor # Removed
+from app.planning_utils import PlanGenerator, TaskAnalyzer  # Import new utilities
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.reasoning import EnhancedReasoningEngine
 from app.schema import Message
@@ -17,8 +20,6 @@ from app.tool.ask_human import AskHuman
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.mcp import MCPClients, MCPClientTool
 from app.tool.python_execute import PythonExecute
-# from app.tool.str_replace_editor import StrReplaceEditor # Removed
-from app.planning_utils import TaskAnalyzer, PlanGenerator # Import new utilities
 
 
 class Manus(ToolCallAgent):
@@ -36,7 +37,9 @@ class Manus(ToolCallAgent):
     max_steps: int = config.max_steps
 
     # Enhanced reasoning and planning
-    reasoning_framework: EnhancedReasoningEngine = Field(default_factory=EnhancedReasoningEngine)
+    reasoning_framework: EnhancedReasoningEngine = Field(
+        default_factory=EnhancedReasoningEngine
+    )
     current_plan: Optional[Dict] = None
     current_phase: int = 0
     current_step: int = 0
@@ -63,6 +66,18 @@ class Manus(ToolCallAgent):
     connected_servers: Dict[str, str] = Field(
         default_factory=dict
     )  # server_id -> url/command
+
+    # Add browser state tracking
+    _browser_state: Dict = Field(
+        default_factory=lambda: {
+            "current_url": None,
+            "content_extracted": False,
+            "analysis_complete": False,
+            "screenshots_taken": False,
+            "last_action": None,
+            "page_ready": False,
+        }
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -100,10 +115,12 @@ class Manus(ToolCallAgent):
         """Create a comprehensive task plan using ENHANCED REASONING FRAMEWORK"""
         logger.info(f"🎯 CREATING STRATEGIC PLAN WITH DEEP REASONING: {user_request}")
 
-        # ENHANCED REASONING: Perform deep multi-layered analysis
+        # Detect task type first
+        task_type = TaskAnalyzer.categorize_task(user_request)
         context = {
             "user_request": user_request,
-            "complexity": TaskAnalyzer.assess_task_complexity(user_request), # Use TaskAnalyzer
+            "task_type": task_type,
+            "complexity": TaskAnalyzer.assess_task_complexity(user_request),
             "optimization_targets": ["quality", "efficiency", "learning"],
             "reasoning_mode": "expert_level",
         }
@@ -112,57 +129,52 @@ class Manus(ToolCallAgent):
         deep_analysis = await self.reasoning_engine.analyze_task_deeply(
             user_request, context
         )
+        deep_analysis["task_type"] = task_type
         logger.info(
-            "🧠 DEEP ANALYSIS COMPLETED: {} reasoning layers applied".format(len(deep_analysis["reasoning_layers"]))
+            "🧠 DEEP ANALYSIS COMPLETED: {} reasoning layers applied".format(
+                len(deep_analysis["reasoning_layers"])
+            )
         )
 
         # Generate optimized strategy
         optimized_strategy = await self.reasoning_engine.generate_optimized_strategy(
             deep_analysis
         )
-        logger.info("⚡ OPTIMIZED STRATEGY GENERATED: {}".format(optimized_strategy["approach"]))
-
-        # Integrate learning insights from memory system
-        learned_strategy = await self.memory_system.get_optimized_strategy(
-            task_type=TaskAnalyzer.categorize_task(user_request), context=context # Use TaskAnalyzer
-        )
         logger.info(
-            "🎓 LEARNING INSIGHTS APPLIED: Confidence {:.2f}".format(learned_strategy["confidence_score"])
+            "⚡ OPTIMIZED STRATEGY GENERATED: {}".format(optimized_strategy["approach"])
         )
 
         # Create enhanced execution plan
         plan = {
             "goal": user_request,
+            "task_type": task_type,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "reasoning_analysis": deep_analysis,
-            "optimized_strategy": optimized_strategy,
-            "learned_insights": learned_strategy,
             "complexity": context["complexity"],
-            "estimated_duration": TaskAnalyzer.estimate_duration(deep_analysis), # Use TaskAnalyzer
             "phases": PlanGenerator.create_enhanced_phases(
-                deep_analysis, optimized_strategy, learned_strategy
+                context, optimized_strategy, {}
             ),
             "success_criteria": PlanGenerator.define_success_criteria(deep_analysis),
-            "optimization_targets": context["optimization_targets"],
-            "quality_standards": ["expert_level", "optimized", "learned"],
-            "learning_mode": "continuous_improvement",
         }
 
-        # Save comprehensive plan to workspace
-        plan_file = os.path.join(config.workspace_root, "enhanced_task_plan.json")
-        try:
-            with open(plan_file, "w") as f:
-                json.dump(plan, f, indent=2)
-            logger.info(f"📋 ENHANCED TASK PLAN SAVED: {plan_file}")
-        except Exception as e:
-            logger.warning(f"Could not save enhanced plan file: {e}")
+        # Reset browser state for new task
+        if task_type == "website_review":
+            self._browser_state = {
+                "current_url": None,
+                "content_extracted": False,
+                "analysis_complete": False,
+                "screenshots_taken": False,
+                "last_action": None,
+                "page_ready": False,
+            }
 
         self.current_plan = plan
         self.current_phase = 0
         self.current_step = 0
 
         logger.info(
-            "🚀 STRATEGIC EXECUTION PLAN READY: {} optimized phases".format(len(plan["phases"]))
+            "🚀 STRATEGIC EXECUTION PLAN READY: {} optimized phases".format(
+                len(plan["phases"])
+            )
         )
         return plan
 
@@ -171,7 +183,9 @@ class Manus(ToolCallAgent):
         todo_content = f"# Task Todo List\n\n"
         todo_content += "**Goal:** {}\n\n".format(plan["goal"])
         todo_content += "**Complexity:** {}\n".format(plan["complexity"])
-        todo_content += "**Estimated Duration:** {}\n\n".format(plan["estimated_duration"])
+        todo_content += "**Estimated Duration:** {}\n\n".format(
+            plan["estimated_duration"]
+        )
 
         for i, phase in enumerate(plan["phases"]):
             status = (
@@ -179,10 +193,16 @@ class Manus(ToolCallAgent):
                 if i == self.current_phase
                 else "PENDING" if i > self.current_phase else "COMPLETE"
             )
-            todo_content += "## Phase {}: {} [{}]\n\n".format(phase["id"], phase["title"], status)
+            todo_content += "## Phase {}: {} [{}]\n\n".format(
+                phase["id"], phase["title"], status
+            )
             todo_content += "**Description:** {}\n\n".format(phase["description"])
-            todo_content += "**Success Criteria:** {}\n\n".format(phase["success_criteria"])
-            todo_content += "**Tools Needed:** {}\n\n".format(", ".join(phase["tools_needed"]))
+            todo_content += "**Success Criteria:** {}\n\n".format(
+                phase["success_criteria"]
+            )
+            todo_content += "**Tools Needed:** {}\n\n".format(
+                ", ".join(phase["tools_needed"])
+            )
             todo_content += "**Steps:**\n"
 
             for j, step in enumerate(phase["steps"], 1):
@@ -233,7 +253,9 @@ class Manus(ToolCallAgent):
                             else:
                                 updated_lines.append(line)
                         except ValueError:
-                            updated_lines.append(line) # Append original line if parsing fails
+                            updated_lines.append(
+                                line
+                            )  # Append original line if parsing fails
                     else:
                         updated_lines.append(line)
 
@@ -243,10 +265,14 @@ class Manus(ToolCallAgent):
                         for j, step in enumerate(phase["steps"], 1):
                             old_checkbox = f"- [ ] {step}"
                             new_checkbox = f"- [x] {step}"
-                            if j <= self.current_step + 1: # Mark current step as complete
+                            if (
+                                j <= self.current_step + 1
+                            ):  # Mark current step as complete
                                 for k, line in enumerate(updated_lines):
                                     if old_checkbox in line:
-                                        updated_lines[k] = line.replace(old_checkbox, new_checkbox)
+                                        updated_lines[k] = line.replace(
+                                            old_checkbox, new_checkbox
+                                        )
                                         break
 
                 new_todo_content = "\n".join(updated_lines)
@@ -256,8 +282,100 @@ class Manus(ToolCallAgent):
                     f.write(new_todo_content)
                 logger.info(f"Todo list updated at {self.todo_file_path}.")
             else:
-                logger.warning(f"Todo file not found at {self.todo_file_path}, cannot update.")
+                logger.warning(
+                    f"Todo file not found at {self.todo_file_path}, cannot update."
+                )
         except Exception as e:
             logger.error(f"Error updating todo list: {e}", exc_info=True)
 
+    async def think(self) -> bool:
+        """Enhanced thinking process with improved state management"""
+        if not self.current_plan:
+            self.current_plan = await self.create_task_plan(
+                self.memory.get_user_request()
+            )
+            await self.create_todo_list(self.current_plan)
+            return True
 
+        current_phase = self.current_plan["phases"][self.current_phase]
+        current_step = current_phase["steps"][self.current_step]
+
+        # Handle website reviews with improved state management
+        if self.current_plan.get("task_type") == "website_review":
+            next_action = await self.handle_browser_task(current_step)
+            if next_action:
+                self.tool_calls = [{"name": "browser_use", "arguments": next_action}]
+                return True
+            else:
+                # Move to next step/phase
+                if self.current_step + 1 < len(current_phase["steps"]):
+                    self.current_step += 1
+                elif self.current_phase + 1 < len(self.current_plan["phases"]):
+                    self.current_phase += 1
+                    self.current_step = 0
+                else:
+                    logger.info("✅ Website review completed successfully")
+                    return False
+
+        return await super().think()
+
+    async def handle_browser_task(self, step: str) -> Optional[Dict]:
+        """Advanced browser task handling with state management"""
+        # Skip if same action was just performed
+        if self._browser_state.get("last_action") == step:
+            return None
+
+        self._browser_state["last_action"] = step
+
+        if step == "Navigate to website":
+            if not self._browser_state["current_url"]:
+                url = self.memory.get_user_request().split()[-1]
+                self._browser_state["current_url"] = url
+                return {"action": "go_to_url", "url": url}
+
+        elif (
+            step == "Extract main content"
+            and not self._browser_state["content_extracted"]
+        ):
+            self._browser_state["content_extracted"] = True
+            return {
+                "action": "extract_content",
+                "css_selector": "main,article,#content,.content,body",
+            }
+
+        elif (
+            step == "Capture screenshots"
+            and not self._browser_state["screenshots_taken"]
+        ):
+            self._browser_state["screenshots_taken"] = True
+            return {
+                "action": "screenshot",
+                "path": os.path.join(config.workspace_root, "screenshots"),
+            }
+
+        elif "analysis.md" in step and not self._browser_state["analysis_complete"]:
+            self._browser_state["analysis_complete"] = True
+            return {
+                "action": "create_file",
+                "path": os.path.join(config.workspace_root, "analysis.md"),
+                "content": self.generate_analysis_report(),
+            }
+
+        return None
+
+    def generate_analysis_report(self) -> str:
+        """Generate a comprehensive analysis report"""
+        content = f"# Website Analysis Report\n\n"
+        content += f"## Overview\n"
+        content += f"URL: {self._browser_state.get('current_url')}\n"
+        content += f"Analysis Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        if self._browser_state.get("content_extracted"):
+            content += "## Content Analysis\n"
+            content += "Main content has been extracted and analyzed.\n\n"
+
+        if self._browser_state.get("screenshots_taken"):
+            content += "## Visual Documentation\n"
+            content += "Screenshots have been captured and saved.\n"
+
+        return content

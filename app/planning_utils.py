@@ -1,178 +1,181 @@
-from typing import Dict, List
+"""Planning and task analysis utilities for the ParManus system."""
+
+import re
+from typing import Dict, List, Optional
+
 
 class TaskAnalyzer:
-    """Utility class for analyzing task complexity, categorization, and duration."""
+    """Advanced task analysis and categorization."""
 
     @staticmethod
-    def assess_task_complexity(task: str) -> str:
-        """Assess task complexity for enhanced reasoning"""
-        task_lower = task.lower()
+    def categorize_task(user_request: str) -> str:
+        """Determine task type from user request with enhanced pattern matching."""
+        request_lower = user_request.lower()
 
-        # High complexity indicators
-        high_complexity_keywords = [
-            "analyze", "comprehensive", "detailed", "complex", "optimize",
-            "strategic", "multi-step", "research", "investigate", "evaluate",
-        ]
-
-        # Medium complexity indicators
-        medium_complexity_keywords = [
-            "review", "check", "compare", "summarize", "create", "build",
-        ]
-
-        high_count = sum(
-            1 for keyword in high_complexity_keywords if keyword in task_lower
-        )
-        medium_count = sum(
-            1 for keyword in medium_complexity_keywords if keyword in task_lower
-        )
-
-        if high_count >= 2 or len(task.split()) > 10:
-            return "high"
-        elif high_count >= 1 or medium_count >= 2:
-            return "medium"
-        else:
-            return "simple"
-
-    @staticmethod
-    def categorize_task(task: str) -> str:
-        """Categorize task type for learning system"""
-        task_lower = task.lower()
-
+        # Website related tasks
         if any(
-            keyword in task_lower
-            for keyword in ["browse", "website", "url", "web", "google"]
+            x in request_lower
+            for x in ["review", "analyze", "check", "browse", "visit"]
         ):
-            return "web_browsing"
-        elif any(
-            keyword in task_lower for keyword in ["analyze", "research", "investigate"]
+            if any(x in request_lower for x in ["http", "www", ".com", ".org", ".net"]):
+                return "website_review"
+
+        # File operations
+        if any(
+            x in request_lower
+            for x in ["file", "read", "write", "create", "delete", "modify"]
         ):
-            return "analysis"
-        elif any(keyword in task_lower for keyword in ["create", "build", "generate"]):
-            return "creation"
-        elif any(keyword in task_lower for keyword in ["review", "check", "verify"]):
-            return "review"
-        else:
-            return "general"
+            return "file_operation"
+
+        # Code tasks
+        if any(
+            x in request_lower
+            for x in ["code", "program", "script", "function", "class"]
+        ):
+            return "code_task"
+
+        return "general_task"
+
+    @staticmethod
+    def assess_task_complexity(user_request: str) -> str:
+        """Advanced complexity assessment based on multiple factors."""
+        words = user_request.split()
+        subtasks = len(re.findall(r"and|then|after|before|while", user_request.lower()))
+
+        complexity_score = len(words) * 0.5 + subtasks * 2
+
+        if complexity_score < 5:
+            return "simple"
+        elif complexity_score < 15:
+            return "moderate"
+        return "complex"
 
     @staticmethod
     def estimate_duration(analysis: Dict) -> str:
-        """Estimate task duration based on analysis"""
-        complexity = (
-            analysis.get("reasoning_layers", {})
-            .get("surface", {})
-            .get("obvious_constraints", [])
-        )
+        """Estimate task duration based on comprehensive analysis."""
+        complexity = analysis.get("complexity", "moderate")
+        task_type = analysis.get("task_type", "general_task")
 
-        if len(complexity) > 5:
-            return "15-30 minutes"
-        elif len(complexity) > 3:
-            return "8-15 minutes"
-        else:
-            return "3-8 minutes"
+        base_durations = {"simple": 5, "moderate": 15, "complex": 30}
+
+        type_multipliers = {
+            "website_review": 1.2,
+            "file_operation": 0.8,
+            "code_task": 1.5,
+            "general_task": 1.0,
+        }
+
+        base_time = base_durations.get(complexity, 15)
+        multiplier = type_multipliers.get(task_type, 1.0)
+
+        estimated_minutes = int(base_time * multiplier)
+        return f"{max(5, estimated_minutes-5)}-{estimated_minutes+5} minutes"
+
 
 class PlanGenerator:
-    """Utility class for generating task phases and success criteria."""
+    """Advanced plan generation with task-specific templates."""
 
     @staticmethod
     def create_enhanced_phases(
-        analysis: Dict, strategy: Dict, learned: Dict
+        context: Dict, strategy: Dict, insights: Dict
     ) -> List[Dict]:
-        """Create enhanced phases with deep reasoning integration"""
-        phases = []
+        """Create execution phases based on task type and context."""
+        task_type = context.get("task_type", "general_task")
 
-        # Phase 1: Deep Analysis and Strategic Planning
-        phases.append(
+        if task_type == "website_review":
+            return [
+                {
+                    "id": 1,
+                    "title": "Initial Access",
+                    "description": "Navigate and verify website access",
+                    "tools_needed": ["browser_use"],
+                    "steps": ["Navigate to website", "Verify access"],
+                    "success_criteria": "Successfully accessed target URL",
+                },
+                {
+                    "id": 2,
+                    "title": "Content Analysis",
+                    "description": "Extract and analyze website content",
+                    "tools_needed": ["browser_use"],
+                    "steps": [
+                        "Extract main content",
+                        "Capture screenshots",
+                        "Analyze page structure",
+                    ],
+                    "success_criteria": "Content analyzed and documented",
+                },
+                {
+                    "id": 3,
+                    "title": "Documentation",
+                    "description": "Document findings and create report",
+                    "tools_needed": ["python_execute"],
+                    "steps": ["Generate analysis.md", "Create summary.md"],
+                    "success_criteria": "Documentation complete",
+                },
+            ]
+
+        elif task_type == "file_operation":
+            return [
+                {
+                    "id": 1,
+                    "title": "Preparation",
+                    "description": "Analyze file operation requirements",
+                    "tools_needed": ["python_execute"],
+                    "steps": ["Validate paths", "Check permissions"],
+                    "success_criteria": "Operation validated",
+                },
+                {
+                    "id": 2,
+                    "title": "Execution",
+                    "description": "Perform file operations",
+                    "tools_needed": ["python_execute"],
+                    "steps": ["Execute operation", "Verify results"],
+                    "success_criteria": "Operation completed",
+                },
+            ]
+
+        # Default general task phases
+        return [
             {
                 "id": 1,
-                "title": "Deep Analysis and Strategic Planning",
-                "description": "Perform comprehensive analysis using multi-layered reasoning",
-                "steps": [
-                    "Apply expert-level reasoning analysis",
-                    "Integrate learned insights and patterns",
-                    "Optimize strategy based on analysis",
-                    "Create detailed execution roadmap",
-                ],
-                "tools_needed": ["python_execute", "reasoning_engine"],
-                "success_criteria": "Deep analysis completed with optimization strategy",
-                "reasoning_focus": "Multi-layered strategic analysis",
-                "optimization_targets": ["quality", "efficiency"],
-            }
-        )
-
-        # Phase 2: Optimized Execution
-        phases.append(
+                "title": "Analysis",
+                "description": "Analyze requirements",
+                "tools_needed": ["python_execute"],
+                "steps": ["Analyze request", "Create plan"],
+                "success_criteria": "Requirements understood",
+            },
             {
                 "id": 2,
-                "title": "Optimized Task Execution",
-                "description": "Execute task using optimized approach with continuous learning",
-                "steps": [
-                    "Apply optimized execution strategy",
-                    "Monitor quality and efficiency metrics",
-                    "Adapt approach based on real-time feedback",
-                    "Integrate learning insights during execution",
-                ],
-                "tools_needed": ["browser_use", "python_execute"],
-                "success_criteria": "Task executed with high quality and efficiency",
-                "reasoning_focus": "Adaptive execution with optimization",
-                "optimization_targets": ["performance", "learning"],
-            }
-        )
-
-        # Phase 3: Quality Enhancement and Learning
-        phases.append(
-            {
-                "id": 3,
-                "title": "Quality Enhancement and Learning Integration",
-                "description": "Enhance output quality and capture learning insights",
-                "steps": [
-                    "Apply quality enhancement techniques",
-                    "Validate against success criteria",
-                    "Extract learning insights for future optimization",
-                    "Document optimization achievements",
-                ],
-                "tools_needed": ["python_execute"],
-                "success_criteria": "High-quality output with learning insights captured",
-                "reasoning_focus": "Quality optimization and learning synthesis",
-                "optimization_targets": ["quality", "learning", "future_improvement"],
-            }
-        )
-
-        # Phase 4: Results Delivery and Optimization
-        phases.append(
-            {
-                "id": 4,
-                "title": "Results Delivery and Continuous Optimization",
-                "description": "Deliver optimized results and apply continuous improvement",
-                "steps": [
-                    "Compile comprehensive results",
-                    "Apply final optimization enhancements",
-                    "Present results with reasoning transparency",
-                    "Update learning system with experience",
-                ],
-                "tools_needed": ["python_execute"],
-                "success_criteria": "Optimized results delivered with learning integration",
-                "reasoning_focus": "Results optimization and learning capture",
-                "optimization_targets": ["delivery_quality", "system_learning"],
-            }
-        )
-
-        return phases
+                "title": "Execution",
+                "description": "Execute planned actions",
+                "tools_needed": ["python_execute", "browser_use"],
+                "steps": ["Execute actions", "Validate results"],
+                "success_criteria": "Actions completed",
+            },
+        ]
 
     @staticmethod
     def define_success_criteria(analysis: Dict) -> List[str]:
-        """Define success criteria based on deep analysis"""
-        criteria = [
-            "Expert-level reasoning applied throughout execution",
-            "Multi-layered analysis completed successfully",
-            "Optimization strategies implemented effectively",
-            "Learning insights integrated and captured",
-            "High-quality output delivered to user",
-            "Efficiency targets met or exceeded",
-            "Continuous improvement demonstrated",
-            "User satisfaction achieved",
+        """Define detailed success criteria based on task analysis."""
+        task_type = analysis.get("task_type", "general_task")
+        complexity = analysis.get("complexity", "moderate")
+
+        base_criteria = [
+            "All planned actions completed successfully",
+            "Results properly documented",
         ]
-        return criteria
 
+        if task_type == "website_review":
+            base_criteria.extend(
+                [
+                    "Website content extracted and analyzed",
+                    "Screenshots captured",
+                    "Analysis report generated",
+                ]
+            )
+        elif complexity == "complex":
+            base_criteria.extend(
+                ["Edge cases handled", "Performance optimized", "Error recovery tested"]
+            )
 
-
-
+        return base_criteria
