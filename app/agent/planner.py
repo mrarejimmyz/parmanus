@@ -5,6 +5,7 @@ Provides strategic task planning, todo list creation, and execution guidance
 
 import json
 import time
+import os
 from typing import Dict, List, Optional, Any
 from pydantic import Field
 
@@ -12,7 +13,7 @@ from app.agent.base import BaseAgent
 from app.logger import logger
 from app.schema import Message, AgentState
 from app.tool import ToolCollection
-from app.tool.str_replace_editor import StrReplaceEditor
+from app.tool.python_execute import PythonExecute # Use PythonExecute for file operations
 
 
 class TaskPlan:
@@ -64,7 +65,7 @@ class PlannerAgent(BaseAgent):
     # Planning-specific tools
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
-            StrReplaceEditor(),
+            PythonExecute(), # Use PythonExecute for file operations
         )
     )
     
@@ -84,7 +85,7 @@ class PlannerAgent(BaseAgent):
         """Get the system prompt for planning tasks"""
         return """You are an expert strategic planning agent. Your role is to:
 
-1. ANALYZE the user's request thoroughly
+1. ANALYZE the user\"s request thoroughly
 2. CREATE a structured plan with clear phases and steps
 3. GENERATE a detailed todo list for execution
 4. GUIDE the execution process step by step
@@ -187,7 +188,7 @@ Format as JSON:
                         "title": "Deliver Results",
                         "description": "Provide results to user",
                         "steps": ["Summarize findings", "Present results"],
-                        "tools_needed": ["str_replace_editor"],
+                        "tools_needed": ["python_execute"],
                         "success_criteria": "User receives complete results"
                     }
                 ]
@@ -199,62 +200,59 @@ Format as JSON:
         """Create a detailed todo list from the task plan"""
         todo_content = f"# Task Todo List\n\n"
         todo_content += f"**Goal:** {plan.goal}\n\n"
-        todo_content += f"**Created:** {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(plan.created_at))}\n\n"
+        todo_content += f"**Created:** {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(plan.created_at))}\n\n"
         
         for i, phase in enumerate(plan.phases):
             status = "🔄 CURRENT" if i == plan.current_phase else "⏳ PENDING" if i > plan.current_phase else "✅ COMPLETE"
-            todo_content += f"## Phase {phase['id']}: {phase['title']} {status}\n\n"
-            todo_content += f"**Description:** {phase['description']}\n\n"
-            todo_content += f"**Success Criteria:** {phase['success_criteria']}\n\n"
-            todo_content += f"**Tools Needed:** {', '.join(phase['tools_needed'])}\n\n"
+            todo_content += f"## Phase {phase["id"]}: {phase["title"]} {status}\n\n"
+            todo_content += f"**Description:** {phase["description"]}\n\n"
+            todo_content += f"**Success Criteria:** {phase["success_criteria"]}\n\n"
+            todo_content += f"**Tools Needed:** {", ".join(phase["tools_needed"])}\n\n"
             todo_content += f"**Steps:**\n"
             
-            for j, step in enumerate(phase['steps'], 1):
+            for j, step in enumerate(phase["steps"], 1):
                 checkbox = "- [ ]" if i >= plan.current_phase else "- [x]"
                 todo_content += f"{checkbox} {step}\n"
             
             todo_content += "\n"
         
-        # Save todo list to file
-        todo_file = f"{self.config.workspace_root}/todo.md"
-        await self._save_todo_file(todo_file, todo_content)
+        # Save todo list to file using direct file write
+        todo_file = os.path.join(self.config.workspace_root, "todo.md")
+        try:
+            with open(todo_file, "w", encoding="utf-8") as f:
+                f.write(todo_content)
+            logger.info(f"Todo list saved to {todo_file}")
+        except Exception as e:
+            logger.error(f"Failed to save todo list: {e}")
         
         return todo_content
     
-    async def _save_todo_file(self, filepath: str, content: str):
-        """Save todo list to file using the editor tool"""
-        try:
-            editor = StrReplaceEditor()
-            await editor.execute(command="create", path=filepath, file_text=content)
-            logger.info(f"Todo list saved to {filepath}")
-        except Exception as e:
-            logger.error(f"Failed to save todo list: {e}")
-    
     async def update_todo_progress(self, phase_id: int, step_index: int, completed: bool = True):
         """Update todo list to mark steps as completed"""
-        todo_file = f"{self.config.workspace_root}/todo.md"
+        todo_file = os.path.join(self.config.workspace_root, "todo.md")
         try:
-            editor = StrReplaceEditor()
             # Read current todo
-            result = await editor.execute(command="view", path=todo_file)
-            if result.error:
-                logger.warning(f"Could not read todo file: {result.error}")
+            if not os.path.exists(todo_file):
+                logger.warning(f"Todo file not found at {todo_file}")
                 return
+
+            with open(todo_file, "r", encoding="utf-8") as f:
+                current_content = f.read()
             
             # Update the specific step
-            lines = result.output.split('\n')
+            lines = current_content.split("\n")
             updated_lines = []
-            current_phase = None
+            current_phase_in_file = None
             step_count = 0
             
             for line in lines:
                 if line.startswith(f"## Phase {phase_id}:"):
-                    current_phase = phase_id
+                    current_phase_in_file = phase_id
                     step_count = 0
                 elif line.startswith("## Phase"):
-                    current_phase = None
+                    current_phase_in_file = None
                     step_count = 0
-                elif current_phase == phase_id and line.strip().startswith("- ["):
+                elif current_phase_in_file == phase_id and line.strip().startswith("- ["):
                     if step_count == step_index:
                         if completed:
                             line = line.replace("- [ ]", "- [x]")
@@ -265,9 +263,10 @@ Format as JSON:
                 updated_lines.append(line)
             
             # Save updated todo
-            updated_content = '\n'.join(updated_lines)
-            await editor.execute(command="str_replace", path=todo_file, 
-                                old_str=result.output, new_str=updated_content)
+            updated_content = "\n".join(updated_lines)
+            with open(todo_file, "w", encoding="utf-8") as f:
+                f.write(updated_content)
+            logger.info(f"Todo list updated at {todo_file}")
             
         except Exception as e:
             logger.error(f"Failed to update todo progress: {e}")
@@ -318,16 +317,16 @@ Format as JSON:
         total_phases = next_action["total_phases"]
         
         guidance = f"""
-CURRENT PHASE: {phase_num}/{total_phases} - {current_phase['title']}
+CURRENT PHASE: {phase_num}/{total_phases} - {current_phase["title"]}
 
-DESCRIPTION: {current_phase['description']}
+DESCRIPTION: {current_phase["description"]}
 
 STEPS TO COMPLETE:
-{chr(10).join(f"- {step}" for step in current_phase['steps'])}
+{chr(10).join(f"- {step}" for step in current_phase["steps"]) }
 
-TOOLS AVAILABLE: {', '.join(current_phase['tools_needed'])}
+TOOLS AVAILABLE: {", ".join(current_phase["tools_needed"]) }
 
-SUCCESS CRITERIA: {current_phase['success_criteria']}
+SUCCESS CRITERIA: {current_phase["success_criteria"]}
 
 Execute the steps for this phase systematically. Update the todo list as you complete each step.
 """
@@ -339,4 +338,5 @@ Execute the steps for this phase systematically. Update the todo list as you com
         """Factory method to create and properly initialize a PlannerAgent instance."""
         instance = cls(**kwargs)
         return instance
+
 
