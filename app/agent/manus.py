@@ -300,8 +300,6 @@ class Manus(ToolCallAgent):
             if not self.current_plan:
                 # Check if task is already complete
                 if self.browser_state and self.browser_state.get("plan_completed"):
-                    from app.exceptions import AgentTaskComplete
-
                     # Log completion once and terminate
                     if not hasattr(self, "_completion_logged"):
                         logger.info("✅ Task completed successfully")
@@ -309,14 +307,19 @@ class Manus(ToolCallAgent):
                         raise AgentTaskComplete("Website review completed successfully")
                     return False
 
-                # Post-completion cooldown check for new tasks
-                if hasattr(self, "last_completion_time"):
-                    time_since_completion = time.time() - self.last_completion_time
-                    if time_since_completion < 2:
-                        logger.debug(
-                            f"In post-completion cooldown ({time_since_completion:.1f}s remaining)"
-                        )
-                        return False
+                # Initialize browser state if needed
+                if not self.browser_state:
+                    self.browser_state = {
+                        "current_url": None,
+                        "content_extracted": False,
+                        "analysis_complete": False,
+                        "screenshots_taken": False,
+                        "last_action": None,
+                        "page_ready": False,
+                        "structure_analyzed": False,
+                        "summary_complete": False,
+                        "plan_completed": False,
+                    }
 
                 # Get user request from recent messages
                 user_messages = [
@@ -325,22 +328,23 @@ class Manus(ToolCallAgent):
                 if not user_messages:
                     logger.error("No user request found in memory")
                     return False
+
+                # Create task plan and todo list
                 user_request = user_messages[-1].content
+                plan = await self.create_task_plan(user_request)
+                todo_list = await self.create_todo_list(plan)
 
-                # Reset browser state before starting new plan
-                self.browser_state = {
-                    "current_url": None,
-                    "content_extracted": False,
-                    "analysis_complete": False,
-                    "screenshots_taken": False,
-                    "last_action": None,
-                    "page_ready": False,
-                    "structure_analyzed": False,
-                    "summary_complete": False,
-                }
+                # Initialize first navigation if URL is present
+                if self.browser_state and not self.browser_state.get("current_url"):
+                    url = self._extract_url_from_request(user_request)
+                    if url:
+                        self.tool_calls = [
+                            {
+                                "name": "browser_use",
+                                "arguments": {"action": "go_to_url", "url": url},
+                            }
+                        ]
 
-                self.current_plan = await self.create_task_plan(user_request)
-                await self.create_todo_list(self.current_plan)
                 return True
 
             task_type = self.current_plan.get("task_type")
@@ -928,30 +932,25 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
                 # Update todo list one final time
                 await self.update_todo_progress()
 
-                # Force completion and cleanup of browser state
-                if self.browser_state:
-                    # Mark all tasks complete
-                    self.browser_state = {
-                        "content_extracted": True,
-                        "analysis_complete": True,
-                        "screenshots_taken": True,
-                        "structure_analyzed": True,
-                        "summary_complete": True,
-                        "plan_completed": True,
-                        "page_ready": True,
-                        "last_action": None,
-                        "current_url": None,
-                    }
-
                 # Store completion time to prevent premature restart
                 self.last_completion_time = time.time()
 
-                # Store final state before reset
-                completed_url = (
-                    self.browser_state.get("current_url")
-                    if self.browser_state
-                    else None
-                )
+                # Store URL info before reset
+                completed_url = None
+                if self.browser_state:
+                    completed_url = self.browser_state.get("current_url")
+                    # Mark all tasks complete
+                    self.browser_state.update(
+                        {
+                            "content_extracted": True,
+                            "analysis_complete": True,
+                            "screenshots_taken": True,
+                            "structure_analyzed": True,
+                            "summary_complete": True,
+                            "plan_completed": True,
+                            "page_ready": True,
+                        }
+                    )
 
                 # Complete reset of all state
                 self.current_plan = None
@@ -967,17 +966,17 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
                 )
                 logger.info(completion_msg)
 
-                # Ensure clean exit by enforcing delay
-                await asyncio.sleep(2)
-
                 # Raise completion exception to trigger proper termination
                 raise AgentTaskComplete(completion_msg)
 
             logger.warning("No active plan to complete")
 
+        except AgentTaskComplete:
+            # Let AgentTaskComplete propagate
+            raise
         except Exception as e:
             logger.error(f"Error in mark_plan_complete: {str(e)}", exc_info=True)
-            # Attempt emergency cleanup
+            # Attempt emergency cleanup of critical state
             self.current_plan = None
             self.current_phase = 0
             self.current_step = 0

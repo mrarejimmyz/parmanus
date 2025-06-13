@@ -311,6 +311,7 @@ class BaseAgent(BaseModel, ABC):
                         # Handle successful task completion
                         logger.info(f"✅ Agent {self.name} task completed: {e.message}")
                         self.state = AgentState.FINISHED
+                        self.performance_metrics["successful_steps"] += 1
                         results.append(f"Task completed: {e.message}")
                         return "\n".join(results)
                     except Exception as step_error:
@@ -321,7 +322,6 @@ class BaseAgent(BaseModel, ABC):
                         )
 
                     step_duration = time.time() - step_start
-
                     logger.info(
                         f"Step {self.current_step} completed in {step_duration:.2f}s, result: {step_result[:200] if step_result else 'None'}..."
                     )
@@ -380,26 +380,25 @@ class BaseAgent(BaseModel, ABC):
                         logger.error("Circuit breaker opened, terminating execution")
                         break
 
-            # Handle termination reasons
-            if self.current_step >= self.max_steps:
-                logger.info(f"Agent {self.name} reached max steps ({self.max_steps})")
-                self.current_step = 0
-                self.state = AgentState.IDLE
-                results.append(f"Terminated: Reached max steps ({self.max_steps})")
-            elif not self.circuit_breaker.can_execute():
-                logger.warning(f"Agent {self.name} terminated due to circuit breaker")
-                results.append(
-                    "Terminated: Circuit breaker opened due to repeated failures"
-                )
-            elif self.state == AgentState.FINISHED:
-                logger.info(f"Agent {self.name} finished successfully")
+        # Handle termination reasons
+        if self.current_step >= self.max_steps:
+            logger.info(f"Agent {self.name} reached max steps ({self.max_steps})")
+            self.current_step = 0
+            self.state = AgentState.IDLE
+            results.append(f"Terminated: Reached max steps ({self.max_steps})")
+        elif not self.circuit_breaker.can_execute():
+            logger.warning(f"Agent {self.name} terminated due to circuit breaker")
+            results.append(
+                "Terminated: Circuit breaker opened due to repeated failures"
+            )
+        elif self.state == AgentState.FINISHED:
+            logger.info(f"Agent {self.name} finished successfully")
 
         # Log performance summary
         total_duration = time.time() - start_time
         self._log_performance_summary(total_duration)
 
         await SANDBOX_CLIENT.cleanup()
-
         final_result = "\n".join(results) if results else "No steps executed"
         logger.info(
             f"Agent {self.name} run() completed, returning result length: {len(final_result)}"

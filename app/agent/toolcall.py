@@ -62,6 +62,16 @@ class ToolCallAgent(ReActAgent):
                 Message.system_message(f"Task completed: {e.message}")
             )
             self.state = AgentState.FINISHED
+            raise  # Re-raise to ensure proper propagation
+        except TokenLimitExceeded as e:
+            # Handle token limit exceeded
+            logger.error(f"🚨 Token limit exceeded: {e}")
+            self.memory.add_message(
+                Message.assistant_message(
+                    f"Maximum token limit reached, cannot continue execution: {str(e)}"
+                )
+            )
+            self.state = AgentState.FINISHED
             return False
         except Exception as e:
             # Check if this is a RetryError containing TokenLimitExceeded
@@ -161,6 +171,7 @@ class ToolCallAgent(ReActAgent):
                 return bool(content)
 
             return bool(self.tool_calls)
+
         except Exception as e:
             logger.error(f"🚨 Oops! The {self.name}'s thinking process hit a snag: {e}")
             self.memory.add_message(
@@ -317,7 +328,11 @@ class ToolCallAgent(ReActAgent):
 
     async def run(self, request: Optional[str] = None) -> str:
         """Run the agent with cleanup when done."""
+        cleanup_called = False
         try:
-            return await super().run(request)
+            result = await super().run(request)
+            return result
         finally:
-            await self.cleanup()
+            if not cleanup_called:
+                cleanup_called = True
+                await self.cleanup()
