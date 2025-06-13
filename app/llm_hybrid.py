@@ -121,8 +121,7 @@ class HybridOllamaLLM:
             use_vision = self._should_use_vision_model(formatted_messages)
             model = self.vision_model if use_vision else self.tools_model
             
-            logger.info(f"🤖 Using model: {model} ({"vision" if use_vision else "tools"})")
-            
+            logger.info(f"🤖 Using model: {model} ({'vision' if use_vision else 'tools'})")           
             response = await self.client.chat.completions.create(
                 model=model,
                 messages=formatted_messages,
@@ -273,8 +272,8 @@ class HybridOllamaLLM:
             
         except Exception as e:
             logger.error(f"Error in Hybrid Ollama ask_tool: {e}")
-            logger.error(f"Tool calls format: {tool_calls if "tool_calls" in locals() else "Not available"}")
-            logger.error(f"Response format: {type(response) if "response" in locals() else "Not available"}")
+            logger.error("Tool calls format: {}".format(tool_calls if "tool_calls" in locals() else "Not available"))
+            logger.error("Response format: {}".format(type(response) if "response" in locals() else "Not available"))
             raise
     
     async def ask_vision(self, messages: Union[str, List[Dict[str, Any]]], images: List[str] = None, **kwargs) -> str:

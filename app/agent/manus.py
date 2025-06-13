@@ -101,15 +101,10 @@ class Manus(ToolCallAgent):
             f"🧠 DEEP ANALYSIS COMPLETED: {len(deep_analysis['reasoning_layers'])} reasoning layers applied"
         )
 
-        # Generate optimized strategy
-        optimized_strategy = await self.reasoning_engine.generate_optimized_strategy(
+        # Generate optim                 opt        optimized_strategy = await self.reasoning_engine.generate_optimized_strategy(
             deep_analysis
         )
-        logger.info(
-            f"⚡ OPTIMIZED STRATEGY GENERATED: {optimized_strategy["approach"]}"
-        )
-
-        # Get learned insights from memory system
+        logger.info(f'⚡ OPTIMIZED STRATEGY GENERATED: {optimized_strategy["approach"]}')system
         learned_strategy = await self.memory_system.get_optimized_strategy(
             task_type=TaskAnalyzer.categorize_task(user_request), context=context # Use TaskAnalyzer
         )
