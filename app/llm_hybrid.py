@@ -53,15 +53,15 @@ class HybridOllamaLLM:
         self.token_counter = TokenCounter()
         
         # Model settings
-        self.tools_model = "llama3.2"  # For tool calling
-        self.vision_model = "llama3.2-vision"  # For vision tasks
-        self.max_tokens = config.max_tokens
-        self.temperature = config.temperature
-        self.base_url = config.base_url
-        self.api_key = config.api_key
+        self.tools_model = config.llm.model  # For tool calling
+        self.vision_model = config.llm.vision.model if config.llm.vision else "llama3.2-vision"  # For vision tasks
+        self.max_tokens = config.llm.max_tokens
+        self.temperature = config.llm.temperature
+        self.base_url = config.llm.base_url
+        self.api_key = config.llm.api_key
         
         # Vision settings
-        self.vision_enabled = getattr(config, 'vision_enabled', True)
+        self.vision_enabled = config.llm.vision.enabled if config.llm.vision else False
         
         # Initialize Ollama client
         self.client = AsyncOpenAI(
@@ -90,13 +90,13 @@ class HybridOllamaLLM:
         """Check if messages contain vision content (images)."""
         for msg in messages:
             if isinstance(msg, dict):
-                content = msg.get('content', '')
+                content = msg.get("content", "")
                 if isinstance(content, list):
                     # Check for image content in message
                     for item in content:
-                        if isinstance(item, dict) and item.get('type') == 'image_url':
+                        if isinstance(item, dict) and item.get("type") == "image_url":
                             return True
-                elif 'image' in str(content).lower() or 'screenshot' in str(content).lower():
+                elif "image" in str(content).lower() or "screenshot" in str(content).lower():
                     return True
         return False
     
@@ -107,7 +107,7 @@ class HybridOllamaLLM:
             return False
         
         # Check for vision-related content
-        return self._has_vision_content(messages)
+        return self.vision_enabled and self._has_vision_content(messages)
     
     async def ask(self, messages: Union[str, List[Dict[str, Any]]], **kwargs) -> str:
         """Basic ask method - routes to appropriate model."""
@@ -121,7 +121,7 @@ class HybridOllamaLLM:
             use_vision = self._should_use_vision_model(formatted_messages)
             model = self.vision_model if use_vision else self.tools_model
             
-            logger.info(f"🤖 Using model: {model} ({'vision' if use_vision else 'tools'})")
+            logger.info(f"🤖 Using model: {model} ({"vision" if use_vision else "tools"})")
             
             response = await self.client.chat.completions.create(
                 model=model,
@@ -133,7 +133,7 @@ class HybridOllamaLLM:
             
             content = response.choices[0].message.content
             
-            if hasattr(response, 'usage') and response.usage:
+            if hasattr(response, "usage") and response.usage:
                 self.token_counter.update(
                     response.usage.prompt_tokens,
                     response.usage.completion_tokens
@@ -209,7 +209,7 @@ class HybridOllamaLLM:
             tool_calls = message.tool_calls or []
             
             # Update token counter
-            if hasattr(response, 'usage') and response.usage:
+            if hasattr(response, "usage") and response.usage:
                 self.token_counter.update(
                     response.usage.prompt_tokens,
                     response.usage.completion_tokens
@@ -220,7 +220,7 @@ class HybridOllamaLLM:
             for tool_call in tool_calls:
                 # Handle both object and dict formats with proper error handling
                 try:
-                    if hasattr(tool_call, 'id'):
+                    if hasattr(tool_call, "id"):
                         # OpenAI object format
                         formatted_tool_calls.append({
                             "id": tool_call.id,
@@ -232,13 +232,13 @@ class HybridOllamaLLM:
                         })
                     elif isinstance(tool_call, dict):
                         # Dict format - ensure proper structure
-                        if 'function' in tool_call:
+                        if "function" in tool_call:
                             formatted_tool_calls.append({
-                                "id": tool_call.get('id', f"call_{len(formatted_tool_calls)}"),
+                                "id": tool_call.get("id", f"call_{len(formatted_tool_calls)}"),
                                 "type": "function",
                                 "function": {
-                                    "name": tool_call['function'].get('name', ''),
-                                    "arguments": tool_call['function'].get('arguments', '{}')
+                                    "name": tool_call["function"].get("name", ""),
+                                    "arguments": tool_call["function"].get("arguments", "{}")
                                 }
                             })
                         else:
@@ -265,16 +265,16 @@ class HybridOllamaLLM:
                 "content": content,
                 "tool_calls": formatted_tool_calls,
                 "usage": {
-                    "prompt_tokens": getattr(response.usage, 'prompt_tokens', 0) if hasattr(response, 'usage') else 0,
-                    "completion_tokens": getattr(response.usage, 'completion_tokens', 0) if hasattr(response, 'usage') else 0,
-                    "total_tokens": getattr(response.usage, 'total_tokens', 0) if hasattr(response, 'usage') else 0,
+                    "prompt_tokens": getattr(response.usage, "prompt_tokens", 0) if hasattr(response, "usage") else 0,
+                    "completion_tokens": getattr(response.usage, "completion_tokens", 0) if hasattr(response, "usage") else 0,
+                    "total_tokens": getattr(response.usage, "total_tokens", 0) if hasattr(response, "usage") else 0,
                 }
             }
             
         except Exception as e:
             logger.error(f"Error in Hybrid Ollama ask_tool: {e}")
-            logger.error(f"Tool calls format: {tool_calls if 'tool_calls' in locals() else 'Not available'}")
-            logger.error(f"Response format: {type(response) if 'response' in locals() else 'Not available'}")
+            logger.error(f"Tool calls format: {tool_calls if "tool_calls" in locals() else "Not available"}")
+            logger.error(f"Response format: {type(response) if "response" in locals() else "Not available"}")
             raise
     
     async def ask_vision(self, messages: Union[str, List[Dict[str, Any]]], images: List[str] = None, **kwargs) -> str:
@@ -299,7 +299,7 @@ class HybridOllamaLLM:
             
             content = response.choices[0].message.content
             
-            if hasattr(response, 'usage') and response.usage:
+            if hasattr(response, "usage") and response.usage:
                 self.token_counter.update(
                     response.usage.prompt_tokens,
                     response.usage.completion_tokens
@@ -323,13 +323,12 @@ class HybridOllamaLLM:
         """Reset token counter."""
         self.token_counter = TokenCounter()
 
-
 def create_llm_with_tools(config):
     """Factory function to create Hybrid Ollama LLM."""
-    api_type = getattr(config, 'api_type', 'ollama').lower()
+    api_type = getattr(config.llm, "api_type", "ollama").lower()
     
-    if api_type != 'ollama':
-        logger.warning(f"API type '{api_type}' not supported. Using Ollama.")
+    if api_type != "ollama":
+        logger.warning(f"API type \'{api_type}\' not supported. Using Ollama.")
     
     if not OPENAI_AVAILABLE:
         logger.error("openai package not available for Ollama")
@@ -340,4 +339,5 @@ def create_llm_with_tools(config):
 
 # Alias for backward compatibility
 LLM = create_llm_with_tools
+
 
