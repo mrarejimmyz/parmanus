@@ -382,38 +382,50 @@ class Manus(ToolCallAgent):
                 logger.error("No valid plan exists")
                 return None
 
-            # Reset if we're starting a new review
-            if step == "Navigate to website" and not self.browser_state["page_ready"]:
-                # Get user request from recent messages
-                user_messages = [
-                    msg for msg in self.memory.messages if msg.role == "user"
-                ]
-                if not user_messages:
-                    logger.error("No user request found in memory")
-                    return None
-                url = user_messages[-1].content.split()[-1]
-
-                self.browser_state.update(
-                    {"current_url": url, "page_ready": True, "last_action": step}
-                )
-                return {"action": "go_to_url", "url": url}
-
-            # Handle initial navigation step specially
+            # Handle website navigation
             if step == "Navigate to website":
-                if not self.browser_state["page_ready"]:
+                # Only navigate if we haven't already
+                if not self.browser_state.get("current_url"):
+                    # Get user request from recent messages
+                    user_messages = [
+                        msg for msg in self.memory.messages if msg.role == "user"
+                    ]
+                    if not user_messages:
+                        logger.error("No user request found in memory")
+                        return None
+
                     url = user_messages[-1].content.split()[-1]
+                    logger.info(f"Navigating to URL: {url}")
+
                     self.browser_state.update(
-                        {"current_url": url, "page_ready": True, "last_action": step}
+                        {
+                            "current_url": url,
+                            "page_ready": False,  # Will be set to True after navigation completes
+                            "last_action": step,
+                        }
                     )
                     return {"action": "go_to_url", "url": url}
-                return None  # Already navigated
+                elif not self.browser_state.get("page_ready"):
+                    # Wait for navigation to complete
+                    logger.debug("Waiting for page to be ready...")
+                    return None
+                else:
+                    # Already navigated and ready
+                    logger.debug("Already navigated to website")
+                    await self.progress_to_next_step()
+                    return None
 
             # Only proceed with other steps if page is ready and we've navigated
-            if not self.browser_state.get("page_ready") or not self.browser_state.get(
-                "current_url"
-            ):
-                logger.warning("Page not ready or no URL set, waiting for navigation")
+            if not self.browser_state.get("current_url"):
+                logger.error("No URL set, cannot proceed with browser task")
                 return None
+
+            # Wait for page to be ready if needed
+            if not self.browser_state.get("page_ready"):
+                logger.debug("Waiting for page to be ready before proceeding")
+                await self.ensure_page_ready()
+                if not self.browser_state.get("page_ready"):
+                    return None
 
             # Validate current phase and step
             if self.current_phase >= len(self.current_plan["phases"]):
@@ -517,8 +529,17 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
         """Ensure the page is ready for interaction"""
         if not self.browser_state.get("page_ready"):
             logger.warning("Page not ready, waiting for navigation to complete")
-            # Add any additional page readiness checks here
-            await asyncio.sleep(1)  # Brief wait for page load
+            try:
+                # Try to verify page is loaded by checking current URL
+                if self.browser_state.get("current_url"):
+                    self.browser_state["page_ready"] = True
+                    logger.info("Page is now ready for interaction")
+                else:
+                    logger.warning("No URL set, page cannot be ready")
+                    await asyncio.sleep(1)  # Brief wait before retry
+            except Exception as e:
+                logger.error(f"Error checking page readiness: {str(e)}")
+                await asyncio.sleep(1)  # Wait before retry
 
     async def execute_browser_step(self, step: str) -> None:
         """Execute a single browser step with validation and retries"""
