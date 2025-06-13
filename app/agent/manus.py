@@ -346,7 +346,25 @@ class Manus(ToolCallAgent):
                 current_step = current_phase["steps"][self.current_step]
                 logger.debug(f"Processing step {self.current_step}: {current_step}")
 
-                # Execute the step
+                # Handle navigation as a special case
+                if (
+                    "navigate" in current_step.lower()
+                    or current_step == "Navigate to website"
+                ):
+                    next_action = await self.handle_browser_task(current_step)
+                    if next_action:
+                        self.tool_calls = [
+                            {"name": "browser_use", "arguments": next_action}
+                        ]
+                        return True
+                    return True
+
+                # For non-navigation steps, require page readiness
+                if not self.browser_state.get("page_ready"):
+                    logger.debug("Waiting for page to be ready")
+                    return True
+
+                # Execute the current step
                 next_action = await self.handle_browser_task(current_step)
                 if next_action:
                     self.tool_calls = [
@@ -364,7 +382,7 @@ class Manus(ToolCallAgent):
                     self.browser_state["summary_complete"] = True
                     return False
 
-                # Only progress if we're not waiting for page readiness
+                # Progress to next step if appropriate
                 if self.browser_state.get("page_ready"):
                     await self.progress_to_next_step()
                 return True
@@ -386,9 +404,11 @@ class Manus(ToolCallAgent):
                 return None
 
             # Handle website navigation
-            if step == "Navigate to website":
-                # Only navigate if we haven't already
-                if not self.browser_state.get("current_url"):
+            if step == "Navigate to website" or "navigate" in step.lower():
+                # Only navigate if we haven't already navigated or page isn't ready
+                if not self.browser_state.get(
+                    "current_url"
+                ) or not self.browser_state.get("page_ready"):
                     # Get user request from recent messages
                     user_messages = [
                         msg for msg in self.memory.messages if msg.role == "user"
@@ -397,8 +417,11 @@ class Manus(ToolCallAgent):
                         logger.error("No user request found in memory")
                         return None
 
-                    # Get URL from user request and verify it
-                    url = user_messages[-1].content.split()[-1]
+                    # Extract URL from user request
+                    message = user_messages[-1].content
+                    url = message.split()[-1].strip()
+                    if not url.startswith(("http://", "https://")):
+                        url = f"https://{url}"
                     logger.info(f"Navigating to URL: {url}")
 
                     # Update state and initiate navigation
@@ -411,7 +434,7 @@ class Manus(ToolCallAgent):
                     )
                     return {"action": "go_to_url", "url": url}
                 elif not self.browser_state.get("page_ready"):
-                    # Navigation is complete, mark page as ready
+                    # Navigation completed, update state and progress
                     self.browser_state["page_ready"] = True
                     logger.info("Navigation completed successfully")
                     await self.progress_to_next_step()
