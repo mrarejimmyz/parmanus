@@ -169,9 +169,9 @@ class Manus(ToolCallAgent):
     async def create_todo_list(self, plan: Dict) -> str:
         """Create a detailed todo list from the plan"""
         todo_content = f"# Task Todo List\n\n"
-        todo_content += f"**Goal:** {plan["goal"]}\n\n"
-        todo_content += f"**Complexity:** {plan["complexity"]}\n"
-        todo_content += f"**Estimated Duration:** {plan["estimated_duration"]}\n\n"
+        todo_content += "**Goal:** {}\n\n".format(plan["goal"])
+        todo_content += "**Complexity:** {}\n".format(plan["complexity"])
+        todo_content += "**Estimated Duration:** {}\n\n".format(plan["estimated_duration"])
 
         for i, phase in enumerate(plan["phases"]):
             status = (
@@ -179,20 +179,16 @@ class Manus(ToolCallAgent):
                 if i == self.current_phase
                 else "PENDING" if i > self.current_phase else "COMPLETE"
             )
-            todo_content += f"## Phase {phase["id"]}: {phase["title"]} [{status}]\n\n"
-            todo_content += f"**Description:** {phase["description"]}\n\n"
-            todo_content += f"**Success Criteria:** {phase["success_criteria"]}\n\n"
-            todo_content += f"**Tools Needed:** {", ".join(phase["tools_needed"])}\n\n"
-            todo_content += f"**Steps:**\n"
+            todo_content += "## Phase {}: {} [{}]\n\n".format(phase["id"], phase["title"], status)
+            todo_content += "**Description:** {}\n\n".format(phase["description"])
+            todo_content += "**Success Criteria:** {}\n\n".format(phase["success_criteria"])
+            todo_content += "**Tools Needed:** {}\n\n".format(", ".join(phase["tools_needed"]))
+            todo_content += "**Steps:**\n"
 
             for j, step in enumerate(phase["steps"], 1):
                 checkbox = "- [ ]"
                 if i < self.current_phase:
-                    checkbox = "- [x]"
-                elif i == self.current_phase and j <= self.current_step:
-                    checkbox = "- [x]"
-
-                todo_content += f"{checkbox} {step}\n"
+                    todo_content += "{} {}\n".format(checkbox, step)
 
             todo_content += "\n"
 

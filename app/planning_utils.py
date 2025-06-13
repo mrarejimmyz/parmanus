@@ -80,7 +80,7 @@ class PlanGenerator:
         """Create enhanced phases with deep reasoning integration"""
         phases = []
 
-        # Phase 1: Deep Analysis and Planning
+        # Phase 1: Deep Analysis and Strategic Planning
         phases.append(
             {
                 "id": 1,
@@ -92,7 +92,7 @@ class PlanGenerator:
                     "Optimize strategy based on analysis",
                     "Create detailed execution roadmap",
                 ],
-                "tools_needed": ["str_replace_editor", "reasoning_engine"],
+                "tools_needed": ["python_execute", "reasoning_engine"],
                 "success_criteria": "Deep analysis completed with optimization strategy",
                 "reasoning_focus": "Multi-layered strategic analysis",
                 "optimization_targets": ["quality", "efficiency"],
@@ -111,7 +111,7 @@ class PlanGenerator:
                     "Adapt approach based on real-time feedback",
                     "Integrate learning insights during execution",
                 ],
-                "tools_needed": ["browser_use", "str_replace_editor"],
+                "tools_needed": ["browser_use", "python_execute"],
                 "success_criteria": "Task executed with high quality and efficiency",
                 "reasoning_focus": "Adaptive execution with optimization",
                 "optimization_targets": ["performance", "learning"],
@@ -130,7 +130,7 @@ class PlanGenerator:
                     "Extract learning insights for future optimization",
                     "Document optimization achievements",
                 ],
-                "tools_needed": ["str_replace_editor"],
+                "tools_needed": ["python_execute"],
                 "success_criteria": "High-quality output with learning insights captured",
                 "reasoning_focus": "Quality optimization and learning synthesis",
                 "optimization_targets": ["quality", "learning", "future_improvement"],
@@ -149,7 +149,7 @@ class PlanGenerator:
                     "Present results with reasoning transparency",
                     "Update learning system with experience",
                 ],
-                "tools_needed": ["str_replace_editor"],
+                "tools_needed": ["python_execute"],
                 "success_criteria": "Optimized results delivered with learning integration",
                 "reasoning_focus": "Results optimization and learning capture",
                 "optimization_targets": ["delivery_quality", "system_learning"],
@@ -172,5 +172,7 @@ class PlanGenerator:
             "User satisfaction achieved",
         ]
         return criteria
+
+
 
 
