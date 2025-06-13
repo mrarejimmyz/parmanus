@@ -10,7 +10,6 @@ from app.prompt.browser import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.schema import Message, ToolChoice
 from app.tool import BrowserUseTool, Terminate, ToolCollection
 
-
 # Avoid circular import if BrowserAgent needs BrowserContextHelper
 if TYPE_CHECKING:
     from app.agent.base import BaseAgent
@@ -119,7 +118,7 @@ class BrowserContextHelper:
 
 class BrowserAgent(ToolCallAgent):
     """
-    A browser agent that uses the browser_use library to control a browser.
+    A browser agent that uses the browser_use library to control a browser.asx
     This agent can navigate web pages, interact with elements, fill forms,
     extract content, and perform other browser-based actions to accomplish tasks.
 
@@ -268,30 +267,13 @@ class BrowserAgent(ToolCallAgent):
                     id="nav_001",
                     function=Function(
                         name="browser_use",
-                        arguments=json.dumps({"action": "navigate", "url": url}),
+                        arguments=json.dumps({"action": "go_to_url", "url": url}),
                     ),
                 )
 
                 # Set this as our tool call
                 self.tool_calls = [nav_tool_call]
-
-                # Execute the tool call
-                browser_tool = self.available_tools.get_tool(BrowserUseTool().name)
-                if browser_tool:
-                    result = await browser_tool.execute(action="navigate", url=url)
-                    if result and not result.error:
-                        self.memory.add_message(
-                            Message.assistant_message(
-                                f"Successfully navigated to {url}"
-                            )
-                        )
-                        logger.info(f"Successfully navigated to {url}")
-                        return True
-                    else:
-                        logger.error(
-                            f"Navigation failed: {result.error if result else 'Unknown error'}"
-                        )
-
+                return True  # Indicate that a tool call has been set
             # Use simplified prompt for first few steps to avoid complexity
             if self.current_step <= 3:
                 try:

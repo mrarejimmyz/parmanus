@@ -220,31 +220,15 @@ class WebSearch(BaseTool):
             A structured response containing search results and metadata
         """
         # Get settings from config
-        retry_delay = (
-            getattr(config.search_config, "retry_delay", 60)
-            if config.search_config
-            else 60
-        )
-        max_retries = (
-            getattr(config.search_config, "max_retries", 3)
-            if config.search_config
-            else 3
-        )
+        retry_delay = getattr(config.search, "retry_delay", 60) if config.search else 60
+        max_retries = getattr(config.search, "max_retries", 3) if config.search else 3
 
         # Use config values for lang and country if not specified
         if lang is None:
-            lang = (
-                getattr(config.search_config, "lang", "en")
-                if config.search_config
-                else "en"
-            )
+            lang = getattr(config.search, "lang", "en") if config.search else "en"
 
         if country is None:
-            country = (
-                getattr(config.search_config, "country", "us")
-                if config.search_config
-                else "us"
-            )
+            country = getattr(config.search, "country", "us") if config.search else "us"
 
         search_params = {"lang": lang, "country": country}
 
@@ -360,14 +344,13 @@ class WebSearch(BaseTool):
     def _get_engine_order(self) -> List[str]:
         """Determines the order in which to try search engines."""
         preferred = (
-            getattr(config.search_config, "engine", "google").lower()
-            if config.search_config
+            getattr(config.search, "engine", "google").lower()
+            if config.search
             else "google"
         )
         fallbacks = (
-            [engine.lower() for engine in config.search_config.fallback_engines]
-            if config.search_config
-            and hasattr(config.search_config, "fallback_engines")
+            [engine.lower() for engine in config.search.fallback_engines]
+            if config.search and hasattr(config.search, "fallback_engines")
             else []
         )
 
