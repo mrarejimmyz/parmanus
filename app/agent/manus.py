@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from typing import Dict, List, Optional
 
 from pydantic import Field, model_validator
@@ -403,147 +404,39 @@ class Manus(ToolCallAgent):
                                 if phase_num == self.current_phase + 1:
                                     line = line.replace("[PENDING]", "[CURRENT]")
                                 elif phase_num < self.current_phase + 1:
-                                    line = line.replace("[PENDING]", "[COMPLETE]").replace("[CURRENT]", "[COMPLETE]")
-                                else:
-                                    line = line.replace("[CURRENT]", "[PENDING]").replace("[COMPLETE]", "[PENDING]")
+                                    line = line.replace("[CURRENT]", "[COMPLETE]")
+                                    line = line.replace("[PENDING]", "[COMPLETE]")
+                                updated_lines.append(line)
+                            else:
+                                updated_lines.append(line)
                         except ValueError:
-                            pass  # Ignore if phase number cannot be parsed
-                    updated_lines.append(line)
+                            updated_lines.append(line) # Append original line if parsing fails
+                    else:
+                        updated_lines.append(line)
 
                 # Update step checkboxes
                 for i, phase in enumerate(self.current_plan["phases"]):
-                    for j, step in enumerate(phase["steps"], 1):
-                        # Find the line corresponding to the step
-                        search_string = f"- [ ] {step}"
-                        replace_string = f"- [x] {step}"
-                        if i < self.current_phase or (i == self.current_phase and j <= self.current_step):
-                            content = content.replace(search_string, replace_string)
+                    if i == self.current_phase:
+                        for j, step in enumerate(phase["steps"], 1):
+                            old_checkbox = f"- [ ] {step}"
+                            new_checkbox = f"- [x] {step}"
+                            if j <= self.current_step + 1: # Mark current step as complete
+                                for k, line in enumerate(updated_lines):
+                                    if old_checkbox in line:
+                                        updated_lines[k] = line.replace(old_checkbox, new_checkbox)
+                                        break
 
-                # Write updated content back to file
+                updated_content = "\n".join(updated_lines)
+
                 with open(self.todo_file_path, "w", encoding="utf-8") as f:
-                    f.write("\n".join(updated_lines))
+                    f.write(updated_content)
                 logger.info(f"Todo list updated at {self.todo_file_path}")
 
+            else:
+                logger.warning(f"Todo file not found at {self.todo_file_path}")
         except Exception as e:
-            logger.warning(f"Could not update todo list: {e}")
+            logger.error(f"Error updating todo list: {e}")
 
-    async def run(self, prompt: str) -> str:
-        """Main execution loop for the Manus agent."""
-        logger.info(f"Starting Manus agent run with prompt: {prompt}")
 
-        # Create or load task plan
-        if not self.current_plan:
-            self.current_plan = await self.create_task_plan(prompt)
-            await self.create_todo_list(self.current_plan)
-
-        # Execute phases
-        while self.current_phase < len(self.current_plan["phases"]):
-            phase = self.current_plan["phases"][self.current_phase]
-            logger.info(f"Executing Phase {phase["id"]}: {phase["title"]}")
-
-            # Update todo list for current phase
-            await self.update_todo_progress()
-
-            # Execute steps within the phase
-            for self.current_step, step in enumerate(phase["steps"], 1):
-                logger.info(f"Executing Step {self.current_step}: {step}")
-
-                # ENHANCED REASONING: Adapt strategy based on current step and context
-                strategy_context = {
-                    "current_phase": phase["title"],
-                    "current_step": step,
-                    "tools_available": [tool.name for tool in self.available_tools.get_tools()],
-                    "memory_insights": await self.memory_system.get_recent_insights(),
-                }
-                adapted_strategy = await self.reasoning_engine.generate_optimized_strategy(strategy_context)
-                logger.info(f"💡 ADAPTED STRATEGY FOR STEP: {adapted_strategy["approach"]}")
-
-                # Generate prompt for LLM based on current step and adapted strategy
-                llm_prompt = self._generate_llm_prompt(step, adapted_strategy)
-
-                # Call LLM with tools
-                try:
-                    response = await self.llm.ask(
-                        [Message(role="user", content=llm_prompt)],
-                        tools=self.available_tools.get_tools(),
-                        tool_choice="auto",
-                    )
-                    logger.info(f"🤖 LLM Response: {response}")
-
-                    # Process LLM response and tool calls
-                    tool_output = await self._process_llm_response(response)
-                    if tool_output:
-                        logger.info(f"🛠️ Tool Output: {tool_output}")
-                        # ENHANCED LEARNING: Learn from tool execution
-                        await self.reasoning_engine.learn_from_execution({
-                            "step": step,
-                            "tool_output": tool_output,
-                            "success": True,
-                            "feedback": "Tool executed successfully",
-                        })
-
-                except Exception as e:
-                    logger.error(f"Error during LLM interaction or tool execution: {e}")
-                    # ENHANCED LEARNING: Learn from failure
-                    await self.reasoning_engine.learn_from_execution({
-                        "step": step,
-                        "tool_output": str(e),
-                        "success": False,
-                        "feedback": "LLM interaction or tool execution failed",
-                    })
-                    # Optionally, implement retry logic or alternative strategy
-                    # For now, we'll just log and continue
-
-            self.current_phase += 1
-            self.current_step = 0  # Reset step for next phase
-
-        logger.info("✅ All phases completed. Task finished.")
-        await self.update_todo_progress()  # Final update
-        return "Task completed successfully."
-
-    def _generate_llm_prompt(self, step: str, adapted_strategy: Dict) -> str:
-        """Generate a detailed prompt for the LLM based on the current step and adapted strategy."""
-        prompt = f"You are an expert AI agent. Your current task is to execute the following step: {step}.\n\n"
-        prompt += f"Based on the optimized strategy ({adapted_strategy["approach"]}), consider the following:\n"
-        for key, value in adapted_strategy.items():
-            if key not in ["approach", "reasoning_depth"]:
-                prompt += f"- {key.replace("_", " ").title()}: {value}\n"
-        prompt += f"\nYour goal is to achieve the success criteria for this step, leveraging available tools efficiently. Provide your response or tool call in the specified format."
-        return prompt
-
-    async def _process_llm_response(self, response: str) -> Optional[str]:
-        """Process the LLM's response, execute tool calls if present."""
-        # This is a simplified placeholder. In a real system, this would parse
-        # the LLM's response for tool calls and execute them.
-        # For now, we assume the LLM directly returns the result or a simple message.
-        if "tool_code" in response:
-            try:
-                # This is a highly simplified and insecure way to execute tool code.
-                # In a real system, this would involve a secure sandbox and proper tool dispatch.
-                tool_call_data = json.loads(response.split("tool_code:")[1].strip())
-                tool_name = tool_call_data.get("tool_name")
-                tool_args = tool_call_data.get("tool_args", {})
-
-                # Find and execute the tool
-                tool = self.available_tools.get_tool(tool_name)
-                if tool:
-                    # Assuming tools have an async_run method
-                    tool_result = await tool.async_run(**tool_args)
-                    return f"Tool {tool_name} executed: {tool_result}"
-                else:
-                    return f"Error: Tool {tool_name} not found."
-            except Exception as e:
-                return f"Error parsing or executing tool call: {e}"
-        return response
-
-    @model_validator(mode="after")
-    def check_tools(self):
-        # This validator ensures that the tools are properly initialized
-        # and can be called by the agent.
-        # It's a placeholder for more robust tool validation.
-        for tool in self.available_tools.get_tools():
-            if not hasattr(tool, "async_run") and not hasattr(tool, "run"):
-                raise ValueError(f"Tool {tool.name} must have an async_run or run method.")
-        return self.json()
 
 

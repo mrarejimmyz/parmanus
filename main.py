@@ -1,3 +1,4 @@
+
 """
 Complete ParManus AI Agent System with Full Tool Integration
 Optimized for local GGUF models while maintaining all functionality.
@@ -305,6 +306,75 @@ def create_agent(agent_name: str, llm, config: Config):
     return SimpleAgent(agent_name, llm, config)
 
 
+async def initialize_system(args) -> tuple[Config, Any, Any]:
+    """Initialize configuration, LLM, and memory."""
+    logger.info("Initializing ParManus AI Agent System...")
+    config = load_config(args.config)
+
+    if args.api_type:
+        if args.api_type != "ollama":
+            logger.warning(f"Only Ollama is supported. Ignoring --api-type {args.api_type}")
+        config.api_type = "ollama"
+    if args.workspace:
+        config.workspace_root = args.workspace
+    if args.max_steps:
+        config.max_steps = args.max_steps
+
+    os.makedirs(config.workspace_root, exist_ok=True)
+
+    try:
+        llm = create_llm_with_tools(config)
+    except Exception as e:
+        logger.error(f"Failed to initialize Ollama LLM: {e}")
+        logger.error("Make sure Ollama is running: ollama serve")
+        logger.error("And the model is available: ollama pull llama3.2-vision")
+        sys.exit(1)
+
+    memory = Memory(config)
+    return config, llm, memory
+
+
+def display_startup_info(config: Config, args):
+    """Display startup information."""
+    logger.info("🚀 ParManus AI Agent System Ready!")
+    logger.info(f"🧠 Backend: Ollama (Hybrid)")
+    logger.info(f"🛠️ Tools Model: llama3.2")
+    logger.info(f"👁️ Vision Model: llama3.2-vision")
+    logger.info(f"📁 Workspace: {config.workspace_root}")
+    if PARMANUS_AVAILABLE and not args.simple:
+        logger.info("🛠️ Full tool system + vision available")
+    else:
+        logger.info("⚡ Simple mode active")
+
+
+async def process_prompt(prompt: str, args, llm, config: Config, memory: Memory):
+    """Process a single user prompt."""
+    if not prompt or not prompt.strip():
+        return
+
+    memory.push("user", prompt)
+
+    try:
+        agent_name = args.agent if args.agent else route_agent(prompt, not args.simple)
+        agent = create_agent(agent_name, llm, config)
+
+        logger.info(f"🎯 Using {agent_name} agent...")
+
+        start_time = time.time()
+        result = await agent.run(prompt)
+        end_time = time.time()
+
+        memory.push("assistant", result)
+
+        logger.info(f"✅ Task completed in {end_time - start_time:.2f} seconds.")
+        print(f"\n🤖 Agent Response:\n{result}")
+
+    except Exception as e:
+        logger.error(f"Error processing prompt: {e}")
+        logger.error(traceback.format_exc())
+        memory.push("error", f"Error processing prompt: {e}")
+
+
 async def main():
     """Main entry point with full functionality."""
     parser = argparse.ArgumentParser(description="ParManus AI Agent - Complete System")
@@ -319,53 +389,12 @@ async def main():
     args = parser.parse_args()
     
     try:
-        # Load configuration
-        config = load_config(args.config)
-        
-        # Override settings from command line
-        if args.api_type:
-            if args.api_type != "ollama":
-                logger.warning(f"Only Ollama is supported. Ignoring --api-type {args.api_type}")
-            config.api_type = "ollama"
-        if args.workspace:
-            config.workspace_root = args.workspace
-        if args.max_steps:
-            config.max_steps = args.max_steps
-        
-        # Create workspace directory
-        os.makedirs(config.workspace_root, exist_ok=True)
-        
-        # Initialize LLM (Ollama only)
-        try:
-            llm = create_llm_with_tools(config)
-        except Exception as e:
-            logger.error(f"Failed to initialize Ollama LLM: {e}")
-            logger.error("Make sure Ollama is running: ollama serve")
-            logger.error("And the model is available: ollama pull llama3.2-vision")
-            sys.exit(1)
-        
-        # Initialize memory
-        memory = Memory(config)
-        
-        # Display startup info
-        logger.info("🚀 ParManus AI Agent System Ready!")
-        logger.info(f"🧠 Backend: Ollama (Hybrid)")
-        logger.info(f"🛠️ Tools Model: llama3.2")
-        logger.info(f"👁️ Vision Model: llama3.2-vision")
-        logger.info(f"📁 Workspace: {config.workspace_root}")
-        if PARMANUS_AVAILABLE and not args.simple:
-            logger.info("🛠️ Full tool system + vision available")
-        else:
-            logger.info("⚡ Simple mode active")
-        
-        # Track command line prompt processing
+        config, llm, memory = await initialize_system(args)
+        display_startup_info(config, args)
+
         processed_cmd_prompt = False
-        
-        # Main loop
         while True:
             prompt = None
-            
-            # Get prompt
             if not processed_cmd_prompt and args.prompt:
                 prompt = args.prompt
                 processed_cmd_prompt = True
@@ -386,65 +415,16 @@ async def main():
                     time.sleep(5)
                     continue
             
-            if not prompt or not prompt.strip():
-                continue
-            
-            # Add to memory
-            memory.push("user", prompt)
-            
-            try:
-                # Route to agent
-                agent_name = args.agent if args.agent else route_agent(prompt, not args.simple)
-                
-                # Create agent
-                agent = create_agent(agent_name, llm, config)
-                
-                logger.info(f"🎯 Using {agent_name} agent...")
-                
-                # Process request
-                start_time = time.time()
-                result = await agent.run(prompt)
-                end_time = time.time()
-                
-                # Add result to memory
-                memory.push("assistant", result)
-                
-                # Display result
-                print(f"\n🤖 {agent_name.title()} Response:")
-                print("=" * 50)
-                print(result)
-                print("=" * 50)
-                print(f"⏱️ Completed in {end_time - start_time:.2f} seconds")
-                
-                # Show token usage if available
-                if hasattr(llm, 'get_token_count'):
-                    tokens = llm.get_token_count()
-                    print(f"🔢 Tokens: {tokens['total_tokens']} (prompt: {tokens['prompt_tokens']}, completion: {tokens['completion_tokens']})")
-                
-                # Save session
-                memory.save_session()
-                
-                # Exit if non-interactive
-                if not sys.stdin.isatty() and args.no_wait and processed_cmd_prompt:
-                    break
-                    
-            except Exception as e:
-                error_msg = f"Error processing request: {e}"
-                logger.error(error_msg, exc_info=True)
-                print(f"\n❌ Error: {error_msg}")
-                
-                # Add error to memory
-                memory.push("assistant", f"Error: {error_msg}")
-    
-    except KeyboardInterrupt:
-        logger.info("\n👋 Operation interrupted by user")
+            await process_prompt(prompt, args, llm, config, memory)
+
     except Exception as e:
-        logger.error(f"💥 Critical error: {e}", exc_info=True)
-        print(f"\n💥 Critical error: {e}")
+        logger.error(f"An unhandled error occurred: {e}")
+        logger.error(traceback.format_exc())
     finally:
-        logger.info("🛑 ParManus AI Agent shutdown complete")
+        memory.save_session()
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
