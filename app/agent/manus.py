@@ -292,9 +292,14 @@ class Manus(ToolCallAgent):
     async def think(self) -> bool:
         """Enhanced thinking process with improved state management"""
         if not self.current_plan:
-            self.current_plan = await self.create_task_plan(
-                self.memory.get_user_request()
-            )
+            # Get user request from recent messages
+            user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
+            if not user_messages:
+                logger.error("No user request found in memory")
+                return False
+            user_request = user_messages[-1].content
+
+            self.current_plan = await self.create_task_plan(user_request)
             await self.create_todo_list(self.current_plan)
             return True
 
@@ -328,7 +333,13 @@ class Manus(ToolCallAgent):
 
         # Reset if we're starting a new review
         if step == "Navigate to website" and not self.browser_state["page_ready"]:
-            url = self.memory.get_user_request().split()[-1]
+            # Get user request from recent messages
+            user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
+            if not user_messages:
+                logger.error("No user request found in memory")
+                return None
+            url = user_messages[-1].content.split()[-1]
+
             self.browser_state.update(
                 {"current_url": url, "page_ready": True, "last_action": step}
             )
