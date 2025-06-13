@@ -229,67 +229,68 @@ class ToolCallAgent(ReActAgent):
 
     async def execute_tool(self, command: ToolCall) -> str:
         """Execute a single tool call with robust error handling"""
-        # Handle both dict and object formats
-        if isinstance(command, dict):
-            if "function" not in command or "name" not in command["function"]:
-                return "Error: Invalid command format"
-            name = command["function"]["name"]
-            arguments = command["function"].get("arguments", "{}")
-        elif hasattr(command, "function") and hasattr(command.function, "name"):
-            if not command or not command.function or not command.function.name:
-                return "Error: Invalid command format"
-            name = command.function.name
-            arguments = command.function.arguments or "{}"
-        else:
-            return "Error: Invalid command format"
-
-        if name not in self.available_tools.tool_map:
-            return f"Error: Unknown tool '{name}'"
-
         try:
-            # Parse arguments
-            args = json.loads(arguments)
+            if (
+                not command
+                or not hasattr(command, "function")
+                or not command.function
+                or not command.function.name
+            ):
+                return "Error: Invalid command format"
 
-            # Execute the tool
-            logger.info(f"🔧 Activating tool: '{name}'...")
-            result = await self.available_tools.execute(name=name, tool_input=args)
+            name = command.function.name
+            if name not in self.available_tools.tool_map:
+                return f"Error: Unknown tool '{name}'"
 
-            # Handle special tools
-            await self._handle_special_tool(name=name, result=result)
+            try:
+                arguments = (
+                    json.loads(command.function.arguments)
+                    if command.function.arguments
+                    else {}
+                )
 
-            # Check if result is a ToolResult with base64_image
-            if hasattr(result, "base64_image") and result.base64_image:
-                # Store the base64_image for later use in tool_message
-                self._current_base64_image = result.base64_image
+                # Execute the tool
+                logger.info(f"🔧 Activating tool: '{name}'...")
+                result = await self.available_tools.execute(
+                    name=name, tool_input=arguments
+                )
 
-            # Format result for display (standard case)
-            observation = (
-                f"Observed output of cmd `{name}` executed:\n{str(result)}"
-                if result
-                else f"Cmd `{name}` completed with no output"
-            )
+                # Handle special tools
+                await self._handle_special_tool(name=name, result=result)
 
-            return observation
-        except json.JSONDecodeError:
-            error_msg = f"Error parsing arguments for {name}: Invalid JSON format"
-            logger.error(
-                f"📝 Oops! The arguments for '{name}' don't make sense - invalid JSON, arguments:{arguments}"
-            )
-            return f"Error: {error_msg}"
-        except AgentTaskComplete as e:
-            # Propagate task completion signal
-            logger.info(
-                f"🎉 Task completion signaled during tool execution: {e.message}"
-            )
-            self.memory.add_message(
-                Message.system_message(f"Task completed: {e.message}")
-            )
-            self.state = AgentState.FINISHED
-            raise
+                # Check if result is a ToolResult with base64_image
+                if hasattr(result, "base64_image") and result.base64_image:
+                    self._current_base64_image = result.base64_image
+
+                # Format result for display
+                observation = (
+                    f"Observed output of cmd `{name}` executed:\n{str(result)}"
+                    if result
+                    else f"Cmd `{name}` completed with no output"
+                )
+
+                return observation
+
+            except json.JSONDecodeError:
+                error_msg = f"Error parsing arguments for {name}: Invalid JSON format"
+                logger.error(
+                    f"📝 Invalid JSON arguments for '{name}': {command.function.arguments}"
+                )
+                return f"Error: {error_msg}"
+            except AgentTaskComplete as e:
+                # Propagate task completion signal
+                logger.info(
+                    f"🎉 Task completion signaled during tool execution: {e.message}"
+                )
+                raise
+            except Exception as e:
+                error_msg = f"⚠️ Tool '{name}' encountered a problem: {str(e)}"
+                logger.exception(error_msg)
+                return f"Error: {error_msg}"
+
         except Exception as e:
-            error_msg = f"⚠️ Tool '{name}' encountered a problem: {str(e)}"
-            logger.exception(error_msg)
-            return f"Error: {error_msg}"
+            logger.error(f"Error executing tool: {str(e)}")
+            return f"Error: Invalid command format - {str(e)}"
 
     async def _handle_special_tool(self, name: str, result: Any, **kwargs):
         """Handle special tool execution and state changes"""

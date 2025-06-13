@@ -296,11 +296,14 @@ class Manus(ToolCallAgent):
 
     async def think(self) -> bool:
         """Enhanced thinking process with improved state management"""
+        import json
+
+        from app.schema import ToolCall
+
         try:
             if not self.current_plan:
                 # Check if task is already complete
                 if self.browser_state and self.browser_state.get("plan_completed"):
-                    # Log completion once and terminate
                     if not hasattr(self, "_completion_logged"):
                         logger.info("✅ Task completed successfully")
                         self._completion_logged = True
@@ -321,7 +324,7 @@ class Manus(ToolCallAgent):
                         "plan_completed": False,
                     }
 
-                # Get user request from recent messages
+                # Get user request from memory
                 user_messages = [
                     msg for msg in self.memory.messages if msg.role == "user"
                 ]
@@ -331,163 +334,365 @@ class Manus(ToolCallAgent):
 
                 # Create task plan and todo list
                 user_request = user_messages[-1].content
-                try:
-                    plan = await self.create_task_plan(user_request)
-                    todo_list = await self.create_todo_list(plan)
+                plan = await self.create_task_plan(user_request)
+                todo_list = await self.create_todo_list(plan)
 
-                    # Extract and validate URL
-                    url = self._extract_url_from_request(user_request)
-                    if url:
-                        logger.info(f"Initiating navigation to {url}")
-                        self.tool_calls = [
-                            {
-                                "name": "browser_use",
-                                "arguments": {
-                                    "action": "go_to_url",
-                                    "url": url,
-                                    "options": {
-                                        "waitUntil": "networkidle0",
-                                        "timeout": 30000,
-                                    },
-                                },
-                            }
-                        ]
-                        self.browser_state["current_url"] = url
-                    else:
-                        logger.error("No valid URL found in request")
-                        return False
+                # Extract and validate URL
+                url = self._extract_url_from_request(user_request)
+                if url:
+                    logger.info(f"Initiating navigation to {url}")
 
+                    # Format browser tool arguments
+                    browser_args = {
+                        "action": "go_to_url",
+                        "url": url,
+                        "options": {"waitUntil": "networkidle0", "timeout": 30000},
+                    }
+
+                    # Create tool call function
+                    func = ToolCall.Function(
+                        name="browser_use", arguments=json.dumps(browser_args)
+                    )
+
+                    # Create tool call
+                    self.tool_calls = [ToolCall(function=func)]
+                    self.browser_state["current_url"] = url
                     return True
-                except Exception as e:
-                    logger.error(f"Error in think(): {str(e)}")
+                else:
+                    logger.error("No valid URL found in request")
                     return False
 
             # Process current step
-            try:
-                task_type = self.current_plan.get("task_type")
-                if task_type == "website_review":
-                    if not self.browser_state:
-                        self.browser_state = {
-                            "current_url": None,
-                            "content_extracted": False,
-                            "analysis_complete": False,
-                            "screenshots_taken": False,
-                            "last_action": None,
-                            "page_ready": False,
-                            "structure_analyzed": False,
-                            "summary_complete": False,
-                        }
+            current_phase = self.current_plan["phases"][self.current_phase]
+            if not current_phase.get("steps"):
+                await self.progress_to_next_phase()
+                return True
 
-                    # Check for task completion
-                    if self.browser_state.get(
-                        "analysis_complete"
-                    ) and self.browser_state.get("summary_complete"):
-                        logger.info("✅ Website review completed")
-                        await self.mark_plan_complete()
-                        return False
+            if self.current_step >= len(current_phase["steps"]):
+                await self.progress_to_next_phase()
+                return True
 
-                    # Validate and get current step
-                    if self.current_phase >= len(self.current_plan["phases"]):
-                        logger.info("✅ Website review completed - all phases done")
-                        await self.mark_plan_complete()
-                        return False
+            current_step = current_phase["steps"][self.current_step]
+            logger.info(f"Processing step: {current_step}")
 
-                    current_phase = self.current_plan["phases"][self.current_phase]
-                    if not current_phase.get("steps"):
-                        logger.warning("Current phase has no steps")
-                        await self.progress_to_next_step()
-                        return True
+            # Only proceed if page is ready
+            if not self.browser_state.get("page_ready"):
+                logger.info("Waiting for page to be ready before next action")
+                if self.browser_state.get("current_url"):
+                    browser_args = {
+                        "action": "go_to_url",
+                        "url": self.browser_state["current_url"],
+                        "options": {"waitUntil": "networkidle0", "timeout": 30000},
+                    }
+                    func = ToolCall.Function(
+                        name="browser_use", arguments=json.dumps(browser_args)
+                    )
+                    self.tool_calls = [ToolCall(function=func)]
+                return True
 
-                    # Handle phase/step progression
-                    if self.current_step >= len(current_phase["steps"]):
-                        if self.current_phase + 1 < len(self.current_plan["phases"]):
-                            self.current_phase += 1
-                            self.current_step = 0
-                            logger.info(f"Moving to phase {self.current_phase}")
-                            await self.update_todo_progress()
-                            return True
-                        else:
-                            self.browser_state["analysis_complete"] = True
-                            self.browser_state["summary_complete"] = True
-                            await self.mark_plan_complete()
-                            logger.info("✅ Website review completed successfully")
-                            return False
+            # Handle steps
+            if (
+                "Navigate to website" in current_step
+                or "navigate" in current_step.lower()
+            ):
+                await self.progress_to_next_step()
+                return True
 
-                    # Get current step
-                    current_step = current_phase["steps"][self.current_step]
-                    logger.info(f"Processing step: {current_step}")
+            return True
 
-                    # Handle navigation and page readiness
-                    if "navigate" in current_step.lower():
-                        if not self.browser_state.get("current_url"):
-                            next_action = await self.handle_browser_task(current_step)
-                            if next_action:
-                                self.tool_calls = [
-                                    {"name": "browser_use", "arguments": next_action}
-                                ]
-                                self.browser_state["last_action"] = "navigate"
-                                return True
-                            return False
+        except AgentTaskComplete:
+            raise
+        except Exception as e:
+            logger.error(f"Error in think(): {str(e)}")
+            return False
 
-                        if not self.browser_state.get("page_ready"):
-                            # Wait for load to complete after navigation
-                            self.tool_calls = [
-                                {
-                                    "name": "browser_use",
-                                    "arguments": {"action": "wait_for_load"},
-                                }
-                            ]
-                            self.browser_state["page_ready"] = True
-                            return True
+    async def create_task_plan(self, user_request: str) -> Dict:
+        """Create a comprehensive task plan using ENHANCED REASONING FRAMEWORK"""
+        logger.info(f"🎯 CREATING STRATEGIC PLAN WITH DEEP REASONING: {user_request}")
 
-                        # Navigation and page load complete, move on
-                        await self.progress_to_next_step()
-                        return True
+        # Detect task type first
+        task_type = TaskAnalyzer.categorize_task(user_request)
+        context = {
+            "user_request": user_request,
+            "task_type": task_type,
+            "complexity": TaskAnalyzer.assess_task_complexity(user_request),
+            "optimization_targets": ["quality", "efficiency", "learning"],
+            "reasoning_mode": "expert_level",
+        }
 
-                    # Ensure page is ready before other actions
-                    if not self.browser_state.get("page_ready"):
-                        logger.info("Waiting for page to be ready before next action")
-                        return True
+        # Deep analysis using enhanced reasoning engine
+        deep_analysis = await self.reasoning_engine.analyze_task_deeply(
+            user_request, context
+        )
+        deep_analysis["task_type"] = task_type
+        logger.info(
+            "🧠 DEEP ANALYSIS COMPLETED: {} reasoning layers applied".format(
+                len(deep_analysis["reasoning_layers"])
+            )
+        )
 
-                    # Execute the current step
-                    if (
-                        "summary.md" in current_step.lower()
-                        or "analysis.md" in current_step.lower()
-                    ):
-                        # These steps don't require page readiness
-                        self.browser_state["page_ready"] = True
-                        next_action = await self.handle_browser_task(current_step)
-                        if next_action:
-                            self.tool_calls = [
-                                {"name": "browser_use", "arguments": next_action}
-                            ]
-                        self.browser_state["last_action"] = current_step
-                        await self.progress_to_next_step()
-                        return True
+        # Generate optimized strategy
+        optimized_strategy = await self.reasoning_engine.generate_optimized_strategy(
+            deep_analysis
+        )
+        logger.info(
+            "⚡ OPTIMIZED STRATEGY GENERATED: {}".format(optimized_strategy["approach"])
+        )
+
+        # Create enhanced execution plan with estimated duration
+        plan = {
+            "goal": user_request,
+            "task_type": task_type,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "complexity": context["complexity"],
+            "estimated_duration": "5-10 minutes",  # Add default estimated duration
+            "phases": PlanGenerator.create_enhanced_phases(
+                context, optimized_strategy, {}
+            ),
+            "success_criteria": PlanGenerator.define_success_criteria(deep_analysis),
+        }
+
+        # Reset browser state for new task
+        if task_type == "website_review":
+            self.browser_state = {
+                "current_url": None,
+                "content_extracted": False,
+                "analysis_complete": False,
+                "screenshots_taken": False,
+                "last_action": None,
+                "page_ready": False,
+                "structure_analyzed": False,
+                "summary_complete": False,
+            }
+
+        self.current_plan = plan
+        self.current_phase = 0
+        self.current_step = 0
+
+        logger.info(
+            "🚀 STRATEGIC EXECUTION PLAN READY: {} optimized phases".format(
+                len(plan["phases"])
+            )
+        )
+        return plan
+
+    async def create_todo_list(self, plan: Dict) -> str:
+        """Create a detailed todo list from the plan"""
+        todo_content = f"# Task Todo List\n\n"
+        todo_content += "**Goal:** {}\n\n".format(plan["goal"])
+        todo_content += "**Complexity:** {}\n".format(plan["complexity"])
+        todo_content += "**Estimated Duration:** {}\n\n".format(
+            plan["estimated_duration"]
+        )
+
+        for i, phase in enumerate(plan["phases"]):
+            status = (
+                "CURRENT"
+                if i == self.current_phase
+                else "PENDING" if i > self.current_phase else "COMPLETE"
+            )
+            todo_content += "## Phase {}: {} [{}]\n\n".format(
+                phase["id"], phase["title"], status
+            )
+            todo_content += "**Description:** {}\n\n".format(phase["description"])
+            todo_content += "**Success Criteria:** {}\n\n".format(
+                phase["success_criteria"]
+            )
+            todo_content += "**Tools Needed:** {}\n\n".format(
+                ", ".join(phase["tools_needed"])
+            )
+            todo_content += "**Steps:**\n"
+
+            for j, step in enumerate(phase["steps"], 1):
+                checkbox = "- [ ]"
+                if i < self.current_phase:
+                    todo_content += "{} {}\n".format(checkbox, step)
+
+            todo_content += "\n"
+
+        # Use direct file write for todo.md
+        try:
+            with open(self.todo_file_path, "w", encoding="utf-8") as f:
+                f.write(todo_content)
+            logger.info(f"Todo list saved to {self.todo_file_path}.")
+        except Exception as e:
+            logger.error(f"Error saving todo list: {e}", exc_info=True)
+
+        return todo_content
+
+    async def update_todo_progress(self):
+        """Update todo list to reflect current progress - FIXED VERSION"""
+        if not self.current_plan:
+            return
+
+        try:
+            # Read current todo content directly
+            if os.path.exists(self.todo_file_path):
+                with open(self.todo_file_path, "r", encoding="utf-8") as f:
+                    current_content = f.read()
+
+                # Update phase status and step checkboxes in memory
+                lines = current_content.split("\n")
+                updated_lines = []
+
+                for line in lines:
+                    # Update phase status indicators
+                    if line.startswith("## Phase"):
+                        try:
+                            phase_parts = line.split()
+                            if len(phase_parts) >= 3:
+                                phase_num = int(phase_parts[2].rstrip(":"))
+                                if phase_num == self.current_phase + 1:
+                                    line = line.replace("[PENDING]", "[CURRENT]")
+                                elif phase_num < self.current_phase + 1:
+                                    line = line.replace("[CURRENT]", "[COMPLETE]")
+                                    line = line.replace("[PENDING]", "[COMPLETE]")
+                                updated_lines.append(line)
+                            else:
+                                updated_lines.append(line)
+                        except ValueError:
+                            updated_lines.append(
+                                line
+                            )  # Append original line if parsing fails
                     else:
-                        # Normal step execution
-                        next_action = await self.handle_browser_task(current_step)
-                        if next_action:
-                            # Avoid repeating the same action
-                            if self.browser_state.get("last_action") != current_step:
-                                self.tool_calls = [
-                                    {"name": "browser_use", "arguments": next_action}
-                                ]
-                                self.browser_state["last_action"] = current_step
-                                return True
+                        updated_lines.append(line)
 
-                    # Move to next step if current one is complete or has no action
-                    await self.progress_to_next_step()
+                # Update step checkboxes
+                for i, phase in enumerate(self.current_plan["phases"]):
+                    if i == self.current_phase:
+                        for j, step in enumerate(phase["steps"], 1):
+                            old_checkbox = f"- [ ] {step}"
+                            new_checkbox = f"- [x] {step}"
+                            if (
+                                j <= self.current_step + 1
+                            ):  # Mark current step as complete
+                                for k, line in enumerate(updated_lines):
+                                    if old_checkbox in line:
+                                        updated_lines[k] = line.replace(
+                                            old_checkbox, new_checkbox
+                                        )
+                                        break
+
+                new_todo_content = "\n".join(updated_lines)
+
+                # Use direct file write to update the file
+                with open(self.todo_file_path, "w", encoding="utf-8") as f:
+                    f.write(new_todo_content)
+                logger.info(f"Todo list updated at {self.todo_file_path}.")
+            else:
+                logger.warning(
+                    f"Todo file not found at {self.todo_file_path}, cannot update."
+                )
+        except Exception as e:
+            logger.error(f"Error updating todo list: {e}", exc_info=True)
+
+    async def think(self) -> bool:
+        """Enhanced thinking process with improved state management"""
+        import json
+
+        from app.schema import ToolCall
+
+        try:
+            if not self.current_plan:
+                # Check if task is already complete
+                if self.browser_state and self.browser_state.get("plan_completed"):
+                    if not hasattr(self, "_completion_logged"):
+                        logger.info("✅ Task completed successfully")
+                        self._completion_logged = True
+                        raise AgentTaskComplete("Website review completed successfully")
+                    return False
+
+                # Initialize browser state if needed
+                if not self.browser_state:
+                    self.browser_state = {
+                        "current_url": None,
+                        "content_extracted": False,
+                        "analysis_complete": False,
+                        "screenshots_taken": False,
+                        "last_action": None,
+                        "page_ready": False,
+                        "structure_analyzed": False,
+                        "summary_complete": False,
+                        "plan_completed": False,
+                    }
+
+                # Get user request from memory
+                user_messages = [
+                    msg for msg in self.memory.messages if msg.role == "user"
+                ]
+                if not user_messages:
+                    logger.error("No user request found in memory")
+                    return False
+
+                # Create task plan and todo list
+                user_request = user_messages[-1].content
+                plan = await self.create_task_plan(user_request)
+                todo_list = await self.create_todo_list(plan)
+
+                # Extract and validate URL
+                url = self._extract_url_from_request(user_request)
+                if url:
+                    logger.info(f"Initiating navigation to {url}")
+
+                    # Format browser tool arguments
+                    browser_args = {
+                        "action": "go_to_url",
+                        "url": url,
+                        "options": {"waitUntil": "networkidle0", "timeout": 30000},
+                    }
+
+                    # Create tool call function
+                    func = ToolCall.Function(
+                        name="browser_use", arguments=json.dumps(browser_args)
+                    )
+
+                    # Create tool call
+                    self.tool_calls = [ToolCall(function=func)]
+                    self.browser_state["current_url"] = url
                     return True
+                else:
+                    logger.error("No valid URL found in request")
+                    return False
 
-                return await super().think()
+            # Process current step
+            current_phase = self.current_plan["phases"][self.current_phase]
+            if not current_phase.get("steps"):
+                await self.progress_to_next_phase()
+                return True
 
-            except Exception as e:
-                logger.error(f"Error processing step: {str(e)}")
-                return False
+            if self.current_step >= len(current_phase["steps"]):
+                await self.progress_to_next_phase()
+                return True
 
-        except AgentTaskComplete as e:
-            # Allow task completion exception to propagate
+            current_step = current_phase["steps"][self.current_step]
+            logger.info(f"Processing step: {current_step}")
+
+            # Only proceed if page is ready
+            if not self.browser_state.get("page_ready"):
+                logger.info("Waiting for page to be ready before next action")
+                if self.browser_state.get("current_url"):
+                    browser_args = {
+                        "action": "go_to_url",
+                        "url": self.browser_state["current_url"],
+                        "options": {"waitUntil": "networkidle0", "timeout": 30000},
+                    }
+                    func = ToolCall.Function(
+                        name="browser_use", arguments=json.dumps(browser_args)
+                    )
+                    self.tool_calls = [ToolCall(function=func)]
+                return True
+
+            # Handle steps
+            if (
+                "Navigate to website" in current_step
+                or "navigate" in current_step.lower()
+            ):
+                await self.progress_to_next_step()
+                return True
+
+            return True
+
+        except AgentTaskComplete:
             raise
         except Exception as e:
             logger.error(f"Error in think(): {str(e)}")
@@ -850,99 +1055,47 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
             raise
 
     async def progress_to_next_step(self) -> None:
-        """Safely progress to the next step or phase"""
-        try:
-            if not self.current_plan or "phases" not in self.current_plan:
-                logger.warning("No valid plan exists, cannot progress")
-                return
+        """Progress to the next step in the current phase."""
+        if not self.current_plan or "phases" not in self.current_plan:
+            logger.warning("No plan exists or invalid plan format")
+            return
 
-            if self.current_phase >= len(self.current_plan["phases"]):
-                logger.warning("Current phase index out of range")
-                return
+        current_phase = self.current_plan["phases"][self.current_phase]
+        if not current_phase.get("steps"):
+            logger.warning("Current phase has no steps")
+            await self.progress_to_next_phase()
+            return
 
-            current_phase = self.current_plan["phases"][self.current_phase]
-            if not current_phase.get("steps"):
-                logger.warning("Current phase has no steps")
-                return
+        self.current_step += 1
+        if self.current_step >= len(current_phase["steps"]):
+            # Move to next phase when all steps in current phase are complete
+            await self.progress_to_next_phase()
+            return
 
-            # Try to move to next step in current phase
-            if self.current_step + 1 < len(current_phase["steps"]):
-                self.current_step += 1
-                logger.info(
-                    f"Moved to step {self.current_step} in phase {self.current_phase}"
-                )
-            # If no more steps in current phase, try to move to next phase
-            elif self.current_phase + 1 < len(self.current_plan["phases"]):
-                self.current_phase += 1
-                self.current_step = 0
-                logger.info(
-                    f"Moved to phase {self.current_phase}, step {self.current_step}"
-                )
-            else:
-                logger.info("Reached end of all phases and steps")
-                await self.mark_plan_complete()
+        # Update todo list to reflect progress
+        await self.update_todo_progress()
 
-            # Update progress in todo list
-            await self.update_todo_progress()
+    async def progress_to_next_phase(self) -> None:
+        """Progress to the next phase in the current plan."""
+        if not self.current_plan or "phases" not in self.current_plan:
+            logger.warning("No plan exists or invalid plan format")
+            return
 
-        except Exception as e:
-            logger.error(f"Error progressing to next step: {str(e)}")
-            # Ensure we don't leave the agent in an invalid state
-            if self.current_step >= len(
-                self.current_plan["phases"][self.current_phase]["steps"]
-            ):
-                self.current_step = (
-                    len(self.current_plan["phases"][self.current_phase]["steps"]) - 1
-                )
+        # Update todo progress for current phase
+        await self.update_todo_progress()
 
-    def parse_review_parameters(self, step: str) -> Dict:
-        """Parse review step parameters"""
-        params = {"element": None}
+        # Move to next phase
+        self.current_phase += 1
+        self.current_step = 0
 
-        if "main content" in step.lower():
-            params["element"] = "main,article,#content,.content,body"
-        elif "header" in step.lower():
-            params["element"] = "header,#header,.header"
-        elif "navigation" in step.lower():
-            params["element"] = "nav,#nav,.nav,.navigation"
-        elif "footer" in step.lower():
-            params["element"] = "footer,#footer,.footer"
+        # Check if we're done with all phases
+        if self.current_phase >= len(self.current_plan["phases"]):
+            logger.info("✅ All phases completed")
+            await self.mark_plan_complete()
+            return
 
-        return params
-
-    def generate_analysis_report(self) -> str:
-        """Generate a detailed analysis report of the website"""
-        return f"""# Analysis Report
-
-## Overview
-- URL: {self.browser_state.get('current_url')}
-- Analysis Date: {time.strftime('%Y-%m-%d %H:%M:%S')}
-
-## Content Extraction
-- Status: {"Complete" if self.browser_state.get('content_extracted') else "Pending"}
-- Extracted Elements:
-  - Main Content: {"Yes" if self.browser_state.get('content_extracted') else "No"}
-
-## Visual Documentation
-- Status: {"Complete" if self.browser_state.get('screenshots_taken') else "Pending"}
-- Screenshot Path: {os.path.join(config.workspace_root, "screenshots")}
-
-## Structure Analysis
-- Status: {"Complete" if self.browser_state.get('structure_analyzed') else "Pending"}
-- Analysis Details: See `analysis` folder
-
-## Summary
-- Status: {"Complete" if self.browser_state.get('summary_complete') else "Pending"}
-- Summary Path: {os.path.join(config.workspace_root, "summary.md")}
-
-## Review Status
-- Overall Status: {"Complete" if self.browser_state.get('analysis_complete') else "In Progress"}
-- Pending Actions:
-  - Content Extraction: {"No" if self.browser_state.get('content_extracted') else "Yes"}
-  - Visual Documentation: {"No" if self.browser_state.get('screenshots_taken') else "Yes"}
-  - Structure Analysis: {"No" if self.browser_state.get('structure_analyzed') else "Yes"}
-  - Summary Creation: {"No" if self.browser_state.get('summary_complete') else "Yes"}
-"""
+        logger.info(f"Moving to phase {self.current_phase + 1}")
+        await self.update_todo_progress()
 
     async def mark_plan_complete(self) -> None:
         """Mark the current plan as complete and clean up with proper state transitions"""
@@ -1002,6 +1155,55 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
             self.current_step = 0
             if self.browser_state:
                 self.browser_state["plan_completed"] = True
+
+    def parse_review_parameters(self, step: str) -> Dict:
+        """Parse review step parameters"""
+        params = {"element": None}
+
+        if "main content" in step.lower():
+            params["element"] = "main,article,#content,.content,body"
+        elif "header" in step.lower():
+            params["element"] = "header,#header,.header"
+        elif "navigation" in step.lower():
+            params["element"] = "nav,#nav,.nav,.navigation"
+        elif "footer" in step.lower():
+            params["element"] = "footer,#footer,.footer"
+
+        return params
+
+    def generate_analysis_report(self) -> str:
+        """Generate a detailed analysis report of the website"""
+        return f"""# Analysis Report
+
+## Overview
+- URL: {self.browser_state.get('current_url')}
+- Analysis Date: {time.strftime('%Y-%m-%d %H:%M:%S')}
+
+## Content Extraction
+- Status: {"Complete" if self.browser_state.get('content_extracted') else "Pending"}
+- Extracted Elements:
+  - Main Content: {"Yes" if self.browser_state.get('content_extracted') else "No"}
+
+## Visual Documentation
+- Status: {"Complete" if self.browser_state.get('screenshots_taken') else "Pending"}
+- Screenshot Path: {os.path.join(config.workspace_root, "screenshots")}
+
+## Structure Analysis
+- Status: {"Complete" if self.browser_state.get('structure_analyzed') else "Pending"}
+- Analysis Details: See `analysis` folder
+
+## Summary
+- Status: {"Complete" if self.browser_state.get('summary_complete') else "Pending"}
+- Summary Path: {os.path.join(config.workspace_root, "summary.md")}
+
+## Review Status
+- Overall Status: {"Complete" if self.browser_state.get('analysis_complete') else "In Progress"}
+- Pending Actions:
+  - Content Extraction: {"No" if self.browser_state.get('content_extracted') else "Yes"}
+  - Visual Documentation: {"No" if self.browser_state.get('screenshots_taken') else "Yes"}
+  - Structure Analysis: {"No" if self.browser_state.get('structure_analyzed') else "Yes"}
+  - Summary Creation: {"No" if self.browser_state.get('summary_complete') else "Yes"}
+"""
 
     def _extract_url_from_request(self, request: str) -> Optional[str]:
         """Extract URL from user request with enhanced validation."""
