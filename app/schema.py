@@ -143,10 +143,43 @@ class Message(BaseModel):
             content: Optional message content
             base64_image: Optional base64 encoded image
         """
-        formatted_calls = [
-            {"id": call.id, "function": call.function.model_dump(), "type": "function"}
-            for call in tool_calls
-        ]
+        formatted_calls = []
+        for call in tool_calls:
+            try:
+                if isinstance(call, dict):
+                    # Dict format
+                    formatted_calls.append({
+                        "id": call.get("id", f"call_{len(formatted_calls)}"),
+                        "function": call.get("function", {}),
+                        "type": "function"
+                    })
+                elif hasattr(call, 'id') and hasattr(call, 'function'):
+                    # Object format with proper attributes
+                    function_data = (
+                        call.function.model_dump() 
+                        if hasattr(call.function, 'model_dump') 
+                        else call.function.__dict__ if hasattr(call.function, '__dict__')
+                        else str(call.function)
+                    )
+                    formatted_calls.append({
+                        "id": getattr(call, 'id', f"call_{len(formatted_calls)}"),
+                        "function": function_data,
+                        "type": "function"
+                    })
+                else:
+                    # Fallback for unexpected formats
+                    formatted_calls.append({
+                        "id": f"call_{len(formatted_calls)}",
+                        "function": {"name": str(call), "arguments": "{}"},
+                        "type": "function"
+                    })
+            except AttributeError as e:
+                # Handle missing attributes gracefully
+                formatted_calls.append({
+                    "id": f"call_{len(formatted_calls)}",
+                    "function": {"name": str(call), "arguments": "{}"},
+                    "type": "function"
+                })
         return cls(
             role=Role.ASSISTANT,
             content=content,
