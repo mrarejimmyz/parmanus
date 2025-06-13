@@ -55,10 +55,9 @@ class ParManusAgentWrapper:
         """Run the ParManus agent."""
         try:
             if not self.agent:
-                # Create ParManus config
-                parmanus_config = self._create_parmanus_config()
-                
                 # Initialize agent
+                # Manus agent uses the global config directly for workspace_root
+                # max_steps and max_observe are class attributes of Manus
                 if self.agent_class == Manus:
                     self.agent = await Manus.create()
                 else:
@@ -82,15 +81,7 @@ class ParManusAgentWrapper:
                 except Exception as e:
                     logger.warning(f"Error during agent cleanup: {e}")
     
-    def _create_parmanus_config(self):
-        """Create ParManus config from our config."""
-        # This would map our config to ParManus config format
-        # For now, return a basic config
-        return type('Config', (), {
-            'workspace_root': self.config.workspace_root,
-            'max_steps': self.config.max_steps,
-            'max_observe': self.config.max_observe,
-        })()
+    # Removed _create_parmanus_config method
 
 def create_agent(agent_name: str, llm, config: Config):
     """Create appropriate agent based on name and availability."""
@@ -109,5 +100,7 @@ def create_agent(agent_name: str, llm, config: Config):
     
     # Fallback to simple agent
     return SimpleAgent(agent_name, llm, config)
+
+
 
 

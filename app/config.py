@@ -163,6 +163,8 @@ class Config(BaseModel):
     )
     memory: Optional[MemorySettings] = Field(default_factory=MemorySettings)
     voice: Optional[VoiceSettings] = Field(default_factory=VoiceSettings)
+    max_steps: int = Field(default=25, description="Maximum steps for agent execution")
+    max_observe: int = Field(default=10000, description="Maximum observation length for agent")
 
     @property
     def browser_config(self) -> Optional[BrowserSettings]:
@@ -269,6 +271,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
             browser=BrowserSettings(headless=False, disable_security=True),
             workspace_root=str(WORKSPACE_ROOT),
             mcp_config=mcp_config,
+            max_steps=25,
+            max_observe=10000,
         )
 
 
@@ -292,3 +296,5 @@ def get_config(config_path: Optional[str] = None) -> Config:
 
 # Global config instance
 config = get_config()
+
+

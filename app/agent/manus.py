@@ -32,8 +32,8 @@ class Manus(ToolCallAgent):
     system_prompt: str = SYSTEM_PROMPT.format(directory=config.workspace_root)
     next_step_prompt: str = NEXT_STEP_PROMPT
 
-    max_observe: int = 10000
-    max_steps: int = 25  # Increased for better planning
+    max_observe: int = config.max_observe
+    max_steps: int = config.max_steps
 
     # Enhanced reasoning and planning
     reasoning_framework: EnhancedReasoningEngine = Field(default_factory=EnhancedReasoningEngine)
@@ -98,13 +98,16 @@ class Manus(ToolCallAgent):
             user_request, context
         )
         logger.info(
-            f"🧠 DEEP ANALYSIS COMPLETED: {len(deep_analysis['reasoning_layers'])} reasoning layers applied"
+            f"🧠 DEEP ANALYSIS COMPLETED: {len(deep_analysis["reasoning_layers"])} reasoning layers applied"
         )
 
-        # Generate optim                 opt        optimized_strategy = await self.reasoning_engine.generate_optimized_strategy(
+        # Generate optimized strategy
+        optimized_strategy = await self.reasoning_engine.generate_optimized_strategy(
             deep_analysis
         )
-        logger.info(f'⚡ OPTIMIZED STRATEGY GENERATED: {optimized_strategy["approach"]}')system
+        logger.info(f"⚡ OPTIMIZED STRATEGY GENERATED: {optimized_strategy["approach"]}")
+
+        # Integrate learning insights from memory system
         learned_strategy = await self.memory_system.get_optimized_strategy(
             task_type=TaskAnalyzer.categorize_task(user_request), context=context # Use TaskAnalyzer
         )
@@ -256,5 +259,7 @@ class Manus(ToolCallAgent):
                 logger.warning(f"Todo file not found at {self.todo_file_path}")
         except Exception as e:
             logger.error(f"Error updating todo list: {e}")
+
+
 
 
