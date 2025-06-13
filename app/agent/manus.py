@@ -335,91 +335,111 @@ class Manus(ToolCallAgent):
         logger.debug(f"Handling browser task: {step}")
         logger.debug(f"Current browser state: {self.browser_state}")
 
-        # Reset if we're starting a new review
-        if step == "Navigate to website" and not self.browser_state["page_ready"]:
-            # Get user request from recent messages
-            user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
-            if not user_messages:
-                logger.error("No user request found in memory")
+        try:
+            if not self.current_plan or "phases" not in self.current_plan:
+                logger.error("No valid plan exists")
                 return None
-            url = user_messages[-1].content.split()[-1]
 
-            self.browser_state.update(
-                {"current_url": url, "page_ready": True, "last_action": step}
-            )
-            return {"action": "go_to_url", "url": url}
+            # Reset if we're starting a new review
+            if step == "Navigate to website" and not self.browser_state["page_ready"]:
+                # Get user request from recent messages
+                user_messages = [
+                    msg for msg in self.memory.messages if msg.role == "user"
+                ]
+                if not user_messages:
+                    logger.error("No user request found in memory")
+                    return None
+                url = user_messages[-1].content.split()[-1]
 
-        # Only proceed if page is ready
-        if not self.browser_state.get("page_ready"):
-            logger.warning("Page not ready, waiting for navigation")
-            return None
+                self.browser_state.update(
+                    {"current_url": url, "page_ready": True, "last_action": step}
+                )
+                return {"action": "go_to_url", "url": url}
 
-        # Skip duplicate actions
-        if self.browser_state.get("last_action") == step:
-            logger.debug(f"Skipping duplicate action: {step}")
-            # Move to next step
+            # Only proceed if page is ready
+            if not self.browser_state.get("page_ready"):
+                logger.warning("Page not ready, waiting for navigation")
+                return None
+
+            # Validate current phase and step
+            if self.current_phase >= len(self.current_plan["phases"]):
+                logger.error("Current phase index out of range")
+                return None
+
             current_phase = self.current_plan["phases"][self.current_phase]
-            if self.current_step + 1 < len(current_phase["steps"]):
-                self.current_step += 1
-            elif self.current_phase + 1 < len(self.current_plan["phases"]):
-                self.current_phase += 1
-                self.current_step = 0
+
+            if not current_phase.get("steps") or self.current_step >= len(
+                current_phase["steps"]
+            ):
+                logger.error("Current step index out of range")
+                return None
+
+            # Skip duplicate actions
+            if self.browser_state.get("last_action") == step:
+                logger.debug(f"Skipping duplicate action: {step}")
+                await self.progress_to_next_step()
+                return None
+
+            self.browser_state["last_action"] = step
+
+            # Handle each step appropriately
+            if (
+                step == "Extract main content"
+                and not self.browser_state["content_extracted"]
+            ):
+                self.browser_state["content_extracted"] = True
+                return {
+                    "action": "extract_content",
+                    "css_selector": "main,article,#content,.content,body",
+                }
+
+            elif (
+                step == "Capture screenshots"
+                and not self.browser_state["screenshots_taken"]
+            ):
+                self.browser_state["screenshots_taken"] = True
+                return {
+                    "action": "screenshot",
+                    "path": os.path.join(config.workspace_root, "screenshots"),
+                }
+
+            elif step == "Analyze page structure" and not self.browser_state.get(
+                "structure_analyzed"
+            ):
+                self.browser_state["structure_analyzed"] = True
+                content_path = os.path.join(config.workspace_root, "analysis")
+                os.makedirs(content_path, exist_ok=True)
+                return {"action": "analyze_structure", "output_path": content_path}
+
+            elif (
+                "Generate analysis.md" in step
+                and not self.browser_state["analysis_complete"]
+            ):
+                self.browser_state["analysis_complete"] = True
+                analysis_path = os.path.join(config.workspace_root, "analysis.md")
+                report = self.generate_analysis_report()
+                with open(analysis_path, "w", encoding="utf-8") as f:
+                    f.write(report)
+                logger.info(f"Analysis report generated at {analysis_path}")
+                await self.progress_to_next_step()
+                return None
+
+            elif "Create summary.md" in step and not self.browser_state.get(
+                "summary_complete"
+            ):
+                self.browser_state["summary_complete"] = True
+                summary_path = os.path.join(config.workspace_root, "summary.md")
+                with open(summary_path, "w", encoding="utf-8") as f:
+                    f.write(self.generate_summary())
+                logger.info(f"Summary generated at {summary_path}")
+                await self.progress_to_next_step()
+                return None
+
             return None
 
-        self.browser_state["last_action"] = step
-
-        # Handle each step appropriately
-        if (
-            step == "Extract main content"
-            and not self.browser_state["content_extracted"]
-        ):
-            self.browser_state["content_extracted"] = True
-            return {
-                "action": "extract_content",
-                "css_selector": "main,article,#content,.content,body",
-            }
-
-        elif (
-            step == "Capture screenshots"
-            and not self.browser_state["screenshots_taken"]
-        ):
-            self.browser_state["screenshots_taken"] = True
-            return {
-                "action": "screenshot",
-                "path": os.path.join(config.workspace_root, "screenshots"),
-            }
-
-        elif step == "Analyze page structure" and not self.browser_state.get(
-            "structure_analyzed"
-        ):
-            self.browser_state["structure_analyzed"] = True
-            content_path = os.path.join(config.workspace_root, "analysis")
-            os.makedirs(content_path, exist_ok=True)
-            return {"action": "analyze_structure", "output_path": content_path}
-
-        elif (
-            "Generate analysis.md" in step
-            and not self.browser_state["analysis_complete"]
-        ):
-            self.browser_state["analysis_complete"] = True
-            analysis_path = os.path.join(config.workspace_root, "analysis.md")
-            report = self.generate_analysis_report()
-            with open(analysis_path, "w", encoding="utf-8") as f:
-                f.write(report)
-            logger.info(f"Analysis report generated at {analysis_path}")
+        except Exception as e:
+            logger.error(f"Error in handle_browser_task: {str(e)}")
             return None
-
-        elif "Create summary.md" in step and not self.browser_state.get(
-            "summary_complete"
-        ):
-            self.browser_state["summary_complete"] = True
-            summary_path = os.path.join(config.workspace_root, "summary.md")
-            with open(summary_path, "w", encoding="utf-8") as f:
-                f.write(self.generate_summary())
-            logger.info(f"Summary generated at {summary_path}")
-            return None
-
-        return None
 
     def generate_summary(self) -> str:
         """Generate a concise summary of the website review"""
@@ -558,3 +578,57 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
         except Exception as e:
             logger.error(f"Review action failed: {str(e)}")
             raise
+
+    async def progress_to_next_step(self) -> None:
+        """Safely progress to the next step or phase"""
+        try:
+            if not self.current_plan or "phases" not in self.current_plan:
+                return
+
+            current_phase = self.current_plan["phases"][self.current_phase]
+
+            if self.current_step + 1 < len(current_phase["steps"]):
+                self.current_step += 1
+                logger.debug(f"Moved to next step: {self.current_step}")
+            elif self.current_phase + 1 < len(self.current_plan["phases"]):
+                self.current_phase += 1
+                self.current_step = 0
+                logger.debug(f"Moved to next phase: {self.current_phase}")
+
+            await self.update_todo_progress()
+        except Exception as e:
+            logger.error(f"Error progressing to next step: {str(e)}")
+
+    def generate_analysis_report(self) -> str:
+        """Generate a detailed analysis report of the website"""
+        return f"""# Analysis Report
+
+## Overview
+- URL: {self.browser_state.get('current_url')}
+- Analysis Date: {time.strftime('%Y-%m-%d %H:%M:%S')}
+
+## Content Extraction
+- Status: {"Complete" if self.browser_state.get('content_extracted') else "Pending"}
+- Extracted Elements:
+  - Main Content: {"Yes" if self.browser_state.get('content_extracted') else "No"}
+
+## Visual Documentation
+- Status: {"Complete" if self.browser_state.get('screenshots_taken') else "Pending"}
+- Screenshot Path: {os.path.join(config.workspace_root, "screenshots")}
+
+## Structure Analysis
+- Status: {"Complete" if self.browser_state.get('structure_analyzed') else "Pending"}
+- Analysis Details: See `analysis` folder
+
+## Summary
+- Status: {"Complete" if self.browser_state.get('summary_complete') else "Pending"}
+- Summary Path: {os.path.join(config.workspace_root, "summary.md")}
+
+## Review Status
+- Overall Status: {"Complete" if self.browser_state.get('analysis_complete') else "In Progress"}
+- Pending Actions:
+  - Content Extraction: {"No" if self.browser_state.get('content_extracted') else "Yes"}
+  - Visual Documentation: {"No" if self.browser_state.get('screenshots_taken') else "Yes"}
+  - Structure Analysis: {"No" if self.browser_state.get('structure_analyzed') else "Yes"}
+  - Summary Creation: {"No" if self.browser_state.get('summary_complete') else "Yes"}
+"""
