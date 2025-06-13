@@ -218,32 +218,48 @@ class HybridOllamaLLM:
             # Format tool calls
             formatted_tool_calls = []
             for tool_call in tool_calls:
-                # Handle both object and dict formats
-                if hasattr(tool_call, 'id'):
-                    # OpenAI object format
-                    formatted_tool_calls.append({
-                        "id": tool_call.id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments
-                        }
-                    })
-                elif isinstance(tool_call, dict):
-                    # Dict format - ensure proper structure
-                    if 'function' in tool_call:
+                # Handle both object and dict formats with proper error handling
+                try:
+                    if hasattr(tool_call, 'id'):
+                        # OpenAI object format
                         formatted_tool_calls.append({
-                            "id": tool_call.get('id', f"call_{len(formatted_tool_calls)}"),
+                            "id": tool_call.id,
                             "type": "function",
                             "function": {
-                                "name": tool_call['function'].get('name', ''),
-                                "arguments": tool_call['function'].get('arguments', '{}')
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments
                             }
                         })
+                    elif isinstance(tool_call, dict):
+                        # Dict format - ensure proper structure
+                        if 'function' in tool_call:
+                            formatted_tool_calls.append({
+                                "id": tool_call.get('id', f"call_{len(formatted_tool_calls)}"),
+                                "type": "function",
+                                "function": {
+                                    "name": tool_call['function'].get('name', ''),
+                                    "arguments": tool_call['function'].get('arguments', '{}')
+                                }
+                            })
+                        else:
+                            # Handle malformed tool call
+                            logger.warning(f"Malformed tool call: {tool_call}")
+                            continue
                     else:
-                        # Handle malformed tool call
-                        logger.warning(f"Malformed tool call: {tool_call}")
+                        # Handle unexpected format
+                        logger.warning(f"Unexpected tool call format: {tool_call}")
                         continue
+                except AttributeError as e:
+                    logger.error(f"Error processing tool call {tool_call}: {e}")
+                    # Create a fallback tool call with generated ID
+                    formatted_tool_calls.append({
+                        "id": f"call_{len(formatted_tool_calls)}",
+                        "type": "function",
+                        "function": {
+                            "name": str(tool_call),
+                            "arguments": "{}"
+                        }
+                    })
             
             return {
                 "content": content,

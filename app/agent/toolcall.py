@@ -188,7 +188,7 @@ class ToolCallAgent(ReActAgent):
                 tool_id = command.get('id', 'unknown')
             elif hasattr(command, 'function') and hasattr(command.function, 'name'):
                 tool_name = command.function.name
-                tool_id = command.id
+                tool_id = getattr(command, 'id', 'unknown')
             else:
                 tool_name = str(command)
                 tool_id = 'unknown'

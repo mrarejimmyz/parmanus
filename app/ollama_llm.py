@@ -220,14 +220,43 @@ class OllamaLLM:
             # Format tool calls
             formatted_tool_calls = []
             for tool_call in tool_calls:
-                formatted_tool_calls.append({
-                    "id": tool_call.id,
-                    "type": "function",
-                    "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments
-                    }
-                })
+                # Handle both object and dict formats with proper error handling
+                try:
+                    if hasattr(tool_call, 'id'):
+                        # Object format
+                        formatted_tool_calls.append({
+                            "id": tool_call.id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments
+                            }
+                        })
+                    elif isinstance(tool_call, dict):
+                        # Dict format - ensure proper structure
+                        formatted_tool_calls.append({
+                            "id": tool_call.get('id', f"call_{len(formatted_tool_calls)}"),
+                            "type": "function",
+                            "function": {
+                                "name": tool_call.get('function', {}).get('name', ''),
+                                "arguments": tool_call.get('function', {}).get('arguments', '{}')
+                            }
+                        })
+                    else:
+                        # Handle malformed tool call
+                        logger.warning(f"Malformed tool call: {tool_call}")
+                        continue
+                except AttributeError as e:
+                    logger.error(f"Error processing tool call {tool_call}: {e}")
+                    # Create a fallback tool call with generated ID
+                    formatted_tool_calls.append({
+                        "id": f"call_{len(formatted_tool_calls)}",
+                        "type": "function",
+                        "function": {
+                            "name": str(tool_call),
+                            "arguments": "{}"
+                        }
+                    })
             
             return {
                 "content": content,
