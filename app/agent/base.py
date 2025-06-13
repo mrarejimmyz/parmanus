@@ -11,6 +11,7 @@ from app.llm import LLM
 from app.logger import logger
 from app.sandbox.client import SANDBOX_CLIENT
 from app.schema import ROLE_TYPE, AgentState, Memory, Message
+from app.intelligent_error_handler import AdaptiveRecoverySystem
 
 
 class CircuitBreaker:
@@ -200,6 +201,7 @@ class BaseAgent(BaseModel, ABC):
     # Enhanced reliability features
     circuit_breaker: CircuitBreaker = Field(default_factory=CircuitBreaker)
     stuck_detector: StuckStateDetector = Field(default_factory=StuckStateDetector)
+    adaptive_recovery: AdaptiveRecoverySystem = Field(default_factory=AdaptiveRecoverySystem)
     performance_metrics: Dict[str, Any] = Field(default_factory=dict)
 
     class Config:

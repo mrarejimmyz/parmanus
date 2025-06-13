@@ -326,3 +326,85 @@ Remember: Quality over speed. Take time to do each step properly.
         
         return current_plan
 
+
+    def generate_strategic_plan(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a strategic plan based on the analysis"""
+        task_type = analysis.get("task_type", "general")
+        complexity = analysis.get("complexity", "moderate")
+        
+        phases = []
+        
+        # Always start with planning phase
+        phases.append({
+            "id": 1,
+            "title": "Strategic Planning and Setup",
+            "description": "Analyze requirements and create execution strategy",
+            "estimated_time": "2-3 minutes"
+        })
+        
+        # Add task-specific phases
+        if task_type == "web_interaction":
+            phases.extend([
+                {
+                    "id": 2,
+                    "title": "Website Access and Navigation", 
+                    "description": "Navigate to target website and verify accessibility",
+                    "estimated_time": "3-5 minutes"
+                },
+                {
+                    "id": 3,
+                    "title": "Content Extraction and Analysis",
+                    "description": "Extract and analyze website content",
+                    "estimated_time": "5-10 minutes"
+                }
+            ])
+        elif task_type == "analysis":
+            phases.extend([
+                {
+                    "id": 2,
+                    "title": "Data Collection",
+                    "description": "Gather all necessary information",
+                    "estimated_time": "5-8 minutes"
+                },
+                {
+                    "id": 3,
+                    "title": "Analysis and Insights",
+                    "description": "Analyze data and generate insights",
+                    "estimated_time": "8-12 minutes"
+                }
+            ])
+        
+        # Always end with delivery phase
+        phases.append({
+            "id": len(phases) + 1,
+            "title": "Results Compilation and Delivery",
+            "description": "Compile findings and deliver to user",
+            "estimated_time": "2-3 minutes"
+        })
+        
+        return {
+            "phases": phases,
+            "total_phases": len(phases),
+            "estimated_total_time": f"{sum([5, 8, 10, 3][:len(phases)])} minutes",
+            "complexity_level": complexity,
+            "success_probability": "85-95%" if complexity == "simple" else "75-85%"
+        }
+    
+    def identify_required_tools(self, analysis: Dict[str, Any]) -> List[str]:
+        """Identify required tools based on analysis"""
+        task_type = analysis.get("task_type", "general")
+        request = analysis.get("original_request", "")
+        
+        tools = ["str_replace_editor"]  # Always need file operations
+        
+        if task_type == "web_interaction" or "website" in request.lower():
+            tools.append("browser_use")
+        
+        if "search" in request.lower():
+            tools.append("web_search")
+            
+        if "code" in request.lower() or "python" in request.lower():
+            tools.append("python_execute")
+            
+        return tools
+

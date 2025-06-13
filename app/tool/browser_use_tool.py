@@ -17,6 +17,7 @@ from app.llm import LLM
 from app.logger import logger
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
+from app.tool.enhanced_browser import EnhancedContentExtractor
 
 
 _BROWSER_DESCRIPTION = """\
@@ -197,6 +198,9 @@ class BrowserUseTool(BaseTool, Generic[Context]):
     selector_tracker: SelectorTracker = Field(
         default_factory=SelectorTracker, exclude=True
     )
+    
+    # Add enhanced content extractor for JavaScript support
+    enhanced_content_extractor: Optional[EnhancedContentExtractor] = Field(default=None, exclude=True)
 
     # Action deduplication system to prevent loops
     last_action: Optional[str] = Field(default=None, exclude=True)
@@ -260,6 +264,10 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 
             self.context = await self.browser.new_context(context_config)
             self.dom_service = DomService(await self.context.get_current_page())
+
+        # Initialize enhanced content extractor if not already done
+        if self.enhanced_content_extractor is None:
+            self.enhanced_content_extractor = EnhancedContentExtractor(self.llm)
 
         return self.context
 
@@ -482,113 +490,98 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                             error="Goal is required for 'extract_content' action"
                         )
 
-                    # Check if a selector was provided and validate it
-                    if selector:
-                        if not self.selector_tracker.is_valid_selector(selector):
-                            return ToolResult(
-                                error=f"Invalid selector format: '{selector}'. Please use valid CSS selectors."
-                            )
+                    # Use enhanced content extraction with JavaScript support
+                    try:
+                        page = await context.get_current_page()
+                        
+                        # Get current page URL for logging
+                        page_url = page.url
+                        logger.info(f"Using enhanced content extraction for: {page_url}")
+                        
+                        # Use enhanced content extraction
+                        extraction_results = await self.enhanced_content_extractor.extract_content_with_js_support(page, goal)
+                        
+                        # Check if extraction was successful
+                        text_content = extraction_results.get('text_content', '')
+                        if not text_content or len(text_content.strip()) < 50:
+                            # Try fallback strategies
+                            logger.warning("Primary extraction failed, trying fallback strategies...")
+                            
+                            # Fallback 1: Wait longer and retry
+                            await asyncio.sleep(5)
+                            extraction_results = await self.enhanced_content_extractor.extract_content_with_js_support(page, goal)
+                            text_content = extraction_results.get('text_content', '')
+                            
+                            # Fallback 2: Take screenshot for visual analysis
+                            if not text_content or len(text_content.strip()) < 50:
+                                try:
+                                    screenshot = await page.screenshot()
+                                    extraction_results['screenshot_taken'] = True
+                                    extraction_results['fallback_reason'] = "Text extraction failed, screenshot captured for visual analysis"
+                                except Exception as e:
+                                    logger.warning(f"Screenshot fallback failed: {e}")
+                        
+                        # Analyze results with LLM
+                        analysis_results = await self.enhanced_content_extractor.analyze_extraction_results(extraction_results, goal)
+                        
+                        # Format final output
+                        if analysis_results.get('extraction_success'):
+                            output = f"""✅ ENHANCED CONTENT EXTRACTION SUCCESSFUL
 
-                        if not self.selector_tracker.track_selector(selector):
-                            return ToolResult(
-                                error=f"Selector '{selector}' has been used too many times. Please try a different approach."
-                            )
+🎯 **Analysis Goal:** {goal}
 
-                    # Get current page state
-                    page = await context.get_current_page()
-                    page_content = await page.content()
-                    page_url = page.url
-                    page_title = await page.title()
+📊 **Website Analysis:**
+{analysis_results['analysis']}
 
-                    # Prepare messages for LLM
-                    messages = [
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant that extracts content from web pages based on specific goals.",
-                        },
-                        {
-                            "role": "user",
-                            "content": f"Extract content from this page based on the goal: {goal}\n\nPage URL: {page_url}\nPage Title: {page_title}\n\nPage Content: {page_content[:max_content_length]}...",
-                        },
-                    ]
+📈 **Technical Summary:**
+- Content Length: {analysis_results['raw_data']['text_length']} characters
+- Headings Found: {analysis_results['raw_data']['structure_summary']['headings_count']}
+- Links Found: {analysis_results['raw_data']['structure_summary']['links_count']}
+- Images Found: {analysis_results['raw_data']['structure_summary']['images_count']}
+- Framework: {analysis_results['raw_data']['technical_info'].get('framework', 'Unknown')}
 
-                    # Define extraction function
-                    extraction_function = {
-                        "name": "extract_content",
-                        "description": "Extract content from a web page based on a specific goal",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "extracted_content": {
-                                    "type": "object",
-                                    "description": "The content extracted from the page according to the goal",
-                                    "properties": {
-                                        "text": {
-                                            "type": "string",
-                                            "description": "Text content extracted from the page",
-                                        },
-                                        "metadata": {
-                                            "type": "object",
-                                            "description": "Additional metadata about the extracted content",
-                                            "properties": {
-                                                "source": {
-                                                    "type": "string",
-                                                    "description": "Source of the extracted content",
-                                                },
-                                            },
-                                        },
-                                    },
-                                }
-                            },
-                            "required": ["extracted_content"],
-                        },
-                    }
+📝 **Content Preview:**
+{analysis_results['content_preview']}
 
-                    # Use LLM to extract content with required function calling
-                    response = await self.llm.ask_tool(
-                        messages,
-                        tools=[extraction_function],
-                        tool_choice="required",
-                    )
+🔗 **Source:** {page_url}
+"""
+                        else:
+                            # Provide helpful error information
+                            dynamic_info = extraction_results.get('dynamic_info', {})
+                            error_details = f"""❌ CONTENT EXTRACTION CHALLENGES
 
-                    # Handle different response formats
-                    extracted_content = None
-                    if response:
-                        try:
-                            # Try object-style access first
-                            if hasattr(response, 'tool_calls') and response.tool_calls:
-                                args = json.loads(response.tool_calls[0].function.arguments)
-                                extracted_content = args.get("extracted_content", {})
-                            # Try dict-style access
-                            elif isinstance(response, dict):
-                                if 'tool_calls' in response and response['tool_calls']:
-                                    args = json.loads(response['tool_calls'][0]['function']['arguments'])
-                                    extracted_content = args.get("extracted_content", {})
-                                elif 'extracted_content' in response:
-                                    extracted_content = response['extracted_content']
-                                else:
-                                    # Try to extract content directly from response
-                                    extracted_content = {"text": str(response), "metadata": {"source": "direct_response"}}
-                            else:
-                                # Fallback: treat response as string content
-                                extracted_content = {"text": str(response), "metadata": {"source": "fallback"}}
-                                
-                        except (json.JSONDecodeError, KeyError, IndexError) as e:
-                            logger.warning(f"Failed to parse LLM response for content extraction: {e}")
-                            # Fallback to basic content extraction
-                            page = await context.get_current_page()
-                            page_text = await page.evaluate("() => document.body.innerText")
-                            extracted_content = {
-                                "text": page_text[:1000] + "..." if len(page_text) > 1000 else page_text,
-                                "metadata": {"source": "fallback_dom", "goal": goal}
-                            }
+🎯 **Attempted Goal:** {goal}
+🔗 **URL:** {page_url}
 
-                    if extracted_content:
+🔍 **Technical Analysis:**
+- Framework Detected: {self.enhanced_content_extractor._detect_framework(dynamic_info)}
+- SPA Indicators: {dynamic_info.get('has_spa_indicators', False)}
+- Scripts Found: {dynamic_info.get('script_count', 0)}
+
+⚠️ **Possible Issues:**
+- Website may require user interaction (login, CAPTCHA)
+- Content may be behind authentication
+- Heavy JavaScript rendering may need more time
+- Anti-bot protection may be active
+
+💡 **Recommendations:**
+- Try accessing the website manually to verify availability
+- Check if the site requires login or has geographic restrictions
+- Consider alternative sources for this information
+
+📊 **Extraction Attempt Results:**
+{json.dumps(extraction_results, indent=2)}
+"""
+                            output = error_details
+                        
+                        return ToolResult(output=output)
+                        
+                    except Exception as e:
+                        logger.error(f"Enhanced content extraction failed: {e}")
                         return ToolResult(
-                            output=f"Extracted from page:\n{extracted_content}\n"
+                            error=f"Enhanced content extraction failed: {str(e)}. "
+                            f"This may indicate a technical issue with the website or network connectivity."
                         )
-
-                    return ToolResult(output="No content was extracted from the page.")
 
                 # Tab management actions
                 elif action == "switch_tab":
