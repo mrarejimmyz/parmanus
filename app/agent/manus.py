@@ -66,6 +66,7 @@ class Manus(ToolCallAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        logger.debug("Manus __init__ started.")
         self.todo_file_path = os.path.join(config.workspace_root, "todo.md")
 
         # ENHANCED AI SYSTEM: Initialize reasoning and learning systems
@@ -80,6 +81,20 @@ class Manus(ToolCallAgent):
         logger.info(
             "🧠 ENHANCED AI SYSTEM INITIALIZED: Deep reasoning and learning enabled"
         )
+        logger.debug("Manus __init__ completed.")
+
+    @classmethod
+    async def create(cls, **kwargs):
+        """Asynchronous factory method to create a Manus instance."""
+        logger.debug("Manus.create started.")
+        try:
+            instance = cls(**kwargs)
+            logger.debug("Manus instance created.")
+            # Any asynchronous initialization logic can go here if needed
+            return instance
+        except Exception as e:
+            logger.error(f"Error during Manus.create: {e}", exc_info=True)
+            raise
 
     async def create_task_plan(self, user_request: str) -> Dict:
         """Create a comprehensive task plan using ENHANCED REASONING FRAMEWORK"""
