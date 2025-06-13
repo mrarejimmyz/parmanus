@@ -324,17 +324,25 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         error=f"Action '{action}' was just performed. Please wait {wait_time:.1f} seconds before retrying or try a different approach."
                     )
                 
-                # EMERGENCY FIX: Detect infinite loops of same action - SIMPLIFIED VERSION
+                # EMERGENCY FIX: Detect infinite loops with SMART STRATEGY ADAPTATION
                 self.action_history.append(current_action_key)
-                # Keep only last 5 actions
-                if len(self.action_history) > 5:
+                # Keep only last 10 actions for better pattern detection
+                if len(self.action_history) > 10:
                     self.action_history.pop(0)
                 
-                # Check for repeated patterns
-                if len(self.action_history) >= 3:
-                    if all(action_key == current_action_key for action_key in self.action_history[-3:]):
+                # ENHANCED LOOP DETECTION: Allow retries with strategy changes
+                if len(self.action_history) >= 5:
+                    # Check for exact same action repeated 5+ times
+                    recent_actions = self.action_history[-5:]
+                    if all(action_key == current_action_key for action_key in recent_actions):
                         return ToolResult(
-                            error=f"Detected infinite loop: action '{action}' repeated 3+ times. Please try a completely different approach."
+                            error=f"Detected persistent failure pattern: action '{action}' failed 5+ times. STRATEGY CHANGE REQUIRED: Try alternative approach, different URL format, or use different tool entirely."
+                        )
+                    
+                    # Check for alternating pattern (A-B-A-B-A)
+                    if len(set(recent_actions)) <= 2 and len(recent_actions) >= 4:
+                        return ToolResult(
+                            error=f"Detected alternating failure pattern. STRATEGY ADAPTATION NEEDED: Current approach not working, try fundamentally different method."
                         )
                 
                 # Update action tracking
