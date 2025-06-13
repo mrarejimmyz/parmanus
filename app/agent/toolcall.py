@@ -5,12 +5,11 @@ from typing import Any, List, Optional, Union
 from pydantic import Field
 
 from app.agent.react import ReActAgent
-from app.exceptions import TokenLimitExceeded
+from app.exceptions import AgentTaskComplete, TokenLimitExceeded
 from app.logger import logger
 from app.prompt.toolcall import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.schema import TOOL_CHOICE_TYPE, AgentState, Message, ToolCall, ToolChoice
 from app.tool import CreateChatCompletion, Terminate, ToolCollection
-
 
 TOOL_CALL_REQUIRED = "Tool calls required but none provided"
 
@@ -37,7 +36,7 @@ class ToolCallAgent(ReActAgent):
     max_observe: Optional[Union[int, bool]] = None
 
     async def think(self) -> bool:
-        """Process current state and decide next actions using tools"""
+        """Process current state and decide next actions with tools"""
         if self.next_step_prompt:
             user_msg = Message.user_message(self.next_step_prompt)
             self.messages += [user_msg]
@@ -56,6 +55,14 @@ class ToolCallAgent(ReActAgent):
             )
         except ValueError:
             raise
+        except AgentTaskComplete as e:
+            # Handle successful task completion
+            logger.info(f"🎉 Task completed successfully: {e.message}")
+            self.memory.add_message(
+                Message.system_message(f"Task completed: {e.message}")
+            )
+            self.state = AgentState.FINISHED
+            return False
         except Exception as e:
             # Check if this is a RetryError containing TokenLimitExceeded
             if hasattr(e, "__cause__") and isinstance(e.__cause__, TokenLimitExceeded):
@@ -84,9 +91,7 @@ class ToolCallAgent(ReActAgent):
         content = (
             response.get("content")
             if response and isinstance(response, dict)
-            else response.content
-            if response and hasattr(response, "content")
-            else ""
+            else response.content if response and hasattr(response, "content") else ""
         )
 
         # Log response info
@@ -100,24 +105,26 @@ class ToolCallAgent(ReActAgent):
             for call in tool_calls:
                 if isinstance(call, dict):
                     # Dict format
-                    if 'function' in call and 'name' in call['function']:
-                        tool_names.append(call['function']['name'])
+                    if "function" in call and "name" in call["function"]:
+                        tool_names.append(call["function"]["name"])
                     else:
                         tool_names.append(str(call))
-                elif hasattr(call, 'function') and hasattr(call.function, 'name'):
+                elif hasattr(call, "function") and hasattr(call.function, "name"):
                     # Object format
                     tool_names.append(call.function.name)
                 else:
                     tool_names.append(str(call))
-            
+
             logger.info(f"🧰 Tools being prepared: {tool_names}")
-            
+
             # Log first tool arguments (handle both formats)
             if tool_calls:
                 first_call = tool_calls[0]
-                if isinstance(first_call, dict) and 'function' in first_call:
-                    args = first_call['function'].get('arguments', '{}')
-                elif hasattr(first_call, 'function') and hasattr(first_call.function, 'arguments'):
+                if isinstance(first_call, dict) and "function" in first_call:
+                    args = first_call["function"].get("arguments", "{}")
+                elif hasattr(first_call, "function") and hasattr(
+                    first_call.function, "arguments"
+                ):
                     args = first_call.function.arguments
                 else:
                     args = str(first_call)
@@ -183,15 +190,15 @@ class ToolCallAgent(ReActAgent):
                 result = result[: self.max_observe]
 
             # Handle both dict and object formats for logging
-            if isinstance(command, dict) and 'function' in command:
-                tool_name = command['function'].get('name', 'unknown')
-                tool_id = command.get('id', 'unknown')
-            elif hasattr(command, 'function') and hasattr(command.function, 'name'):
+            if isinstance(command, dict) and "function" in command:
+                tool_name = command["function"].get("name", "unknown")
+                tool_id = command.get("id", "unknown")
+            elif hasattr(command, "function") and hasattr(command.function, "name"):
                 tool_name = command.function.name
-                tool_id = getattr(command, 'id', 'unknown')
+                tool_id = getattr(command, "id", "unknown")
             else:
                 tool_name = str(command)
-                tool_id = 'unknown'
+                tool_id = "unknown"
 
             logger.info(
                 f"🎯 Tool '{tool_name}' completed its mission! Result: {result}"
@@ -213,11 +220,11 @@ class ToolCallAgent(ReActAgent):
         """Execute a single tool call with robust error handling"""
         # Handle both dict and object formats
         if isinstance(command, dict):
-            if 'function' not in command or 'name' not in command['function']:
+            if "function" not in command or "name" not in command["function"]:
                 return "Error: Invalid command format"
-            name = command['function']['name']
-            arguments = command['function'].get('arguments', '{}')
-        elif hasattr(command, 'function') and hasattr(command.function, 'name'):
+            name = command["function"]["name"]
+            arguments = command["function"].get("arguments", "{}")
+        elif hasattr(command, "function") and hasattr(command.function, "name"):
             if not command or not command.function or not command.function.name:
                 return "Error: Invalid command format"
             name = command.function.name
@@ -258,6 +265,16 @@ class ToolCallAgent(ReActAgent):
                 f"📝 Oops! The arguments for '{name}' don't make sense - invalid JSON, arguments:{arguments}"
             )
             return f"Error: {error_msg}"
+        except AgentTaskComplete as e:
+            # Propagate task completion signal
+            logger.info(
+                f"🎉 Task completion signaled during tool execution: {e.message}"
+            )
+            self.memory.add_message(
+                Message.system_message(f"Task completed: {e.message}")
+            )
+            self.state = AgentState.FINISHED
+            raise
         except Exception as e:
             error_msg = f"⚠️ Tool '{name}' encountered a problem: {str(e)}"
             logger.exception(error_msg)

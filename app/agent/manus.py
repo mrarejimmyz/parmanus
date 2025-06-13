@@ -9,6 +9,7 @@ from pydantic import Field, model_validator
 from app.agent.browser import BrowserContextHelper
 from app.agent.toolcall import ToolCallAgent
 from app.config import config
+from app.exceptions import AgentTaskComplete
 from app.logger import logger
 
 # from app.tool.str_replace_editor import StrReplaceEditor # Removed
@@ -460,7 +461,11 @@ class Manus(ToolCallAgent):
 
             return await super().think()
 
+        except AgentTaskComplete as e:
+            # Allow task completion exception to propagate
+            raise
         except Exception as e:
+            # Handle other errors
             logger.error(f"Error in think(): {str(e)}")
             return False
 
@@ -955,14 +960,18 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
                 self.tool_calls = []
 
                 # Log completion with URL info
-                if completed_url:
-                    logger.info(f"✅ Website review completed for {completed_url}")
-                else:
-                    logger.info("✅ Plan completed and state fully reset")
+                completion_msg = (
+                    f"✅ Website review completed for {completed_url}"
+                    if completed_url
+                    else "✅ Plan completed and state fully reset"
+                )
+                logger.info(completion_msg)
 
                 # Ensure clean exit by enforcing delay
                 await asyncio.sleep(2)
-                return
+
+                # Raise completion exception to trigger proper termination
+                raise AgentTaskComplete(completion_msg)
 
             logger.warning("No active plan to complete")
 
