@@ -206,6 +206,9 @@ class BrowserUseTool(BaseTool, Generic[Context]):
     last_action: Optional[str] = Field(default=None, exclude=True)
     last_action_time: float = Field(default=0.0, exclude=True)
     action_cooldown: float = Field(default=2.0, exclude=True)  # seconds
+    
+    # EMERGENCY FIX: Add action_history field properly
+    action_history: List[str] = Field(default_factory=list, exclude=True)
 
     # Context for generic functionality
     tool_context: Optional[Context] = Field(default=None, exclude=True)
@@ -321,21 +324,18 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         error=f"Action '{action}' was just performed. Please wait {wait_time:.1f} seconds before retrying or try a different approach."
                     )
                 
-                # EMERGENCY FIX: Detect infinite loops of same action
-                if hasattr(self, 'action_history'):
-                    self.action_history.append(current_action_key)
-                    # Keep only last 5 actions
-                    if len(self.action_history) > 5:
-                        self.action_history.pop(0)
-                    
-                    # Check for repeated patterns
-                    if len(self.action_history) >= 3:
-                        if all(action_key == current_action_key for action_key in self.action_history[-3:]):
-                            return ToolResult(
-                                error=f"Detected infinite loop: action '{action}' repeated 3+ times. Please try a completely different approach."
-                            )
-                else:
-                    self.action_history = [current_action_key]
+                # EMERGENCY FIX: Detect infinite loops of same action - SIMPLIFIED VERSION
+                self.action_history.append(current_action_key)
+                # Keep only last 5 actions
+                if len(self.action_history) > 5:
+                    self.action_history.pop(0)
+                
+                # Check for repeated patterns
+                if len(self.action_history) >= 3:
+                    if all(action_key == current_action_key for action_key in self.action_history[-3:]):
+                        return ToolResult(
+                            error=f"Detected infinite loop: action '{action}' repeated 3+ times. Please try a completely different approach."
+                        )
                 
                 # Update action tracking
                 self.last_action = current_action_key
