@@ -318,16 +318,29 @@ class Manus(ToolCallAgent):
                     return False
 
                 current_phase = self.current_plan["phases"][self.current_phase]
+
+                # Check if we need to move to the next phase
                 if not current_phase.get("steps") or self.current_step >= len(
                     current_phase["steps"]
                 ):
-                    logger.error("Current step index out of range")
-                    await self.progress_to_next_step()
-                    return True
+                    logger.debug("Reached end of current phase steps")
+                    if self.current_phase + 1 < len(self.current_plan["phases"]):
+                        self.current_phase += 1
+                        self.current_step = 0
+                        logger.info(f"Moving to phase {self.current_phase}")
+                        await self.update_todo_progress()
+                        return True
+                    else:
+                        logger.info(
+                            "✅ Website review completed successfully - all phases done"
+                        )
+                        return False
 
+                # Get current step
                 current_step = current_phase["steps"][self.current_step]
-                logger.debug(f"Processing step: {current_step}")
+                logger.debug(f"Processing step {self.current_step}: {current_step}")
 
+                # Execute the step
                 next_action = await self.handle_browser_task(current_step)
                 if next_action:
                     self.tool_calls = [
@@ -559,21 +572,47 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
         """Safely progress to the next step or phase"""
         try:
             if not self.current_plan or "phases" not in self.current_plan:
+                logger.warning("No valid plan exists, cannot progress")
+                return
+
+            if self.current_phase >= len(self.current_plan["phases"]):
+                logger.warning("Current phase index out of range")
                 return
 
             current_phase = self.current_plan["phases"][self.current_phase]
+            if not current_phase.get("steps"):
+                logger.warning("Current phase has no steps")
+                return
 
+            # Try to move to next step in current phase
             if self.current_step + 1 < len(current_phase["steps"]):
                 self.current_step += 1
-                logger.debug(f"Moved to next step: {self.current_step}")
+                logger.info(
+                    f"Moved to step {self.current_step} in phase {self.current_phase}"
+                )
+            # If no more steps in current phase, try to move to next phase
             elif self.current_phase + 1 < len(self.current_plan["phases"]):
                 self.current_phase += 1
                 self.current_step = 0
-                logger.debug(f"Moved to next phase: {self.current_phase}")
+                logger.info(
+                    f"Moved to phase {self.current_phase}, step {self.current_step}"
+                )
+            else:
+                logger.info("Reached end of all phases and steps")
+                return
 
+            # Update progress in todo list
             await self.update_todo_progress()
+
         except Exception as e:
             logger.error(f"Error progressing to next step: {str(e)}")
+            # Ensure we don't leave the agent in an invalid state
+            if self.current_step >= len(
+                self.current_plan["phases"][self.current_phase]["steps"]
+            ):
+                self.current_step = (
+                    len(self.current_plan["phases"][self.current_phase]["steps"]) - 1
+                )
 
     def parse_review_parameters(self, step: str) -> Dict:
         """Parse review step parameters"""
