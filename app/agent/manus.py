@@ -209,8 +209,18 @@ class Manus(ToolCallAgent):
         if not plan:
             return ""
         
-        # Set todo file path
-        self.todo_file_path = os.path.join(config.workspace_root, "todo.md")
+        # EMERGENCY FIX: Use proper workspace path from config
+        workspace_path = getattr(config, 'workspace_root', '/workspace')
+        if not workspace_path or workspace_path == 'None':
+            workspace_path = '/workspace'  # Fallback
+        
+        # Ensure workspace directory exists
+        import os
+        os.makedirs(workspace_path, exist_ok=True)
+        
+        # Set todo file path with proper workspace
+        self.todo_file_path = os.path.join(workspace_path, "todo.md")
+        logger.info(f"EMERGENCY: Setting todo file path to: {self.todo_file_path}")
         
         # Create todo content
         todo_content = f"# {plan['goal']}\n\n"
@@ -256,38 +266,46 @@ class Manus(ToolCallAgent):
                     break
             
             if str_editor:
+                logger.info(f"EMERGENCY: Using existing str_replace_editor tool")
                 result = await str_editor.execute(
                     command="create",
                     path=self.todo_file_path,
                     file_text=todo_content
                 )
-                logger.info(f"Todo list created using str_replace_editor: {self.todo_file_path}")
+                logger.info(f"EMERGENCY: Todo list created using str_replace_editor: {self.todo_file_path}")
             else:
                 # Fallback: create new instance
+                logger.info(f"EMERGENCY: Creating new str_replace_editor instance")
                 str_editor = StrReplaceEditor()
                 result = await str_editor.execute(
                     command="create",
                     path=self.todo_file_path,
                     file_text=todo_content
                 )
-                logger.info(f"Todo list created using new str_replace_editor instance: {self.todo_file_path}")
+                logger.info(f"EMERGENCY: Todo list created using new str_replace_editor instance: {self.todo_file_path}")
                 
             return todo_content
         except Exception as e:
-            logger.error(f"Failed to create todo list with str_replace_editor: {e}")
+            logger.error(f"EMERGENCY: Failed to create todo list with str_replace_editor: {e}")
             # Fallback to direct file creation
             try:
                 with open(self.todo_file_path, 'w', encoding='utf-8') as f:
                     f.write(todo_content)
-                logger.info(f"Todo list saved with fallback method to {self.todo_file_path}")
+                logger.info(f"EMERGENCY: Todo list saved with fallback method to {self.todo_file_path}")
             except Exception as e2:
-                logger.error(f"Failed to save todo list even with fallback: {e2}")
+                logger.error(f"EMERGENCY: Failed to save todo list even with fallback: {e2}")
             return todo_content
     
     async def create_analysis_file(self, content: str, filename: str = "analysis.md") -> str:
         """Create analysis.md file using str_replace_editor tool for visibility"""
         try:
-            analysis_path = os.path.join(config.workspace_root, filename)
+            # EMERGENCY FIX: Use proper workspace path from config
+            workspace_path = getattr(config, 'workspace_root', '/workspace')
+            if not workspace_path or workspace_path == 'None':
+                workspace_path = '/workspace'  # Fallback
+            
+            analysis_path = os.path.join(workspace_path, filename)
+            logger.info(f"EMERGENCY: Creating analysis file at: {analysis_path}")
             
             # Get the str_replace_editor tool
             str_editor = None
@@ -304,16 +322,22 @@ class Manus(ToolCallAgent):
                 path=analysis_path,
                 file_text=content
             )
-            logger.info(f"Analysis file created using str_replace_editor: {analysis_path}")
+            logger.info(f"EMERGENCY: Analysis file created using str_replace_editor: {analysis_path}")
             return content
         except Exception as e:
-            logger.error(f"Failed to create analysis file: {e}")
+            logger.error(f"EMERGENCY: Failed to create analysis file: {e}")
             return content
     
     async def create_summary_file(self, content: str, filename: str = "summary.md") -> str:
         """Create summary.md file using str_replace_editor tool for visibility"""
         try:
-            summary_path = os.path.join(config.workspace_root, filename)
+            # EMERGENCY FIX: Use proper workspace path from config
+            workspace_path = getattr(config, 'workspace_root', '/workspace')
+            if not workspace_path or workspace_path == 'None':
+                workspace_path = '/workspace'  # Fallback
+            
+            summary_path = os.path.join(workspace_path, filename)
+            logger.info(f"EMERGENCY: Creating summary file at: {summary_path}")
             
             # Get the str_replace_editor tool
             str_editor = None
@@ -330,43 +354,73 @@ class Manus(ToolCallAgent):
                 path=summary_path,
                 file_text=content
             )
-            logger.info(f"Summary file created using str_replace_editor: {summary_path}")
+            logger.info(f"EMERGENCY: Summary file created using str_replace_editor: {summary_path}")
             return content
         except Exception as e:
-            logger.error(f"Failed to create summary file: {e}")
+            logger.error(f"EMERGENCY: Failed to create summary file: {e}")
             return content
     
     async def step(self) -> str:
         """Enhanced step method with planning integration and visible file creation"""
-        # Check if we need to create a plan
-        if not self.current_plan:
+        # EMERGENCY FIX: Force planning logic to execute ALWAYS
+        logger.info(f"STEP DEBUG: current_plan is None: {self.current_plan is None}")
+        logger.info(f"STEP DEBUG: current_plan value: {self.current_plan}")
+        
+        # Check if we need to create a plan - FORCE THIS TO HAPPEN
+        if self.current_plan is None or not self.current_plan:
+            logger.info("EMERGENCY: Forcing plan creation due to None/empty current_plan")
+            
             # Get user request from memory
             user_messages = [msg for msg in self.memory.messages if msg.role == "user"]
             if user_messages:
                 user_request = user_messages[-1].content
+                logger.info(f"EMERGENCY: Creating plan for request: {user_request}")
                 
                 # Create plan and todo list
                 plan = await self.create_task_plan(user_request)
+                logger.info(f"EMERGENCY: Plan created: {plan is not None}")
                 
-                # Force creation of todo.md file using str_replace_editor tool
+                # FORCE creation of todo.md file using str_replace_editor tool
+                logger.info("EMERGENCY: Forcing todo.md creation")
                 await self.force_create_todo_file(plan)
                 
                 # Add planning message to memory
                 planning_msg = f"""
-📋 TASK ANALYSIS COMPLETE
+📋 EMERGENCY TASK ANALYSIS COMPLETE
 
 🎯 **Goal:** {plan['goal']}
 📊 **Complexity:** {plan['complexity']}
 ⏱️ **Estimated Duration:** {plan['estimated_duration']}
 📝 **Phases:** {len(plan['phases'])}
 
-✅ **Plan created and todo.md file saved to workspace**
+✅ **Plan created and todo.md file FORCIBLY saved to workspace**
 
 Now proceeding with systematic execution...
 """
                 self.memory.add_message(Message.assistant_message(planning_msg))
                 
                 return planning_msg
+            else:
+                logger.error("EMERGENCY: No user messages found for planning")
+                # Create a default plan
+                default_plan = {
+                    'goal': 'Complete user request',
+                    'complexity': 'Medium',
+                    'estimated_duration': '10-15 minutes',
+                    'phases': [
+                        {
+                            'id': 1,
+                            'title': 'Execute Task',
+                            'description': 'Complete the requested task',
+                            'success_criteria': 'Task completed successfully',
+                            'tools_needed': ['browser_use', 'str_replace_editor'],
+                            'steps': ['Analyze request', 'Execute task', 'Provide results']
+                        }
+                    ]
+                }
+                self.current_plan = default_plan
+                await self.force_create_todo_file(default_plan)
+                return "Emergency plan created due to missing user request"
         
         # Get guidance for current phase
         guidance = await self.get_current_phase_guidance()
