@@ -127,7 +127,7 @@ class Manus(ToolCallAgent):
             task_type=TaskAnalyzer.categorize_task(user_request), context=context # Use TaskAnalyzer
         )
         logger.info(
-            f"🎓 LEARNING INSIGHTS APPLIED: Confidence {learned_strategy["confidence_score"]:.2f}"
+            "🎓 LEARNING INSIGHTS APPLIED: Confidence {:.2f}".format(learned_strategy["confidence_score"])
         )
 
         # Create enhanced execution plan
