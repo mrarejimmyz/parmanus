@@ -53,7 +53,6 @@ class Manus(ToolCallAgent):
         default_factory=lambda: ToolCollection(
             PythonExecute(),
             BrowserUseTool(),
-            # StrReplaceEditor(), # Removed
             AskHuman(),
             Terminate(),
         )
@@ -67,8 +66,8 @@ class Manus(ToolCallAgent):
         default_factory=dict
     )  # server_id -> url/command
 
-    # Add browser state tracking
-    _browser_state: Dict = Field(
+    # Add browser state tracking (renamed from _browser_state to browser_state)
+    browser_state: Dict = Field(
         default_factory=lambda: {
             "current_url": None,
             "content_extracted": False,
@@ -76,6 +75,8 @@ class Manus(ToolCallAgent):
             "screenshots_taken": False,
             "last_action": None,
             "page_ready": False,
+            "structure_analyzed": False,
+            "summary_complete": False,
         }
     )
 
@@ -158,7 +159,7 @@ class Manus(ToolCallAgent):
 
         # Reset browser state for new task
         if task_type == "website_review":
-            self._browser_state = {
+            self.browser_state = {
                 "current_url": None,
                 "content_extracted": False,
                 "analysis_complete": False,
@@ -323,23 +324,23 @@ class Manus(ToolCallAgent):
     async def handle_browser_task(self, step: str) -> Optional[Dict]:
         """Advanced browser task handling with state management"""
         logger.debug(f"Handling browser task: {step}")
-        logger.debug(f"Current browser state: {self._browser_state}")
+        logger.debug(f"Current browser state: {self.browser_state}")
 
         # Reset if we're starting a new review
-        if step == "Navigate to website" and not self._browser_state["page_ready"]:
+        if step == "Navigate to website" and not self.browser_state["page_ready"]:
             url = self.memory.get_user_request().split()[-1]
-            self._browser_state.update(
+            self.browser_state.update(
                 {"current_url": url, "page_ready": True, "last_action": step}
             )
             return {"action": "go_to_url", "url": url}
 
         # Only proceed if page is ready
-        if not self._browser_state.get("page_ready"):
+        if not self.browser_state.get("page_ready"):
             logger.warning("Page not ready, waiting for navigation")
             return None
 
         # Skip duplicate actions
-        if self._browser_state.get("last_action") == step:
+        if self.browser_state.get("last_action") == step:
             logger.debug(f"Skipping duplicate action: {step}")
             # Move to next step
             current_phase = self.current_plan["phases"][self.current_phase]
@@ -350,14 +351,14 @@ class Manus(ToolCallAgent):
                 self.current_step = 0
             return None
 
-        self._browser_state["last_action"] = step
+        self.browser_state["last_action"] = step
 
         # Handle each step appropriately
         if (
             step == "Extract main content"
-            and not self._browser_state["content_extracted"]
+            and not self.browser_state["content_extracted"]
         ):
-            self._browser_state["content_extracted"] = True
+            self.browser_state["content_extracted"] = True
             return {
                 "action": "extract_content",
                 "css_selector": "main,article,#content,.content,body",
@@ -365,27 +366,27 @@ class Manus(ToolCallAgent):
 
         elif (
             step == "Capture screenshots"
-            and not self._browser_state["screenshots_taken"]
+            and not self.browser_state["screenshots_taken"]
         ):
-            self._browser_state["screenshots_taken"] = True
+            self.browser_state["screenshots_taken"] = True
             return {
                 "action": "screenshot",
                 "path": os.path.join(config.workspace_root, "screenshots"),
             }
 
-        elif step == "Analyze page structure" and not self._browser_state.get(
+        elif step == "Analyze page structure" and not self.browser_state.get(
             "structure_analyzed"
         ):
-            self._browser_state["structure_analyzed"] = True
+            self.browser_state["structure_analyzed"] = True
             content_path = os.path.join(config.workspace_root, "analysis")
             os.makedirs(content_path, exist_ok=True)
             return {"action": "analyze_structure", "output_path": content_path}
 
         elif (
             "Generate analysis.md" in step
-            and not self._browser_state["analysis_complete"]
+            and not self.browser_state["analysis_complete"]
         ):
-            self._browser_state["analysis_complete"] = True
+            self.browser_state["analysis_complete"] = True
             analysis_path = os.path.join(config.workspace_root, "analysis.md")
             report = self.generate_analysis_report()
             with open(analysis_path, "w", encoding="utf-8") as f:
@@ -393,23 +394,15 @@ class Manus(ToolCallAgent):
             logger.info(f"Analysis report generated at {analysis_path}")
             return None
 
-        elif "Create summary.md" in step and not self._browser_state.get(
+        elif "Create summary.md" in step and not self.browser_state.get(
             "summary_complete"
         ):
-            self._browser_state["summary_complete"] = True
+            self.browser_state["summary_complete"] = True
             summary_path = os.path.join(config.workspace_root, "summary.md")
             with open(summary_path, "w", encoding="utf-8") as f:
                 f.write(self.generate_summary())
             logger.info(f"Summary generated at {summary_path}")
             return None
-
-        # Move to next step if current one is complete
-        current_phase = self.current_plan["phases"][self.current_phase]
-        if self.current_step + 1 < len(current_phase["steps"]):
-            self.current_step += 1
-        elif self.current_phase + 1 < len(self.current_plan["phases"]):
-            self.current_phase += 1
-            self.current_step = 0
 
         return None
 
@@ -418,14 +411,14 @@ class Manus(ToolCallAgent):
         return f"""# Website Review Summary
 
 ## Overview
-- URL: {self._browser_state.get('current_url')}
+- URL: {self.browser_state.get('current_url')}
 - Review Date: {time.strftime('%Y-%m-%d %H:%M:%S')}
 
 ## Key Findings
-- Content Extraction: {"Complete" if self._browser_state.get('content_extracted') else "Pending"}
-- Visual Documentation: {"Complete" if self._browser_state.get('screenshots_taken') else "Pending"}
-- Structure Analysis: {"Complete" if self._browser_state.get('structure_analyzed') else "Pending"}
+- Content Extraction: {"Complete" if self.browser_state.get('content_extracted') else "Pending"}
+- Visual Documentation: {"Complete" if self.browser_state.get('screenshots_taken') else "Pending"}
+- Structure Analysis: {"Complete" if self.browser_state.get('structure_analyzed') else "Pending"}
 
 ## Status
-Review Status: {"Complete" if self._browser_state.get('analysis_complete') else "In Progress"}
+Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "In Progress"}
 """
