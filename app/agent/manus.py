@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import time
@@ -145,12 +146,13 @@ class Manus(ToolCallAgent):
             "⚡ OPTIMIZED STRATEGY GENERATED: {}".format(optimized_strategy["approach"])
         )
 
-        # Create enhanced execution plan
+        # Create enhanced execution plan with estimated duration
         plan = {
             "goal": user_request,
             "task_type": task_type,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "complexity": context["complexity"],
+            "estimated_duration": "5-10 minutes",  # Add default estimated duration
             "phases": PlanGenerator.create_enhanced_phases(
                 context, optimized_strategy, {}
             ),
@@ -166,6 +168,8 @@ class Manus(ToolCallAgent):
                 "screenshots_taken": False,
                 "last_action": None,
                 "page_ready": False,
+                "structure_analyzed": False,
+                "summary_complete": False,
             }
 
         self.current_plan = plan
@@ -433,3 +437,124 @@ class Manus(ToolCallAgent):
 ## Status
 Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "In Progress"}
 """
+
+    async def handle_browser_task(self, url: str, steps: List[str]) -> None:
+        """Handle browser-based tasks with improved error handling and state management"""
+        try:
+            # Initialize browser state if needed
+            if not hasattr(self, "browser_state"):
+                self.browser_state = {
+                    "current_step": 0,
+                    "completed_steps": set(),
+                    "url": url,
+                    "is_ready": False,
+                }
+
+            # Validate URL
+            if not url.startswith(("http://", "https://")):
+                raise ValueError(f"Invalid URL format: {url}")
+
+            # Reset state if URL changed
+            if self.browser_state["url"] != url:
+                self.browser_state = {
+                    "current_step": 0,
+                    "completed_steps": set(),
+                    "url": url,
+                    "is_ready": False,
+                }
+
+            # Validate steps
+            if not steps or not isinstance(steps, list):
+                raise ValueError("Steps must be a non-empty list")
+
+            # Execute steps with proper bounds checking
+            while self.browser_state["current_step"] < len(steps):
+                current_step = steps[self.browser_state["current_step"]]
+
+                # Skip if step already completed
+                if current_step in self.browser_state["completed_steps"]:
+                    self.browser_state["current_step"] += 1
+                    continue
+
+                # Execute step
+                try:
+                    await self.execute_browser_step(current_step)
+                    self.browser_state["completed_steps"].add(current_step)
+                    self.browser_state["current_step"] += 1
+                except Exception as step_error:
+                    logger.error(
+                        f"Error executing step {current_step}: {str(step_error)}"
+                    )
+                    raise
+
+        except Exception as e:
+            logger.error(f"Browser task error: {str(e)}")
+            self.browser_state["is_ready"] = False
+            raise
+
+    async def execute_browser_step(self, step: str) -> None:
+        """Execute a single browser step with validation and retries"""
+        max_retries = 3
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                # Validate page readiness
+                if not self.browser_state["is_ready"]:
+                    await self.ensure_page_ready()
+
+                # Execute step based on type
+                if step.startswith("click"):
+                    await self.handle_click_action(step)
+                elif step.startswith("type"):
+                    await self.handle_input_action(step)
+                elif step.startswith("wait"):
+                    await self.handle_wait_action(step)
+                elif step.startswith("review"):
+                    await self.handle_review_action(step)
+                else:
+                    logger.warning(f"Unknown step type: {step}")
+
+                # Step completed successfully
+                return
+
+            except Exception as e:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    logger.error(f"Step failed after {max_retries} attempts: {str(e)}")
+                    raise
+                await asyncio.sleep(1)  # Wait before retry
+
+    async def handle_review_action(self, step: str) -> None:
+        """Handle website review steps with improved validation"""
+        try:
+            # Extract review parameters
+            params = self.parse_review_parameters(step)
+
+            # Validate parameters
+            if not params.get("element"):
+                raise ValueError("Review step missing required element parameter")
+
+            # Perform the review
+            review_result = await self.browser.evaluate(
+                f"""
+                document.querySelector('{params["element"]}')?.textContent || ''
+            """
+            )
+
+            # Store review result
+            if review_result:
+                self.memory.add_fact(
+                    {
+                        "type": "review_result",
+                        "element": params["element"],
+                        "content": review_result,
+                        "timestamp": time.time(),
+                    }
+                )
+            else:
+                logger.warning(f"No content found for element: {params['element']}")
+
+        except Exception as e:
+            logger.error(f"Review action failed: {str(e)}")
+            raise
