@@ -7,7 +7,7 @@ from app.agent.toolcall import ToolCallAgent
 from app.config import config
 from app.logger import logger
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.reasoning import ReasoningFramework, TaskPhase
+from app.reasoning import EnhancedReasoningEngine, TaskPhase
 from app.tool import Terminate, ToolCollection
 from app.tool.ask_human import AskHuman
 from app.tool.browser_use_tool import BrowserUseTool
@@ -32,7 +32,7 @@ class Manus(ToolCallAgent):
     max_steps: int = 25  # Increased for better planning
 
     # Enhanced reasoning and planning
-    reasoning_framework: ReasoningFramework = Field(default_factory=ReasoningFramework)
+    reasoning_framework: EnhancedReasoningEngine = Field(default_factory=EnhancedReasoningEngine)
     current_plan: Optional[Dict] = None
     current_phase: int = 0
     current_step: int = 0
