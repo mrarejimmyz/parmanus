@@ -387,31 +387,81 @@ class BaseAgent(BaseModel, ABC):
         """Advanced stuck state handling with multiple recovery strategies."""
         logger.warning(f"Agent {self.name} detected stuck state, attempting recovery")
 
-        # Strategy 1: Clear recent memory
-        if len(self.memory.messages) > 10:
-            logger.info("Clearing recent memory to break stuck pattern")
-            self.memory.messages = self.memory.messages[:-3]  # Remove last 3 messages
+        # Analyze recent actions to determine recovery strategy
+        recent_responses = list(self.stuck_detector.recent_responses)
+        recent_actions = list(self.stuck_detector.recent_actions)
+        
+        # Strategy 1: Browser tool specific recovery
+        browser_actions = ["go_to_url", "extract_content", "click_element", "input_text"]
+        if any(action in str(recent_actions) for action in browser_actions):
+            logger.info("Detected browser tool stuck state, applying browser-specific recovery")
+            
+            # Clear browser-related memory
+            if len(self.memory.messages) > 5:
+                self.memory.messages = self.memory.messages[:-2]
+            
+            # Add browser-specific guidance
+            browser_recovery_prompts = [
+                "The browser tool seems to be having issues. Try using basic page content extraction instead of complex extraction goals.",
+                "Browser navigation may be failing. Try accessing a different URL or using a simpler approach.",
+                "Content extraction is not working. Try scrolling the page or waiting for it to load completely before extracting content.",
+                "Switch to a different browser action or try the same action with different parameters.",
+            ]
+            
+            import random
+            recovery_prompt = random.choice(browser_recovery_prompts)
+            self.next_step_prompt = f"{recovery_prompt}\n\nOriginal task: {self.next_step_prompt}"
+            
+        # Strategy 2: Tool failure recovery
+        elif "failed" in str(recent_responses).lower() or "error" in str(recent_responses).lower():
+            logger.info("Detected tool failure pattern, applying tool-specific recovery")
+            
+            # More aggressive memory clearing for tool failures
+            if len(self.memory.messages) > 8:
+                self.memory.messages = self.memory.messages[:-4]
+            
+            tool_recovery_prompts = [
+                "The current tool approach is not working. Try using a completely different tool or method.",
+                "Tool execution is failing repeatedly. Break down the task into smaller steps using different tools.",
+                "Switch to a manual approach or use simpler tool operations.",
+                "The current strategy is not effective. Try a fundamentally different approach to achieve the same goal.",
+            ]
+            
+            import random
+            recovery_prompt = random.choice(tool_recovery_prompts)
+            self.next_step_prompt = f"{recovery_prompt}\n\nOriginal task: {self.next_step_prompt}"
+            
+        # Strategy 3: Generic stuck state recovery (fallback)
+        else:
+            logger.info("Applying generic stuck state recovery")
+            
+            # Standard memory clearing
+            if len(self.memory.messages) > 10:
+                self.memory.messages = self.memory.messages[:-3]
+            
+            # Generic recovery prompts
+            randomization_prompts = [
+                "Try a completely different approach to solve this problem.",
+                "Consider alternative methods you haven't tried yet.",
+                "Step back and reassess the situation from a new perspective.",
+                "Use a different strategy or tool to make progress.",
+                "Break down the problem into smaller, different steps.",
+            ]
+            
+            import random
+            random_prompt = random.choice(randomization_prompts)
+            self.next_step_prompt = f"{random_prompt}\n\nOriginal task: {self.next_step_prompt}"
 
-        # Strategy 2: Add randomization prompt
-        randomization_prompts = [
-            "Try a completely different approach to solve this problem.",
-            "Consider alternative methods you haven't tried yet.",
-            "Step back and reassess the situation from a new perspective.",
-            "Use a different strategy or tool to make progress.",
-            "Break down the problem into smaller, different steps.",
-        ]
+        # Strategy 4: Lower circuit breaker threshold temporarily
+        if hasattr(self, 'circuit_breaker'):
+            original_threshold = self.circuit_breaker.failure_threshold
+            self.circuit_breaker.failure_threshold = max(1, original_threshold - 1)
+            logger.info(f"Temporarily lowered circuit breaker threshold from {original_threshold} to {self.circuit_breaker.failure_threshold}")
 
-        import random
-
-        random_prompt = random.choice(randomization_prompts)
-        self.next_step_prompt = (
-            f"{random_prompt}\n\nOriginal task: {self.next_step_prompt}"
-        )
-
-        # Strategy 3: Reset stuck detector
+        # Strategy 5: Reset stuck detector
         self.stuck_detector.reset()
 
-        logger.info(f"Applied recovery strategy: {random_prompt}")
+        logger.info(f"Applied recovery strategy based on detected pattern")
         return True
 
     def handle_stuck_state(self):

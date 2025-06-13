@@ -2,7 +2,6 @@ import asyncio
 import base64
 import json
 import re
-import time
 from typing import Dict, Generic, List, Optional, TypeVar
 
 from browser_use import Browser as BrowserUseBrowser
@@ -198,11 +197,6 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         default_factory=SelectorTracker, exclude=True
     )
 
-    # Action deduplication system to prevent loops
-    last_action: Optional[str] = Field(default=None, exclude=True)
-    last_action_time: float = Field(default=0.0, exclude=True)
-    action_cooldown: float = Field(default=2.0, exclude=True)  # seconds
-
     # Context for generic functionality
     tool_context: Optional[Context] = Field(default=None, exclude=True)
 
@@ -300,20 +294,6 @@ class BrowserUseTool(BaseTool, Generic[Context]):
         """
         async with self.lock:
             try:
-                # Action deduplication check to prevent loops
-                current_time = time.time()
-                current_action_key = f"{action}:{url or ''}"
-                
-                if (self.last_action == current_action_key and 
-                    current_time - self.last_action_time < self.action_cooldown):
-                    return ToolResult(
-                        error=f"Action '{action}' was just performed. Please try a different approach or wait before retrying."
-                    )
-                
-                # Update action tracking
-                self.last_action = current_action_key
-                self.last_action_time = current_time
-
                 # Validate selector if provided to prevent hallucination loops
                 if selector:
                     if not self.selector_tracker.is_valid_selector(selector):
@@ -551,39 +531,9 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                         tool_choice="required",
                     )
 
-                    # Handle different response formats
-                    extracted_content = None
-                    if response:
-                        try:
-                            # Try object-style access first
-                            if hasattr(response, 'tool_calls') and response.tool_calls:
-                                args = json.loads(response.tool_calls[0].function.arguments)
-                                extracted_content = args.get("extracted_content", {})
-                            # Try dict-style access
-                            elif isinstance(response, dict):
-                                if 'tool_calls' in response and response['tool_calls']:
-                                    args = json.loads(response['tool_calls'][0]['function']['arguments'])
-                                    extracted_content = args.get("extracted_content", {})
-                                elif 'extracted_content' in response:
-                                    extracted_content = response['extracted_content']
-                                else:
-                                    # Try to extract content directly from response
-                                    extracted_content = {"text": str(response), "metadata": {"source": "direct_response"}}
-                            else:
-                                # Fallback: treat response as string content
-                                extracted_content = {"text": str(response), "metadata": {"source": "fallback"}}
-                                
-                        except (json.JSONDecodeError, KeyError, IndexError) as e:
-                            logger.warning(f"Failed to parse LLM response for content extraction: {e}")
-                            # Fallback to basic content extraction
-                            page = await context.get_current_page()
-                            page_text = await page.evaluate("() => document.body.innerText")
-                            extracted_content = {
-                                "text": page_text[:1000] + "..." if len(page_text) > 1000 else page_text,
-                                "metadata": {"source": "fallback_dom", "goal": goal}
-                            }
-
-                    if extracted_content:
+                    if response and response.tool_calls:
+                        args = json.loads(response.tool_calls[0].function.arguments)
+                        extracted_content = args.get("extracted_content", {})
                         return ToolResult(
                             output=f"Extracted from page:\n{extracted_content}\n"
                         )
@@ -621,24 +571,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     return ToolResult(error=f"Unknown action: {action}")
 
             except Exception as e:
-                error_msg = f"Browser action '{action}' failed: {str(e)}"
-                
-                # Add specific guidance for common errors
-                error_str = str(e).lower()
-                if "tool_calls" in error_str:
-                    error_msg += "\nSuggestion: Try using a different approach to extract content, such as basic page content extraction."
-                elif "navigation" in error_str or "timeout" in error_str:
-                    error_msg += "\nSuggestion: Check if the URL is accessible and try again, or try a different URL."
-                elif "element" in error_str and "not found" in error_str:
-                    error_msg += "\nSuggestion: The page may have changed. Try refreshing the page or using a different element."
-                elif "selector" in error_str:
-                    error_msg += "\nSuggestion: Try using element indices instead of CSS selectors, or use a simpler selector."
-                elif "connection" in error_str or "network" in error_str:
-                    error_msg += "\nSuggestion: Check your internet connection and try again."
-                else:
-                    error_msg += "\nSuggestion: Try a different approach or check if the page has loaded completely."
-                
-                return ToolResult(error=error_msg)
+                return ToolResult(error=f"Browser action '{action}' failed: {str(e)}")
 
     async def get_current_state(
         self, context: Optional[BrowserContext] = None
