@@ -204,8 +204,140 @@ class Manus(ToolCallAgent):
         
         await self.update_todo_progress()
     
+    async def force_create_todo_file(self, plan: Dict) -> str:
+        """Force creation of todo.md file using str_replace_editor tool for visibility"""
+        if not plan:
+            return ""
+        
+        # Set todo file path
+        self.todo_file_path = os.path.join(config.workspace_root, "todo.md")
+        
+        # Create todo content
+        todo_content = f"# {plan['goal']}\n\n"
+        todo_content += f"**Created:** {plan.get('created_at', 'Unknown')}\n"
+        todo_content += f"**Complexity:** {plan.get('complexity', 'Unknown')}\n"
+        todo_content += f"**Estimated Duration:** {plan.get('estimated_duration', 'Unknown')}\n\n"
+        todo_content += f"## Progress Overview\n\n"
+        todo_content += f"- **Current Phase:** {self.current_phase + 1}/{len(plan['phases'])}\n"
+        todo_content += f"- **Current Step:** {self.current_step + 1}\n\n"
+        todo_content += f"## Phases\n\n"
+        
+        for i, phase in enumerate(plan['phases']):
+            status = "PENDING"
+            if i < self.current_phase:
+                status = "COMPLETED"
+            elif i == self.current_phase:
+                status = "IN PROGRESS"
+            
+            todo_content += f"## Phase {phase['id']}: {phase['title']} [{status}]\n\n"
+            todo_content += f"**Description:** {phase['description']}\n\n"
+            todo_content += f"**Success Criteria:** {phase['success_criteria']}\n\n"
+            todo_content += f"**Tools Needed:** {', '.join(phase['tools_needed'])}\n\n"
+            todo_content += f"**Steps:**\n"
+            
+            for j, step in enumerate(phase['steps'], 1):
+                checkbox = "- [ ]"
+                if i < self.current_phase:
+                    checkbox = "- [x]"
+                elif i == self.current_phase and j <= self.current_step:
+                    checkbox = "- [x]"
+                
+                todo_content += f"{checkbox} {step}\n"
+            
+            todo_content += "\n"
+        
+        # Use str_replace_editor tool to create the file - this will be visible in logs
+        try:
+            # Get the str_replace_editor tool from available tools
+            str_editor = None
+            for tool in self.available_tools.tools:
+                if isinstance(tool, StrReplaceEditor):
+                    str_editor = tool
+                    break
+            
+            if str_editor:
+                result = await str_editor.execute(
+                    command="create",
+                    path=self.todo_file_path,
+                    file_text=todo_content
+                )
+                logger.info(f"Todo list created using str_replace_editor: {self.todo_file_path}")
+            else:
+                # Fallback: create new instance
+                str_editor = StrReplaceEditor()
+                result = await str_editor.execute(
+                    command="create",
+                    path=self.todo_file_path,
+                    file_text=todo_content
+                )
+                logger.info(f"Todo list created using new str_replace_editor instance: {self.todo_file_path}")
+                
+            return todo_content
+        except Exception as e:
+            logger.error(f"Failed to create todo list with str_replace_editor: {e}")
+            # Fallback to direct file creation
+            try:
+                with open(self.todo_file_path, 'w', encoding='utf-8') as f:
+                    f.write(todo_content)
+                logger.info(f"Todo list saved with fallback method to {self.todo_file_path}")
+            except Exception as e2:
+                logger.error(f"Failed to save todo list even with fallback: {e2}")
+            return todo_content
+    
+    async def create_analysis_file(self, content: str, filename: str = "analysis.md") -> str:
+        """Create analysis.md file using str_replace_editor tool for visibility"""
+        try:
+            analysis_path = os.path.join(config.workspace_root, filename)
+            
+            # Get the str_replace_editor tool
+            str_editor = None
+            for tool in self.available_tools.tools:
+                if isinstance(tool, StrReplaceEditor):
+                    str_editor = tool
+                    break
+            
+            if not str_editor:
+                str_editor = StrReplaceEditor()
+            
+            result = await str_editor.execute(
+                command="create",
+                path=analysis_path,
+                file_text=content
+            )
+            logger.info(f"Analysis file created using str_replace_editor: {analysis_path}")
+            return content
+        except Exception as e:
+            logger.error(f"Failed to create analysis file: {e}")
+            return content
+    
+    async def create_summary_file(self, content: str, filename: str = "summary.md") -> str:
+        """Create summary.md file using str_replace_editor tool for visibility"""
+        try:
+            summary_path = os.path.join(config.workspace_root, filename)
+            
+            # Get the str_replace_editor tool
+            str_editor = None
+            for tool in self.available_tools.tools:
+                if isinstance(tool, StrReplaceEditor):
+                    str_editor = tool
+                    break
+            
+            if not str_editor:
+                str_editor = StrReplaceEditor()
+            
+            result = await str_editor.execute(
+                command="create",
+                path=summary_path,
+                file_text=content
+            )
+            logger.info(f"Summary file created using str_replace_editor: {summary_path}")
+            return content
+        except Exception as e:
+            logger.error(f"Failed to create summary file: {e}")
+            return content
+    
     async def step(self) -> str:
-        """Enhanced step method with planning integration"""
+        """Enhanced step method with planning integration and visible file creation"""
         # Check if we need to create a plan
         if not self.current_plan:
             # Get user request from memory
@@ -215,7 +347,9 @@ class Manus(ToolCallAgent):
                 
                 # Create plan and todo list
                 plan = await self.create_task_plan(user_request)
-                todo_list = await self.create_todo_list(plan)
+                
+                # Force creation of todo.md file using str_replace_editor tool
+                await self.force_create_todo_file(plan)
                 
                 # Add planning message to memory
                 planning_msg = f"""
@@ -226,7 +360,7 @@ class Manus(ToolCallAgent):
 ⏱️ **Estimated Duration:** {plan['estimated_duration']}
 📝 **Phases:** {len(plan['phases'])}
 
-✅ **Plan created and todo list saved to workspace**
+✅ **Plan created and todo.md file saved to workspace**
 
 Now proceeding with systematic execution...
 """
