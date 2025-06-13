@@ -346,27 +346,38 @@ class Manus(ToolCallAgent):
                 current_step = current_phase["steps"][self.current_step]
                 logger.debug(f"Processing step {self.current_step}: {current_step}")
 
-                # Handle any navigation step immediately
+                # Handle navigation steps
                 if (
                     "navigate" in current_step.lower()
                     or current_step == "Navigate to website"
                 ):
-                    logger.info(f"Beginning navigation step: {current_step}")
+                    logger.info(f"Processing navigation step: {current_step}")
+
+                    # If we have a URL but page isn't ready, mark as ready after navigation confirmed
+                    if self.browser_state.get(
+                        "current_url"
+                    ) and not self.browser_state.get("page_ready"):
+                        logger.info(
+                            "Navigation confirmed successful, marking page as ready"
+                        )
+                        self.browser_state["page_ready"] = True
+                        await self.progress_to_next_step()
+                        return True
+
+                    # Otherwise try to start navigation
                     next_action = await self.handle_browser_task(current_step)
                     if next_action:
                         self.tool_calls = [
                             {"name": "browser_use", "arguments": next_action}
                         ]
                         return True
+                    return True  # Keep processing navigation step
 
-                # For non-navigation steps, require and verify page readiness
+                # For non-navigation steps, require page readiness
                 if not self.browser_state.get("page_ready"):
-                    if self.browser_state.get("current_url"):
-                        # Navigation happened but page not ready yet
-                        self.browser_state["page_ready"] = True
-                        logger.info("Navigation complete, marking page as ready")
-                        await self.progress_to_next_step()
-                    logger.debug("Waiting for page to be ready")
+                    logger.debug(
+                        "Waiting for page to be ready before proceeding with non-navigation steps"
+                    )
                     return True
 
                 # Execute the current step
@@ -410,62 +421,71 @@ class Manus(ToolCallAgent):
 
             # Handle website navigation
             if step == "Navigate to website" or "navigate" in step.lower():
-                # Only navigate if we haven't already navigated or page isn't ready
-                if not self.browser_state.get(
-                    "current_url"
-                ) or not self.browser_state.get("page_ready"):
-                    # Get user request from recent messages
-                    user_messages = [
-                        msg for msg in self.memory.messages if msg.role == "user"
-                    ]
-                    if not user_messages:
-                        logger.error("No user request found in memory")
-                        return None
+                # Check if navigation is already complete
+                if self.browser_state.get("current_url") and self.browser_state.get(
+                    "page_ready"
+                ):
+                    logger.info("Navigation already completed")
+                    return None
 
-                    # Extract URL from user request
-                    message = user_messages[-1].content.lower()
-                    words = message.split()
+                # If we have URL but page isn't ready, wait for readiness
+                if self.browser_state.get("current_url"):
+                    logger.debug("URL set but waiting for page readiness")
+                    return None
 
-                    # Try to find the URL after "review" or at the end
-                    url = None
-                    try:
-                        if "review" in words:
-                            url_index = words.index("review") + 1
-                            if url_index < len(words):
-                                url = words[url_index]
-                        if not url:
-                            # Fallback to last word
-                            url = words[-1]
-                    except:
-                        url = words[-1]  # Fallback
+                # Start new navigation
+                user_messages = [
+                    msg for msg in self.memory.messages if msg.role == "user"
+                ]
+                if not user_messages:
+                    logger.error("No user request found in memory")
+                    return None
 
-                    # Normalize URL
-                    if not url:
-                        logger.error("No URL found in user request")
-                        return None
+                # Extract and clean URL from last message
+                message = user_messages[-1].content
+                url = None
 
-                    # Clean up URL
-                    url = url.rstrip(".")
-                    if not url.startswith(("http://", "https://")):
+                # First look for URLs in the message
+                words = message.split()
+                for word in words:
+                    if any(
+                        word.startswith(prefix)
+                        for prefix in ["http://", "https://", "www."]
+                    ):
+                        url = word
+                        break
+
+                if not url:
+                    # Then try finding keywords
+                    for i, word in enumerate(words):
+                        if word.lower() in ["review", "open", "goto", "visit"]:
+                            if i + 1 < len(words):
+                                url = words[i + 1]
+                                break
+
+                # Fallback to last word if needed
+                if not url:
+                    url = words[-1]
+
+                # Clean and normalize URL
+                url = url.rstrip(".")
+                if not url.startswith(("http://", "https://")):
+                    if url.startswith("www."):
                         url = f"https://{url}"
+                    else:
+                        url = f"https://www.{url}"
 
-                    logger.info(f"Extracted and navigating to URL: {url}")
+                logger.info(f"Starting navigation to: {url}")
 
-                    # Update state and initiate navigation
-                    self.browser_state.update(
-                        {
-                            "current_url": url,
-                            "page_ready": False,
-                            "last_action": None,  # Reset to allow retry if needed
-                        }
-                    )
-                    return {"action": "go_to_url", "url": url}
-                elif not self.browser_state.get("page_ready"):
-                    # Navigation completed, update state and progress
-                    self.browser_state["page_ready"] = True
-                    logger.info("Navigation completed successfully")
-                    await self.progress_to_next_step()
-                return None
+                # Update state and start navigation
+                self.browser_state.update(
+                    {
+                        "current_url": url,
+                        "page_ready": False,
+                        "last_action": step,
+                    }
+                )
+                return {"action": "go_to_url", "url": url}
 
             # Only proceed with other steps if page is ready and we've navigated
             if not self.browser_state.get("current_url"):
