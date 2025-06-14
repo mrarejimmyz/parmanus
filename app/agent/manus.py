@@ -16,7 +16,7 @@ from app.logger import logger
 from app.planning_utils import PlanGenerator, TaskAnalyzer  # Import new utilities
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
 from app.reasoning import EnhancedReasoningEngine
-from app.schema import Function, Message, ToolCall
+from app.schema import AgentState, Function, Message, ToolCall
 from app.tool import Terminate, ToolCollection
 from app.tool.ask_human import AskHuman
 from app.tool.browser_use_tool import BrowserUseTool
@@ -918,3 +918,59 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
         if self.browser_context_helper is None:
             self.browser_context_helper = BrowserContextHelper(agent=self)
         return True
+
+    async def _get_current_phase(self) -> Optional[Dict]:
+        """Get the current phase from the plan"""
+        if not self.current_plan or "phases" not in self.current_plan:
+            logger.error("No valid plan exists")
+            return None
+
+        try:
+            return self.current_plan["phases"][self.current_phase]
+        except (IndexError, KeyError) as e:
+            logger.error(f"Error getting current phase: {str(e)}")
+            return None
+
+    async def _get_current_step(self) -> Optional[str]:
+        """Get the current step from the current phase"""
+        current_phase = await self._get_current_phase()
+        if not current_phase or "steps" not in current_phase:
+            return None
+
+        try:
+            return current_phase["steps"][self.current_step]
+        except (IndexError, KeyError) as e:
+            logger.error(f"Error getting current step: {str(e)}")
+            return None
+
+    async def step(self) -> str:
+        """Execute a single step, creating a plan if needed"""
+        try:
+            # On first step, create plan if none exists
+            if self.current_step == 1 and not self.current_plan:
+                # Get the last user request from memory
+                user_messages = [
+                    msg for msg in self.memory.messages if msg.role == "user"
+                ]
+                if not user_messages:
+                    raise ValueError("No user request found in memory")
+
+                request = user_messages[-1].content
+                self.current_plan = await self.create_task_plan(request)
+                await self.create_todo_list(self.current_plan)
+                return "Created initial task plan"
+
+            # For subsequent steps, use think() to determine and take actions
+            success = await self.think()
+            if success:
+                return "Thinking complete - no action needed..."
+            else:
+                logger.error("Think failed")
+                return "Error during think phase"
+
+        except AgentTaskComplete:
+            self.state = AgentState.FINISHED
+            return "Task completed successfully"
+        except Exception as e:
+            logger.error(f"Error in step(): {str(e)}")
+            return f"Error in step: {str(e)}"
