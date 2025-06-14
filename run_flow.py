@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from app.agent.manus import Manus
+from app.agent.manus_core import Manus
 from app.flow.flow_factory import FlowFactory, FlowType
 from app.logger import logger
 

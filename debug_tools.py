@@ -5,11 +5,10 @@ Debug script to test tool loading and schema generation
 import asyncio
 import sys
 
-
 # Add the project root to the path
 sys.path.insert(0, "/home/ubuntu/ParManusAI")
 
-from app.agent.manus import Manus
+from app.agent.manus_core import Manus
 from app.config import get_config
 
 
@@ -56,7 +55,9 @@ async def debug_tools():
         print(f"✅ Think result: {result}")
 
         if agent.tool_calls:
-            print(f"🔧 Tool calls made: {[tc.function.name for tc in agent.tool_calls]}")
+            print(
+                f"🔧 Tool calls made: {[tc.function.name for tc in agent.tool_calls]}"
+            )
         else:
             print(f"❌ No tool calls made")
 

@@ -3,7 +3,7 @@
 from typing import Dict, List, Optional
 
 from app.agent.base import BaseAgent
-from app.agent.manus import Manus
+from app.agent.manus_core import Manus
 from app.logger import logger
 
 
