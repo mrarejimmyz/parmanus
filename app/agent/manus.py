@@ -805,3 +805,28 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
         except Exception as e:
             logger.error(f"Error in step(): {str(e)}")
             return f"Error in step: {str(e)}"
+
+    async def _initialize_browser_state(self) -> bool:
+        """Initialize the browser state and context helper if needed"""
+        if not hasattr(self, "browser_state"):
+            self.browser_state = {
+                "current_url": None,
+                "content_extracted": False,
+                "analysis_complete": False,
+                "screenshots_taken": False,
+                "last_action": None,
+                "page_ready": False,
+                "structure_analyzed": False,
+                "summary_complete": False,
+                "initialized": False,
+            }
+        if self.browser_context_helper is None:
+            self.browser_context_helper = BrowserContextHelper(agent=self)
+
+        # Ensure we have the browser tool available
+        browser_tool = self.available_tools.get_tool(BrowserUseTool().name)
+        if not browser_tool:
+            logger.error("BrowserUseTool not found in available tools")
+            return False
+
+        return True
