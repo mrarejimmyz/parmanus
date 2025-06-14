@@ -386,10 +386,11 @@ class Manus(ToolCallAgent):
 
                 url_patterns = [
                     r'https?://[^\s<>"]+|www\.[^\s<>"]+',  # Standard URLs
-                    r'(?<=review\s)[^\s<>"]+',  # URLs after "review"
-                    r'(?<=visit\s)[^\s<>"]+',  # URLs after "visit"
-                    r'(?<=open\s)[^\s<>"]+',  # URLs after "open"
-                    r'(?<=goto\s)[^\s<>"]+',  # URLs after "goto"
+                    r'(?<=review\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "review"
+                    r'(?<=visit\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "visit"
+                    r'(?<=open\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "open"
+                    r'(?<=goto\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "goto"
+                    r'(?<=navigate to\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "navigate to"
                 ]
 
                 for pattern in url_patterns:
@@ -774,6 +775,40 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
 
         return True
 
+    async def _get_current_phase(self) -> Optional[Dict]:
+        """Get the current phase from the plan"""
+        if not self.current_plan or "phases" not in self.current_plan:
+            logger.error("No valid plan exists")
+            return None
+
+        try:
+            if self.current_phase < 0 or self.current_phase >= len(
+                self.current_plan["phases"]
+            ):
+                logger.error(f"Phase index {self.current_phase} out of range")
+                return None
+            return self.current_plan["phases"][self.current_phase]
+        except (IndexError, KeyError) as e:
+            logger.error(f"Error getting current phase: {str(e)}")
+            return None
+
+    async def _get_current_step(self) -> Optional[str]:
+        """Get the current step from the current phase"""
+        current_phase = await self._get_current_phase()
+        if not current_phase or "steps" not in current_phase:
+            return None
+
+        try:
+            if self.current_step < 0 or self.current_step >= len(
+                current_phase["steps"]
+            ):
+                logger.error(f"Step index {self.current_step} out of range")
+                return None
+            return current_phase["steps"][self.current_step]
+        except (IndexError, KeyError) as e:
+            logger.error(f"Error getting current step: {str(e)}")
+            return None
+
     async def step(self) -> str:
         """Execute a single step, creating a plan if needed"""
         try:
@@ -830,3 +865,56 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
             return False
 
         return True
+
+    def _extract_url_from_request(self, text: str) -> Optional[str]:
+        """Extract and normalize URL from text"""
+        if not text:
+            return None
+
+        # Look for common URL patterns
+        import re
+
+        url_patterns = [
+            r'https?://[^\s<>"]+|www\.[^\s<>"]+',  # Standard URLs
+            r'(?<=review\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "review"
+            r'(?<=visit\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "visit"
+            r'(?<=open\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "open"
+            r'(?<=goto\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "goto"
+            r'(?<=navigate to\s)[^\s<>"]+\.[^\s<>"]+',  # URLs after "navigate to"
+        ]
+
+        url = None
+        for pattern in url_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                url = matches[0]
+                break
+
+        if not url:
+            # Try to extract something that looks like a domain
+            domain_pattern = r"[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+[a-zA-Z]+"
+            matches = re.findall(domain_pattern, text)
+            if matches:
+                url = matches[0]
+
+        if not url:
+            return None
+
+        # Clean and normalize URL
+        url = url.rstrip(".,\"'`]}>)")  # Remove trailing punctuation
+        url = url.lstrip(".,\"'`[{<(")  # Remove leading punctuation
+
+        # Add scheme if missing
+        if not url.startswith(("http://", "https://")):
+            if url.startswith("www."):
+                url = f"https://{url}"
+            else:
+                url = f"https://www.{url}"
+
+        # Add .com if no TLD
+        valid_tlds = [".com", ".org", ".net", ".edu", ".gov", ".io", ".ai", ".co"]
+        if not any(url.lower().endswith(tld) for tld in valid_tlds):
+            url += ".com"
+
+        logger.debug(f"Extracted URL: {url}")
+        return url
