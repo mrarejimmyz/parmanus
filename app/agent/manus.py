@@ -298,9 +298,16 @@ class Manus(ToolCallAgent):
         """Think about the next action based on the current plan phase and step"""
         try:
             await self._initialize_browser_state()
+
+            # Validate current position in plan
+            if not await self._validate_current_position():
+                logger.error("Invalid position in plan")
+                return False
+
             current_phase = await self._get_current_phase()
             current_step = await self._get_current_step()
 
+            # This should never happen now due to validation, but keep as safety
             if not current_phase or not current_step:
                 logger.error("No valid phase or step found in plan")
                 return False
@@ -694,254 +701,78 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
             logger.error(f"Review action failed: {str(e)}")
             raise
 
-    async def progress_to_next_step(self) -> None:
-        """Progress to the next step in the current phase."""
+    async def progress_to_next_step(self) -> bool:
+        """Progress to the next step in the current phase or next phase"""
         if not self.current_plan or "phases" not in self.current_plan:
-            logger.warning("No plan exists or invalid plan format")
-            return
+            logger.error("No valid plan exists for progression")
+            return False
 
-        current_phase = self.current_plan["phases"][self.current_phase]
-        if not current_phase.get("steps"):
-            logger.warning("Current phase has no steps")
-            await self.progress_to_next_phase()
-            return
-
-        self.current_step += 1
-        if self.current_step >= len(current_phase["steps"]):
-            # Move to next phase when all steps in current phase are complete
-            await self.progress_to_next_phase()
-            return
-
-        # Update todo list to reflect progress
-        await self.update_todo_progress()
-
-    async def progress_to_next_phase(self) -> None:
-        """Progress to the next phase in the current plan."""
-        if not self.current_plan or "phases" not in self.current_plan:
-            logger.warning("No plan exists or invalid plan format")
-            return
-
-        # Update todo progress for current phase
-        await self.update_todo_progress()
-
-        # Move to next phase
-        self.current_phase += 1
-        self.current_step = 0
-
-        # Check if we're done with all phases
-        if self.current_phase >= len(self.current_plan["phases"]):
-            logger.info("✅ All phases completed")
-            await self.mark_plan_complete()
-            return
-
-        logger.info(f"Moving to phase {self.current_phase + 1}")
-        await self.update_todo_progress()
-
-    async def mark_plan_complete(self) -> None:
-        """Mark the current plan as complete and clean up with proper state transitions"""
-        try:
-            logger.info("Marking plan as complete")
-            if self.current_plan:
-                # Update todo list one final time
-                await self.update_todo_progress()
-
-                # Store completion time to prevent premature restart
-                self.last_completion_time = time.time()
-
-                # Store URL info before reset
-                completed_url = None
-                if self.browser_state:
-                    completed_url = self.browser_state.get("current_url")
-                    # Mark all tasks complete
-                    self.browser_state.update(
-                        {
-                            "content_extracted": True,
-                            "analysis_complete": True,
-                            "screenshots_taken": True,
-                            "structure_analyzed": True,
-                            "summary_complete": True,
-                            "plan_completed": True,
-                            "page_ready": True,
-                        }
-                    )
-
-                # Complete reset of all state
-                self.current_plan = None
-                self.current_phase = 0
-                self.current_step = 0
-                self.tool_calls = []
-
-                # Log completion with URL info
-                completion_msg = (
-                    f"✅ Website review completed for {completed_url}"
-                    if completed_url
-                    else "✅ Plan completed and state fully reset"
-                )
-                logger.info(completion_msg)
-
-                # Raise completion exception to trigger proper termination
-                raise AgentTaskComplete(completion_msg)
-
-            logger.warning("No active plan to complete")
-
-        except AgentTaskComplete:
-            # Let AgentTaskComplete propagate
-            raise
-        except Exception as e:
-            logger.error(f"Error in mark_plan_complete: {str(e)}", exc_info=True)
-            # Attempt emergency cleanup of critical state
-            self.current_plan = None
-            self.current_phase = 0
-            self.current_step = 0
-            if self.browser_state:
-                self.browser_state["plan_completed"] = True
-
-    def parse_review_parameters(self, step: str) -> Dict:
-        """Parse review step parameters"""
-        params = {"element": None}
-
-        if "main content" in step.lower():
-            params["element"] = "main,article,#content,.content,body"
-        elif "header" in step.lower():
-            params["element"] = "header,#header,.header"
-        elif "navigation" in step.lower():
-            params["element"] = "nav,#nav,.nav,.navigation"
-        elif "footer" in step.lower():
-            params["element"] = "footer,#footer,.footer"
-
-        return params
-
-    def generate_analysis_report(self) -> str:
-        """Generate a detailed analysis report of the website"""
-        return f"""# Analysis Report
-
-## Overview
-- URL: {self.browser_state.get('current_url')}
-- Analysis Date: {time.strftime('%Y-%m-%d %H:%M:%S')}
-
-## Content Extraction
-- Status: {"Complete" if self.browser_state.get('content_extracted') else "Pending"}
-- Extracted Elements:
-  - Main Content: {"Yes" if self.browser_state.get('content_extracted') else "No"}
-
-## Visual Documentation
-- Status: {"Complete" if self.browser_state.get('screenshots_taken') else "Pending"}
-- Screenshot Path: {os.path.join(config.workspace_root, "screenshots")}
-
-## Structure Analysis
-- Status: {"Complete" if self.browser_state.get('structure_analyzed') else "Pending"}
-- Analysis Details: See `analysis` folder
-
-## Summary
-- Status: {"Complete" if self.browser_state.get('summary_complete') else "Pending"}
-- Summary Path: {os.path.join(config.workspace_root, "summary.md")}
-
-## Review Status
-- Overall Status: {"Complete" if self.browser_state.get('analysis_complete') else "In Progress"}
-- Pending Actions:
-  - Content Extraction: {"No" if self.browser_state.get('content_extracted') else "Yes"}
-  - Visual Documentation: {"No" if self.browser_state.get('screenshots_taken') else "Yes"}
-  - Structure Analysis: {"No" if self.browser_state.get('structure_analyzed') else "Yes"}
-  - Summary Creation: {"No" if self.browser_state.get('summary_complete') else "Yes"}
-"""
-
-    def _extract_url_from_request(self, request: str) -> Optional[str]:
-        """Extract URL from user request with enhanced validation."""
-        try:
-            # Common URL patterns
-            import re
-
-            url_patterns = [
-                r'https?://[^\s<>"]+|www\.[^\s<>"]+',  # Standard URLs
-                r'(?<=review\s)[^\s<>"]+',  # URLs after "review"
-                r'(?<=visit\s)[^\s<>"]+',  # URLs after "visit"
-                r'(?<=open\s)[^\s<>"]+',  # URLs after "open"
-                r'(?<=goto\s)[^\s<>"]+',  # URLs after "goto"
-            ]
-
-            # Try each pattern
-            url = None
-            for pattern in url_patterns:
-                matches = re.findall(pattern, request, re.IGNORECASE)
-                if matches:
-                    url = matches[0]
-                    break
-
-            # Fallback to last word if no URL found
-            if not url:
-                words = request.split()
-                url = words[-1].strip(".,\"' ")
-
-            # Clean and normalize URL
-            url = url.rstrip(".,")
-            if not url.startswith(("http://", "https://")):
-                if url.startswith("www."):
-                    url = f"https://{url}"
-                else:
-                    url = f"https://www.{url}"
-
-            # Additional validation
-            valid_tlds = [
-                ".com",
-                ".org",
-                ".net",
-                ".edu",
-                ".gov",
-                ".io",
-                ".ai",
-                ".co",
-            ]
-            if not any(url.lower().endswith(tld) for tld in valid_tlds):
-                url += ".com"  # Default to .com if no valid TLD found
-
-            logger.info(f"Extracted URL from request: {url}")
-            return url
-
-        except Exception as e:
-            logger.error(f"Error extracting URL from request: {str(e)}")
-            return None
-
-    async def _initialize_browser_state(self):
-        """Initialize the browser state if needed"""
-        if not hasattr(self, "browser_state"):
-            self.browser_state = {
-                "current_url": None,
-                "content_extracted": False,
-                "analysis_complete": False,
-                "screenshots_taken": False,
-                "last_action": None,
-                "page_ready": False,
-                "structure_analyzed": False,
-                "summary_complete": False,
-                "initialized": False,
-            }
-        if self.browser_context_helper is None:
-            self.browser_context_helper = BrowserContextHelper(agent=self)
-        return True
-
-    async def _get_current_phase(self) -> Optional[Dict]:
-        """Get the current phase from the plan"""
-        if not self.current_plan or "phases" not in self.current_plan:
-            logger.error("No valid plan exists")
-            return None
-
-        try:
-            return self.current_plan["phases"][self.current_phase]
-        except (IndexError, KeyError) as e:
-            logger.error(f"Error getting current phase: {str(e)}")
-            return None
-
-    async def _get_current_step(self) -> Optional[str]:
-        """Get the current step from the current phase"""
         current_phase = await self._get_current_phase()
         if not current_phase or "steps" not in current_phase:
-            return None
+            logger.error("No valid phase for progression")
+            return False
 
-        try:
-            return current_phase["steps"][self.current_step]
-        except (IndexError, KeyError) as e:
-            logger.error(f"Error getting current step: {str(e)}")
-            return None
+        # Calculate next step
+        next_step = self.current_step + 1
+
+        # If we've completed all steps in the current phase
+        if next_step >= len(current_phase["steps"]):
+            return await self.progress_to_next_phase()
+
+        # Move to next step in current phase
+        self.current_step = next_step
+        logger.info(
+            f"Progressed to step {self.current_step} in phase {self.current_phase}"
+        )
+        await self.update_todo_progress()
+        return True
+
+    async def progress_to_next_phase(self) -> bool:
+        """Progress to the next phase and reset step counter"""
+        if not self.current_plan or "phases" not in self.current_plan:
+            logger.error("No valid plan exists for phase progression")
+            return False
+
+        # Calculate next phase
+        next_phase = self.current_phase + 1
+
+        # Check if we've completed all phases
+        if next_phase >= len(self.current_plan["phases"]):
+            logger.info("All phases complete!")
+            raise AgentTaskComplete("All phases of the plan have been completed")
+
+        # Move to next phase
+        self.current_phase = next_phase
+        self.current_step = 0  # Reset step counter for new phase
+        logger.info(
+            f"Progressed to phase {self.current_phase}, step {self.current_step}"
+        )
+        await self.update_todo_progress()
+        return True
+
+    async def _validate_current_position(self) -> bool:
+        """Validate current phase and step indices"""
+        if not self.current_plan or "phases" not in self.current_plan:
+            return False
+
+        # Check phase bounds
+        if self.current_phase < 0 or self.current_phase >= len(
+            self.current_plan["phases"]
+        ):
+            logger.error(f"Invalid phase index: {self.current_phase}")
+            return False
+
+        current_phase = self.current_plan["phases"][self.current_phase]
+        if "steps" not in current_phase:
+            logger.error("Current phase has no steps")
+            return False
+
+        # Check step bounds
+        if self.current_step < 0 or self.current_step >= len(current_phase["steps"]):
+            logger.error(f"Invalid step index: {self.current_step}")
+            return False
+
+        return True
 
     async def step(self) -> str:
         """Execute a single step, creating a plan if needed"""
