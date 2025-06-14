@@ -916,5 +916,5 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
                 "initialized": False,
             }
         if self.browser_context_helper is None:
-            self.browser_context_helper = BrowserContextHelper()
+            self.browser_context_helper = BrowserContextHelper(agent=self)
         return True
