@@ -913,7 +913,7 @@ Review Status: {"Complete" if self.browser_state.get('analysis_complete') else "
                 "page_ready": False,
                 "structure_analyzed": False,
                 "summary_complete": False,
-                "initialized": False
+                "initialized": False,
             }
         if self.browser_context_helper is None:
             self.browser_context_helper = BrowserContextHelper()
