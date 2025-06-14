@@ -241,7 +241,7 @@ class BaseAgent(BaseModel, ABC):
 
     def update_memory(
         self,
-        role: ROLE_TYPE,
+        role: str,
         content: str,
         base64_image: Optional[str] = None,
         **kwargs,
