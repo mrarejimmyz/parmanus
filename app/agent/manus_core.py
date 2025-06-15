@@ -201,25 +201,55 @@ class Manus(ToolCallAgent):
                     ]
                     return True
 
-            # Handle steps
-            if (
-                "Navigate to website" in current_step
-                or "navigate" in current_step.lower()
-            ):
-                # Progress to next step safely
-                success = await self.utils_module.progress_to_next_step()
-                if not success:
-                    logger.warning("Failed to progress to next step")
-                return True
-
-            # For any other step, we should also progress
-            # This ensures the agent doesn't get stuck on the same logical step
-            logger.info(f"Processing step: {current_step}")
-            success = await self.utils_module.progress_to_next_step()
-            if not success:
-                logger.warning("Failed to progress to next step")
+            # Handle different types of steps with actual tool execution
+            step_lower = current_step.lower()
             
-            return True
+            # Initialize action executor if not already done
+            if not hasattr(self, 'action_executor'):
+                from app.agent.manus_action_executor import ManusActionExecutor
+                self.action_executor = ManusActionExecutor(self)
+            
+            # Research and planning steps - navigate to relevant websites
+            if any(keyword in step_lower for keyword in ["research", "plan", "identify", "sources"]):
+                logger.info(f"Executing research action for: {current_step}")
+                await self.action_executor.execute_research_action(current_step)
+                success = await self.utils_module.progress_to_next_step()
+                return True
+            
+            # Data extraction steps - scrape and collect information
+            elif any(keyword in step_lower for keyword in ["extract", "headlines", "gather", "collect", "visit"]):
+                logger.info(f"Executing data extraction for: {current_step}")
+                await self.action_executor.execute_extraction_action(current_step)
+                success = await self.utils_module.progress_to_next_step()
+                return True
+            
+            # Verification steps - check multiple sources
+            elif any(keyword in step_lower for keyword in ["verify", "check", "multiple sources", "confirm"]):
+                logger.info(f"Executing verification action for: {current_step}")
+                await self.action_executor.execute_verification_action(current_step)
+                success = await self.utils_module.progress_to_next_step()
+                return True
+            
+            # File creation steps - generate reports and documents
+            elif any(keyword in step_lower for keyword in ["generate", "create", "format", "output", ".md"]):
+                logger.info(f"Executing file creation for: {current_step}")
+                await self.action_executor.execute_creation_action(current_step)
+                success = await self.utils_module.progress_to_next_step()
+                return True
+            
+            # Navigation steps (legacy support)
+            elif "navigate" in step_lower or "Navigate to website" in current_step:
+                logger.info(f"Executing navigation for: {current_step}")
+                await self.action_executor.execute_navigation_action(current_step)
+                success = await self.utils_module.progress_to_next_step()
+                return True
+            
+            # Default case - try to determine action from context
+            else:
+                logger.info(f"Executing default action for: {current_step}")
+                await self.action_executor.execute_default_action(current_step)
+                success = await self.utils_module.progress_to_next_step()
+                return True
 
         except AgentTaskComplete:
             raise
