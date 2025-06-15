@@ -12,6 +12,16 @@ class TaskAnalyzer:
         """Determine task type from user request with enhanced pattern matching."""
         request_lower = user_request.lower()
 
+        # News and current information gathering tasks
+        if any(
+            x in request_lower
+            for x in ["news", "current", "today", "latest", "recent", "headlines", "breaking"]
+        ) or any(
+            phrase in request_lower
+            for phrase in ["top 10", "top ten", "what's happening", "current events"]
+        ):
+            return "news_gathering"
+
         # Website related tasks
         if any(
             x in request_lower
@@ -59,6 +69,7 @@ class TaskAnalyzer:
         base_durations = {"simple": 5, "moderate": 15, "complex": 30}
 
         type_multipliers = {
+            "news_gathering": 1.3,
             "website_review": 1.2,
             "file_operation": 0.8,
             "code_task": 1.5,
@@ -82,7 +93,40 @@ class PlanGenerator:
         """Create execution phases based on task type and context."""
         task_type = context.get("task_type", "general_task")
 
-        if task_type == "website_review":
+        if task_type == "news_gathering":
+            return [
+                {
+                    "id": 1,
+                    "title": "Research Planning",
+                    "description": "Plan news sources and research strategy",
+                    "tools_needed": ["browser_use"],
+                    "steps": ["Identify reliable news sources", "Plan research approach"],
+                    "success_criteria": "Research strategy established",
+                },
+                {
+                    "id": 2,
+                    "title": "News Collection",
+                    "description": "Browse news websites and gather current information",
+                    "tools_needed": ["browser_use"],
+                    "steps": [
+                        "Visit major news websites",
+                        "Extract current headlines",
+                        "Gather detailed information",
+                        "Verify information from multiple sources"
+                    ],
+                    "success_criteria": "Current news information collected",
+                },
+                {
+                    "id": 3,
+                    "title": "Content Creation",
+                    "description": "Compile and format news into requested format",
+                    "tools_needed": ["python_execute"],
+                    "steps": ["Organize collected news", "Create formatted output", "Generate news_report.md"],
+                    "success_criteria": "News report created with real current information",
+                },
+            ]
+
+        elif task_type == "website_review":
             return [
                 {
                     "id": 1,
