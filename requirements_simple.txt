@@ -1,11 +1,11 @@
 # Hybrid ParManus dependencies - supports both local GGUF and Ollama
-pydantic~=2.10.6
+pydantic~=2.11.7
 
 # For local GGUF models (your current setup)
 llama-cpp-python>=0.2.56
 
 # For Ollama API (optional fallback)
-openai~=1.66.3
+openai~=1.86.0
 httpx>=0.27.0
 
 # Configuration and logging
