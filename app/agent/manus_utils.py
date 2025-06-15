@@ -135,7 +135,14 @@ class ManusUtils:
             current_phase = self.agent.current_plan["phases"][self.agent.current_phase]
             if "steps" in current_phase:
                 if self.agent.current_step >= len(current_phase["steps"]):
-                    self.agent.current_step = len(current_phase["steps"]) - 1
+                    # If we're past the last step, try to move to next phase
+                    if self.agent.current_phase + 1 < len(self.agent.current_plan["phases"]):
+                        logger.info("Moving to next phase during recovery")
+                        self.agent.current_phase += 1
+                        self.agent.current_step = 0
+                    else:
+                        # We're at the last phase, set to last valid step
+                        self.agent.current_step = len(current_phase["steps"]) - 1
                 elif self.agent.current_step < 0:
                     self.agent.current_step = 0
             else:
@@ -146,5 +153,28 @@ class ManusUtils:
             
         except Exception as e:
             logger.error(f"Error during position recovery: {str(e)}")
+            return False
+
+    async def sync_with_base_framework(self) -> bool:
+        """Synchronize our step tracking with the base framework's step counter"""
+        try:
+            # This method helps coordinate between our plan-based step tracking
+            # and the base framework's automatic step incrementing
+            if not self.agent.current_plan or "phases" not in self.agent.current_plan:
+                return False
+            
+            current_phase = await self._get_current_phase()
+            if not current_phase or "steps" not in current_phase:
+                return False
+            
+            # If we've completed all steps in current phase, signal completion
+            if self.agent.current_step >= len(current_phase["steps"]):
+                logger.info("All steps in current phase completed")
+                return await self.progress_to_next_phase()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error syncing with base framework: {str(e)}")
             return False
 

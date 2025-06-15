@@ -212,6 +212,13 @@ class Manus(ToolCallAgent):
                     logger.warning("Failed to progress to next step")
                 return True
 
+            # For any other step, we should also progress
+            # This ensures the agent doesn't get stuck on the same logical step
+            logger.info(f"Processing step: {current_step}")
+            success = await self.utils_module.progress_to_next_step()
+            if not success:
+                logger.warning("Failed to progress to next step")
+            
             return True
 
         except AgentTaskComplete:
@@ -246,6 +253,9 @@ class Manus(ToolCallAgent):
                     logger.error("Failed to recover from invalid position")
                     return "Error: Unable to recover from invalid position"
                 logger.info("Successfully recovered from invalid position")
+
+            # Synchronize with base framework step tracking
+            await self.utils_module.sync_with_base_framework()
 
             # For subsequent steps, use think() to determine and take actions
             success = await self.think()
