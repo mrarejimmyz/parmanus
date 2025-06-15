@@ -8,6 +8,7 @@ import json
 from typing import Dict, List, Optional
 from app.logger import logger
 from app.schema import ToolCall, Function
+from app.agent.visual_google_search import VisualGoogleSearch
 
 
 class ManusActionExecutor:
@@ -17,6 +18,7 @@ class ManusActionExecutor:
         """Initialize with reference to the main agent."""
         self.agent = agent
         self.browser_handler = agent.browser_handler if hasattr(agent, 'browser_handler') else None
+        self.visual_google = VisualGoogleSearch(agent)
         
     async def execute_research_action(self, step: str) -> bool:
         """Execute research and planning actions - use Google to find relevant sources."""
@@ -543,118 +545,77 @@ print(f"✅ Research report saved to: {{workspace_path}}")
         )
     
     async def _google_search(self, query: str) -> bool:
-        """Perform a Google search using the browser tool's built-in web search capability."""
+        """Perform a Google search with truly visual human-like interaction."""
         try:
-            logger.info(f"🔍 Performing web search for: {query}")
+            logger.info(f"🔍 Starting VISUAL Google search for: {query}")
             
-            # Use the browser tool's built-in web search action
-            # This bypasses the need to manually interact with Google's interface
-            tool_call = self._create_tool_call("browser_use", {
-                "action": "web_search",
-                "query": query
-            })
-            result = await self.agent.execute_tool(tool_call)
-            logger.info(f"🌐 Web search result: {result}")
+            # Use the new visual Google search implementation
+            search_result = await self.visual_google.perform_visual_google_search(query)
             
-            if "error" in str(result).lower():
-                logger.error(f"Web search failed: {result}")
-                return False
-            
-            # The web search action automatically navigates to the first result
-            # Let's verify we have search results by extracting page content
-            await asyncio.sleep(3)  # Wait for page to load
-            
-            tool_call = self._create_tool_call("browser_use", {
-                "action": "extract_content",
-                "goal": "Check if we have search results or relevant content about the query"
-            })
-            verification_result = await self.agent.execute_tool(tool_call)
-            logger.info(f"🔍 Content verification: {verification_result}")
-            
-            if any(keyword in str(verification_result).lower() for keyword in ["crypto", "bitcoin", "search", "result"]):
-                logger.info("✅ Web search completed successfully - found relevant content")
+            if search_result["success"]:
+                logger.info(f"✅ Visual Google search completed successfully!")
+                logger.info(f"📊 Found {len(search_result.get('results', []))} search results")
+                
+                # Store results for later use
+                if hasattr(self.agent, 'last_search_results'):
+                    self.agent.last_search_results = search_result
+                
                 return True
             else:
-                logger.warning("⚠️ Web search completed but content relevance unclear")
-                return True  # Still consider it successful since web_search worked
-            
+                logger.error(f"❌ Visual Google search failed: {search_result.get('error', 'Unknown error')}")
+                return False
+                
         except Exception as e:
-            logger.error(f"Error performing web search: {str(e)}")
+            logger.error(f"❌ Exception in visual Google search: {str(e)}")
             return False
     
     async def _visit_search_results(self, num_results: int = 3) -> bool:
-        """Visit the top search results from Google by clicking on them visually."""
+        """Visit the top search results from the last visual Google search."""
         try:
-            logger.info(f"📖 Visiting top {num_results} search results visually")
+            logger.info(f"📖 Visiting top {num_results} search results from visual search")
             
-            # First, analyze the page to see what search results are available
-            tool_call = self._create_tool_call("browser_use", {
-                "action": "extract_content",
-                "goal": "Identify all clickable search result links on the page"
-            })
-            result = await self.agent.execute_tool(tool_call)
-            logger.info(f"👁️ Search results analysis: {result}")
+            # Get results from the last visual Google search
+            if not hasattr(self.agent, 'last_search_results') or not self.agent.last_search_results:
+                logger.warning("⚠️ No search results available to visit")
+                return False
+            
+            search_results = self.agent.last_search_results.get('results', [])
+            if not search_results:
+                logger.warning("⚠️ No search results found in last search")
+                return False
             
             visited_count = 0
             
-            # Try to visit search results by clicking on different elements
-            for i in range(num_results * 2):  # Try more indices to find actual search results
-                if visited_count >= num_results:
-                    break
-                    
-                logger.info(f"🔗 Attempting to click on element #{i} (looking for search result)")
+            # Visit the top results
+            for i, result in enumerate(search_results[:num_results]):
+                logger.info(f"🔗 Visiting result #{i+1}: {result.get('url', 'Unknown URL')}")
                 
-                # Try clicking on this element
-                tool_call = self._create_tool_call("browser_use", {
-                    "action": "click_element",
-                    "index": i
-                })
-                result = await self.agent.execute_tool(tool_call)
-                logger.info(f"🖱️ Click result for element {i}: {result}")
-                
-                # Check if we successfully navigated to a new page
-                if "error" not in str(result).lower():
-                    await asyncio.sleep(3)  # Allow page to load
+                try:
+                    visit_result = await self.visual_google.visit_search_result(result['url'])
                     
-                    # Check if we're on a different page (not Google search results)
-                    tool_call = self._create_tool_call("browser_use", {
-                        "action": "extract_content",
-                        "goal": "Check current page URL and content to see if we navigated away from Google search results"
-                    })
-                    page_check = await self.agent.execute_tool(tool_call)
-                    logger.info(f"📄 Page check result: {page_check}")
-                    
-                    # If we're on a different page, extract content and go back
-                    if "google.com/search" not in str(page_check).lower():
+                    if visit_result['success']:
+                        logger.info(f"✅ Successfully visited and extracted content from result #{i+1}")
                         visited_count += 1
-                        logger.info(f"✅ Successfully visited search result #{visited_count}")
                         
-                        # Extract content from this page
-                        logger.info(f"📊 Extracting data from search result #{visited_count}")
-                        tool_call = self._create_tool_call("browser_use", {
-                            "action": "extract_content",
-                            "goal": "Extract key information, prices, headlines, or data from this page"
-                        })
-                        extraction_result = await self.agent.execute_tool(tool_call)
-                        logger.info(f"📄 Extraction result: {extraction_result}")
+                        # Store the extracted content
+                        result['extracted_content'] = visit_result['content']
                         
-                        # Go back to search results
-                        tool_call = self._create_tool_call("browser_use", {"action": "go_back"})
-                        back_result = await self.agent.execute_tool(tool_call)
-                        logger.info(f"⬅️ Go back result: {back_result}")
+                    else:
+                        logger.warning(f"⚠️ Failed to visit result #{i+1}: {visit_result.get('error', 'Unknown error')}")
                         
-                        await asyncio.sleep(2)  # Wait for search results page to load
+                except Exception as e:
+                    logger.error(f"❌ Exception visiting result #{i+1}: {str(e)}")
+                    continue
                 
-                await asyncio.sleep(1)  # Small delay between attempts
+                await asyncio.sleep(2)  # Respectful delay between visits
             
             if visited_count > 0:
-                logger.info(f"✅ Successfully visited {visited_count} search results with real visual browser actions")
+                logger.info(f"✅ Successfully visited {visited_count} search results with visual browser actions")
                 return True
             else:
-                logger.error("❌ Failed to visit any search results - no clickable results found")
+                logger.error("❌ Failed to visit any search results")
                 return False
             
         except Exception as e:
             logger.error(f"Error visiting search results: {str(e)}")
             return False
-
