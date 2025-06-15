@@ -227,7 +227,7 @@ class ToolCallAgent(ReActAgent):
 
         return "\n\n".join(results)
 
-    async def execute_tool(self, command: ToolCall) -> str:
+    async def execute_tool(self, command: ToolCall) -> Union[str, Any]:
         """Execute a single tool call with robust error handling"""
         try:
             if (
@@ -262,7 +262,13 @@ class ToolCallAgent(ReActAgent):
                 if hasattr(result, "base64_image") and result.base64_image:
                     self._current_base64_image = result.base64_image
 
-                # Format result for display
+                # For browser_use tool, return the ToolResult object directly
+                # This preserves base64_image for vision integration
+                if name == "browser_use" and hasattr(result, "base64_image"):
+                    logger.info(f"🖼️ Returning ToolResult object for vision integration")
+                    return result
+
+                # Format result for display for other tools
                 observation = (
                     f"Observed output of cmd `{name}` executed:\n{str(result)}"
                     if result
