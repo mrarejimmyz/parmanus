@@ -125,25 +125,30 @@ class VisualGoogleSearch:
 
         while retry_count < max_retries:
             try:
-                # First locate the search box
-                find_result = await self.browser.execute(
-                    action="find_element", selector="input[name='q']"
-                )
-
-                if find_result.error:
-                    raise Exception(f"Failed to find search box: {find_result.error}")
-
-                # Input text into the found search box
+                # Try to input text directly using index 0 (search box is typically the first input)
                 input_result = await self.browser.execute(
                     action="input_text",
-                    index=0,  # Use the first matching element
+                    index=0,  # First input element on the page (Google search box)
                     text=query,
                 )
 
                 if input_result.error:
-                    raise Exception(
-                        f"Failed to input search text: {input_result.error}"
+                    # If index 0 fails, try clicking the search box first to ensure it's selected
+                    click_result = await self.browser.execute(
+                        action="click_element",
+                        index=0,  # Click the first clickable element (search box)
                     )
+
+                    if not click_result.error:
+                        # Try input again after clicking
+                        input_result = await self.browser.execute(
+                            action="input_text", index=0, text=query
+                        )
+
+                    if input_result.error:
+                        raise Exception(
+                            f"Failed to input search text: {input_result.error}"
+                        )
 
                 # Submit the search with Enter key
                 submit_result = await self.browser.execute(
