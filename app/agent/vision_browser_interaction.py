@@ -22,9 +22,10 @@ class VisionBrowserInteraction:
         logger.info(f"📸 Taking screenshot for vision analysis: {goal}")
         
         try:
-            # Get current browser state which includes screenshot
+            # Use extract_content action which includes screenshots
             screenshot_call = self._create_tool_call("browser_use", {
-                "action": "get_current_state"
+                "action": "extract_content",
+                "goal": f"Get page screenshot for vision analysis: {goal}"
             })
             
             screenshot_result = await self.agent.execute_tool(screenshot_call)
@@ -55,6 +56,9 @@ class VisionBrowserInteraction:
         """Find an element on the page using vision analysis"""
         logger.info(f"👁️ Looking for element visually: {element_description}")
         
+        # Add delay to prevent rate limiting
+        await asyncio.sleep(2)
+        
         goal = f"""
         Analyze this webpage screenshot and find the {element_description}.
         
@@ -82,6 +86,9 @@ class VisionBrowserInteraction:
     async def verify_page_visually(self, expected_content: str) -> Dict:
         """Verify page content using vision analysis"""
         logger.info(f"🔍 Verifying page content visually: {expected_content}")
+        
+        # Add delay to prevent rate limiting
+        await asyncio.sleep(2)
         
         goal = f"""
         Analyze this webpage screenshot and check if it contains: {expected_content}
@@ -113,6 +120,9 @@ class VisionBrowserInteraction:
     async def get_interaction_guidance(self, action_goal: str) -> Dict:
         """Get guidance on how to interact with the page using vision"""
         logger.info(f"🎯 Getting interaction guidance: {action_goal}")
+        
+        # Add delay to prevent rate limiting
+        await asyncio.sleep(2)
         
         goal = f"""
         Analyze this webpage screenshot to help with this action: {action_goal}
