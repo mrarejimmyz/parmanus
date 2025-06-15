@@ -1,79 +1,58 @@
 """
 Visual Google Search Implementation
-Enhanced with Nodriver for captcha bypass and anti-bot detection avoidance
+Enhanced with vision-enabled browser interaction
 """
 
 import asyncio
 import json
 import re
+import time
 from typing import Dict, List, Optional
+from uuid import uuid4
 
-# Import the new Nodriver implementation
-from app.agent.nodriver_google_search import NodriverGoogleSearch
+from app.agent.visual_element_annotator import VisualElementAnnotator
 from app.logger import logger
 from app.schema import Function, ToolCall
+from app.tool.browser_use_tool import BrowserUseTool
 
 
 class VisualGoogleSearch:
-    """Handles visual Google search with Nodriver for stealth browsing"""
+    """Handles visual Google search with vision-enabled browser interaction"""
 
     def __init__(self, agent):
         self.agent = agent
-        self.nodriver_search = NodriverGoogleSearch(agent)
+        self.annotator = VisualElementAnnotator(agent)
 
     async def perform_visual_google_search(self, query: str) -> Dict:
-        """Perform Google search using Nodriver for captcha bypass"""
-        logger.info(f"🔍 Starting Nodriver-powered visual Google search for: {query}")
+        """Perform Google search using vision-enabled browser interaction"""
+        logger.info(f"🔍 Starting visual Google search with annotation for: {query}")
 
         try:
-            # Use Nodriver implementation
-            result = await self.nodriver_search.perform_visual_google_search(query)
+            # Step 1: Navigate to Google
+            navigation_result = await self._navigate_to_google()
+            if not navigation_result["success"]:
+                return navigation_result
 
-            if result["success"]:
-                logger.info(f"✅ Nodriver Google search completed successfully!")
-                logger.info(f"📊 Found {len(result.get('results', []))} search results")
-            else:
-                logger.error(
-                    f"❌ Nodriver Google search failed: {result.get('error', 'Unknown error')}"
-                )
+            # Step 2: Find and use search box with visual annotation
+            search_result = await self._find_and_use_search_box_with_annotation(query)
+            if not search_result["success"]:
+                return search_result
 
-            return result
+            # Step 3: Extract search results
+            results = await self._extract_search_results()
+
+            return {"success": True, "query": query, "results": results}
 
         except Exception as e:
             logger.error(f"❌ Visual Google search failed: {str(e)}")
             return {"success": False, "error": str(e)}
 
-    async def close(self) -> None:
-        """Close the search engine and clean up resources"""
-        await self.nodriver_search.close()
-
-    # Legacy methods for backward compatibility
-    async def _navigate_to_google(self) -> Dict:
-        """Legacy method - now handled by Nodriver"""
-        logger.info(
-            "🔄 Legacy navigation method called - using Nodriver implementation"
-        )
-        return {"success": True, "message": "Using Nodriver implementation"}
-
-    async def _find_and_use_search_box_with_annotation(self, query: str) -> Dict:
-        """Legacy method - now handled by Nodriver"""
-        logger.info(
-            "🔄 Legacy search box method called - using Nodriver implementation"
-        )
-        return {"success": True, "message": "Using Nodriver implementation"}
-
-    async def _extract_search_results(self) -> List[Dict]:
-        """Legacy method - now handled by Nodriver"""
-        logger.info(
-            "🔄 Legacy extraction method called - using Nodriver implementation"
-        )
-        return []
-
-    def _create_tool_call(self, tool_name: str, arguments: Dict) -> ToolCall:
-        """Legacy method for tool call creation"""
+    def _create_tool_call(self, name: str, args: Dict) -> ToolCall:
+        """Create a properly formatted tool call"""
         return ToolCall(
-            id=f"call_{tool_name}_{hash(str(arguments)) % 10000}",
-            function=Function(name=tool_name, arguments=json.dumps(arguments)),
+            id=f"call_{name}_{uuid4().hex[:8]}",
+            type="function",
+            function=Function(name=name, arguments=json.dumps(args)),
         )
 
     async def _navigate_to_google(self) -> Dict:
@@ -82,344 +61,173 @@ class VisualGoogleSearch:
         max_retries = 3
         retry_count = 0
 
-        # List of selectors to try, in order of preference
-        search_box_selectors = [
-            "input[name='q']",  # Standard search box
-            "textarea[name='q']",  # Alternative search box type
-            "input[type='text']",  # Any text input
-            "input[title*='Search']",  # Input with Search in title
-            "input[aria-label*='Search']",  # Accessibility label
-        ]
+        while retry_count < max_retries:
+            try:
+                # Create navigation tool call
+                nav_call = self._create_tool_call(
+                    "browser_navigate", {"url": "https://www.google.com"}
+                )
+
+                # Execute navigation
+                nav_result = await self.agent.execute_tool_call(nav_call)
+
+                # Verify page load with vision
+                verify_call = self._create_tool_call(
+                    "browser_vision_analyze",
+                    {
+                        "prompt": "Verify this is the Google search homepage with search box visible",
+                        "element_types": ["search input", "Google logo"],
+                    },
+                )
+                verify_result = await self.agent.execute_tool_call(verify_call)
+
+                if verify_result.get("is_verified"):
+                    logger.info("✅ Successfully navigated to Google.com")
+                    return {"success": True}
+
+                retry_count += 1
+                logger.warning(
+                    f"⚠️ Page verification failed, attempt {retry_count} of {max_retries}"
+                )
+                await asyncio.sleep(1)  # Brief delay before retry
+
+            except Exception as e:
+                logger.error(f"❌ Navigation failed: {str(e)}")
+                retry_count += 1
+                if retry_count >= max_retries:
+                    return {
+                        "success": False,
+                        "error": f"Failed to navigate after {max_retries} attempts",
+                    }
+                await asyncio.sleep(1)
+
+        return {"success": False, "error": "Failed to verify Google homepage"}
+
+    async def _find_and_use_search_box_with_annotation(self, query: str) -> Dict:
+        """Use vision to find and interact with search box"""
+        logger.info("🔍 Finding and using search box")
+        max_retries = 3
+        retry_count = 0
 
         while retry_count < max_retries:
             try:
-                # Reset browser state thoroughly
-                await asyncio.sleep(1)
-                clear_call = self._create_tool_call(
-                    "browser_use",
+                # Use vision to locate search box
+                locate_call = self._create_tool_call(
+                    "browser_vision_analyze",
                     {
-                        "action": "execute_js",
-                        "code": "window.localStorage.clear(); window.sessionStorage.clear(); document.cookie.split(';').forEach(c => document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'));",
+                        "prompt": "Locate the main Google search input box",
+                        "element_types": ["search input"],
                     },
                 )
-                await self.agent.execute_tool(clear_call)
+                locate_result = await self.agent.execute_tool_call(locate_call)
 
-                # Navigate with longer timeout and wait for network idle
-                nav_call = self._create_tool_call(
-                    "browser_use",
-                    {
-                        "action": "go_to_url",
-                        "url": "https://www.google.com",
-                        "options": {"timeout": 30000, "waitUntil": "networkidle0"},
-                    },
-                )
-
-                nav_result = await self.agent.execute_tool(nav_call)
-                logger.info(f"📍 Navigation result: {nav_result}")
-
-                if hasattr(nav_result, "output"):
-                    if "Error:" in str(nav_result.output):
-                        logger.warning(
-                            f"⚠️ Navigation attempt {retry_count + 1} failed: {nav_result.output}"
-                        )
-                        retry_count += 1
-                        continue
-
-                logger.info("✅ Navigation to Google.com appears successful")
-
-                # Wait for page to be fully interactive
-                await asyncio.sleep(2)
-
-                # Get page info to verify we're on Google
-                verify_call = self._create_tool_call(
-                    "browser_use",
-                    {
-                        "action": "execute_js",
-                        "code": """
-                        return {
-                            title: document.title,
-                            url: window.location.href,
-                            readyState: document.readyState,
-                            hasSearchBox: !!document.querySelector('input[name="q"]'),
-                            hasGoogleLogo: !!document.querySelector('img[alt*="Google"]'),
-                            bodyContent: document.body.innerText.slice(0, 200)
-                        }
-                    """,
-                    },
-                )
-                verify_result = await self.agent.execute_tool(verify_call)
-
-                # Log detailed diagnostics
-                if hasattr(verify_result, "output"):
-                    try:
-                        page_info = json.loads(str(verify_result.output))
-                        logger.info(f"Page diagnostics:")
-                        logger.info(f"  Title: {page_info.get('title', 'N/A')}")
-                        logger.info(f"  URL: {page_info.get('url', 'N/A')}")
-                        logger.info(
-                            f"  Ready State: {page_info.get('readyState', 'N/A')}"
-                        )
-                        logger.info(
-                            f"  Has Search Box: {page_info.get('hasSearchBox', False)}"
-                        )
-                        logger.info(
-                            f"  Has Google Logo: {page_info.get('hasGoogleLogo', False)}"
-                        )
-
-                        # Check multiple indicators that we're on Google
-                        is_google_page = (
-                            (
-                                "google" in str(page_info.get("title", "")).lower()
-                                or "google" in str(page_info.get("url", "")).lower()
-                            )
-                            and page_info.get("readyState") == "complete"
-                            and (
-                                page_info.get("hasSearchBox", False)
-                                or page_info.get("hasGoogleLogo", False)
-                            )
-                        )
-
-                        if not is_google_page:
-                            logger.warning(
-                                "⚠️ Not on Google homepage (failed verification checks)"
-                            )
-                            logger.warning(
-                                f"  Body preview: {page_info.get('bodyContent', 'N/A')}"
-                            )
-                            retry_count += 1
-                            continue
-
-                        logger.info("✅ Successfully verified Google homepage")
-
-                    except json.JSONDecodeError:
-                        logger.warning("⚠️ Failed to parse page verification result")
-                        logger.warning(f"Raw output: {verify_result.output}")
-                        retry_count += 1
-                        continue
-                else:
-                    logger.warning("⚠️ No output from page verification")
-                    retry_count += 1
-                    continue
-
-                # Try each selector for the search box
-                for selector in search_box_selectors:
-                    logger.debug(f"🔍 Trying selector: {selector}")
-
-                    # Check if element exists and is visible
-                    check_call = self._create_tool_call(
-                        "browser_use",
+                if locate_result.get("elements"):
+                    # Input the search query
+                    input_call = self._create_tool_call(
+                        "browser_element_action",
                         {
-                            "action": "execute_js",
-                            "code": f"""
-                                const el = document.querySelector('{selector}');
-                                if (!el) return false;
-                                const rect = el.getBoundingClientRect();
-                                const style = window.getComputedStyle(el);
-                                return rect.width > 0 &&
-                                       rect.height > 0 &&
-                                       style.display !== 'none' &&
-                                       style.visibility !== 'hidden';
-                            """,
+                            "action": "input",
+                            "value": query,
+                            "selector": locate_result["elements"][0].get(
+                                "selector", "input[name='q']"
+                            ),
                         },
                     )
-                    check_result = await self.agent.execute_tool(check_call)
+                    await self.agent.execute_tool_call(input_call)
 
-                    if (
-                        hasattr(check_result, "output")
-                        and "true" in str(check_result.output).lower()
-                    ):
-                        logger.info(
-                            f"✅ Found visible search box with selector: {selector}"
-                        )
+                    # Submit the search
+                    submit_call = self._create_tool_call(
+                        "browser_element_action",
+                        {
+                            "action": "press",
+                            "key": "Enter",
+                            "selector": locate_result["elements"][0].get(
+                                "selector", "input[name='q']"
+                            ),
+                        },
+                    )
+                    await self.agent.execute_tool_call(submit_call)
 
-                        # Try to focus and verify interactivity
-                        focus_call = self._create_tool_call(
-                            "browser_use",
-                            {
-                                "action": "execute_js",
-                                "code": f"""
-                                    const el = document.querySelector('{selector}');
-                                    el.focus();
-                                    return document.activeElement === el;
-                                """,
-                            },
-                        )
-                        focus_result = await self.agent.execute_tool(focus_call)
+                    # Verify search results page loaded
+                    await asyncio.sleep(2)  # Brief delay for page load
+                    verify_call = self._create_tool_call(
+                        "browser_vision_analyze",
+                        {
+                            "prompt": "Verify this is a Google search results page",
+                            "element_types": ["search results", "result links"],
+                        },
+                    )
+                    verify_result = await self.agent.execute_tool_call(verify_call)
 
-                        if (
-                            hasattr(focus_result, "output")
-                            and "true" in str(focus_result.output).lower()
-                        ):
-                            logger.info("✅ Successfully focused search box")
-                            return {"success": True, "selector": selector}
-                        else:
-                            logger.warning(
-                                f"⚠️ Failed to focus search box with selector: {selector}"
-                            )
+                    if verify_result.get("is_verified"):
+                        logger.info("✅ Successfully executed search")
+                        return {"success": True}
 
-                logger.warning(
-                    f"⚠️ Search box interaction test failed (attempt {retry_count + 1})"
-                )
                 retry_count += 1
-                await asyncio.sleep(2 * (retry_count + 1))  # Exponential backoff
+                logger.warning(
+                    f"⚠️ Search execution failed, attempt {retry_count} of {max_retries}"
+                )
+                await asyncio.sleep(1)
 
             except Exception as e:
-                logger.error(
-                    f"❌ Navigation attempt {retry_count + 1} failed: {str(e)}"
-                )
+                logger.error(f"❌ Search box interaction failed: {str(e)}")
                 retry_count += 1
-                await asyncio.sleep(2 * (retry_count + 1))
+                if retry_count >= max_retries:
+                    return {
+                        "success": False,
+                        "error": f"Failed to execute search after {max_retries} attempts",
+                    }
+                await asyncio.sleep(1)
 
-        return {
-            "success": False,
-            "error": "Failed to establish reliable page interaction after retries",
-        }
-
-    async def _find_and_use_search_box_with_annotation(self, query: str) -> Dict:
-        """Find search box using visual annotation and type query"""
-        logger.info(
-            f"🔍 Looking for search box with visual annotation to type: {query}"
-        )
-
-        try:
-            # Try direct selector first (faster and more reliable)
-            type_call = self._create_tool_call(
-                "browser_use",
-                {
-                    "action": "type",
-                    "selector": "input[name='q']",
-                    "text": query,
-                    "wait_for": {"selector": "input[name='q']", "timeout": 5000},
-                },
-            )
-
-            type_result = await self.agent.execute_tool(type_call)
-
-            # If direct selector works, submit the form
-            if hasattr(type_result, "output") and "Error:" not in str(
-                type_result.output
-            ):
-                submit_call = self._create_tool_call(
-                    "browser_use", {"action": "press_key", "key": "Enter"}
-                )
-                await self.agent.execute_tool(submit_call)
-                await asyncio.sleep(2)  # Wait for search results
-                return {"success": True}
-
-            # Fallback to visual annotation if direct selector fails
-            search_box_result = await self.annotator.find_element_by_description(
-                "Google search input box or search field where I can type a query"
-            )
-
-            if not search_box_result["success"]:
-                logger.error(
-                    f"❌ Failed to get annotated analysis: {search_box_result}"
-                )
-                return {
-                    "success": False,
-                    "error": "Failed to analyze page with annotations",
-                }
-
-            if not search_box_result["element_found"]:
-                logger.error("❌ Search box not found in visual annotation")
-                return {
-                    "success": False,
-                    "error": "Search box not found with visual annotation",
-                }
-
-            # Get the browser element index
-            browser_index = search_box_result["browser_index"]
-            logger.info(
-                f"🎯 Found search box at element #{search_box_result['element_number']} (browser index: {browser_index})"
-            )
-
-            # Type in the search box
-            type_call = self._create_tool_call(
-                "browser_use",
-                {"action": "input_text", "index": browser_index, "text": query},
-            )
-
-            type_result = await self.agent.execute_tool(type_call)
-            logger.info(f"⌨️ Typing result: {type_result}")
-
-            # Press Enter or click search button
-            await asyncio.sleep(1)
-
-            # Try to find and click search button with annotation
-            search_button_result = await self.annotator.find_element_by_description(
-                "Google Search button or submit button to execute the search"
-            )
-
-            if (
-                search_button_result["success"]
-                and search_button_result["element_found"]
-            ):
-                button_index = search_button_result["browser_index"]
-                logger.info(
-                    f"🔍 Found search button at element #{search_button_result['element_number']} (browser index: {button_index})"
-                )
-
-                click_call = self._create_tool_call(
-                    "browser_use", {"action": "click_element", "index": button_index}
-                )
-
-                click_result = await self.agent.execute_tool(click_call)
-                logger.info(f"🖱️ Search button click result: {click_result}")
-            else:
-                # Fallback: press Enter in search box
-                logger.info("🔍 Search button not found, pressing Enter in search box")
-                enter_call = self._create_tool_call(
-                    "browser_use", {"action": "send_keys", "text": "\\n"}  # Enter key
-                )
-
-                enter_result = await self.agent.execute_tool(enter_call)
-                logger.info(f"⏎ Enter key result: {enter_result}")
-
-            # Wait for search results to load
-            await asyncio.sleep(3)
-
-            return {"success": True, "query": query}
-
-        except Exception as e:
-            logger.error(f"❌ Search box interaction failed: {str(e)}")
-            return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Failed to execute search"}
 
     async def _extract_search_results(self) -> List[Dict]:
-        """Extract search results from Google results page"""
-        logger.info("📊 Extracting search results")
+        """Extract search results using vision analysis"""
+        logger.info("📑 Extracting search results with visual analysis")
 
         try:
-            # Extract page content
-            extract_call = self._create_tool_call(
-                "browser_use",
+            # Take screenshot and analyze search results
+            vision_call = self._create_tool_call(
+                "browser_vision_analyze",
                 {
-                    "action": "extract_content",
-                    "goal": "Extract Google search results with titles and URLs",
+                    "prompt": "Analyze Google search results. Find main result titles, URLs, and descriptions.",
+                    "element_types": ["search result", "link", "text snippet"],
+                    "screenshot_area": "main",
                 },
             )
 
-            extract_result = await self.agent.execute_tool(extract_call)
+            vision_result = await self.agent.execute_tool_call(vision_call)
 
-            # Parse results (simplified - would need more sophisticated parsing)
+            if not vision_result.get("elements"):
+                logger.warning("⚠️ No search results found in visual analysis")
+                return []
+
             results = []
-            if hasattr(extract_result, "output"):
-                content = str(extract_result.output)
-                # Simple extraction - in practice would need better parsing
-                if "search results" in content.lower():
-                    results.append(
-                        {
-                            "title": "Search Results Found",
-                            "url": "https://www.google.com/search",
-                            "snippet": "Google search completed successfully",
-                        }
-                    )
+            for element in vision_result.get("elements", []):
+                if element.get("type") == "search result":
+                    result = {
+                        "title": element.get("text", "").strip(),
+                        "url": element.get("url", ""),
+                        "snippet": element.get("description", "").strip(),
+                    }
+                    if result["title"] and (result["url"] or result["snippet"]):
+                        results.append(result)
 
-            logger.info(f"📊 Extracted {len(results)} search results")
+            logger.info(f"✅ Successfully extracted {len(results)} search results")
             return results
 
         except Exception as e:
-            logger.error(f"❌ Results extraction failed: {str(e)}")
+            logger.error(f"❌ Failed to extract search results: {str(e)}")
             return []
+
+    async def close(self) -> None:
+        """Cleanup browser resources"""
+        logger.info("🧹 Cleaning up browser resources")
+        try:
+            close_call = self._create_tool_call("browser_close", {})
+            await self.agent.execute_tool_call(close_call)
+        except Exception as e:
+            logger.error(f"❌ Failed to close browser: {str(e)}")
 
     def _create_tool_call(self, function_name: str, arguments: Dict) -> ToolCall:
         """Create a properly formatted ToolCall object"""
