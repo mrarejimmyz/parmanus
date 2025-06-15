@@ -289,3 +289,6 @@ kitchener_attractions.html
 .gitignore
 .gitignore
 kitchener_top_attractions.html
+test_framework_simple.py
+test_framework.py
+main_unified.py

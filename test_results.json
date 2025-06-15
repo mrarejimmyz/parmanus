@@ -1,0 +1,27 @@
+{
+  "total_tests": 4,
+  "passed": 2,
+  "failed": 2,
+  "tests": {
+    "File Structure": {
+      "status": "PASS",
+      "duration": 0.00015282630920410156,
+      "error": null
+    },
+    "Critical Imports": {
+      "status": "PASS",
+      "duration": 0.17263460159301758,
+      "error": null
+    },
+    "Configuration Loading": {
+      "status": "FAIL",
+      "duration": 0.00015234947204589844,
+      "error": null
+    },
+    "Unified Entry Point": {
+      "status": "FAIL",
+      "duration": 4.6253204345703125e-05,
+      "error": null
+    }
+  }
+}
