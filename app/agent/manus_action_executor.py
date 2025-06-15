@@ -566,7 +566,7 @@ print(f"✅ Research report saved to: {{workspace_path}}")
             # Press Enter to search
             tool_call = self._create_tool_call("browser_use", {
                 "action": "send_keys",
-                "text": "Return"
+                "keys": "Return"
             })
             await self.agent.execute_tool(tool_call)
             
@@ -599,7 +599,7 @@ print(f"✅ Research report saved to: {{workspace_path}}")
                 logger.info(f"📊 Extracting data from page #{i}")
                 tool_call = self._create_tool_call("browser_use", {
                     "action": "extract_content",
-                    "text": "Extract key information, prices, headlines, or data from this page"
+                    "goal": "Extract key information, prices, headlines, or data from this page"
                 })
                 await self.agent.execute_tool(tool_call)
                 
