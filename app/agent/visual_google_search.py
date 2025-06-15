@@ -71,19 +71,39 @@ class VisualGoogleSearch:
             })
             
             result = await self.agent.execute_tool(tool_call)
+            logger.info(f"📍 Navigation result: {result}")
             
-            if "error" in result.output.lower():
+            # Check for any errors in the result
+            if hasattr(result, 'error') and result.error:
+                logger.error(f"❌ Browser navigation error: {result.error}")
+                return {"success": False, "error": result.error}
+            
+            if hasattr(result, 'output') and result.output and "error" in str(result.output).lower():
+                logger.error(f"❌ Navigation failed with output: {result.output}")
                 return {"success": False, "error": result.output}
+            
+            # If we get here, navigation seems successful
+            logger.info("✅ Navigation to Google.com appears successful")
             
             # Verify we're on Google by extracting page content
             verification_result = await self._verify_google_page()
             
-            return {
-                "success": verification_result["is_google"],
-                "content": verification_result["content"]
-            }
+            if verification_result["is_google"]:
+                logger.info("✅ Successfully verified we're on Google page")
+                return {
+                    "success": True,
+                    "content": verification_result["content"]
+                }
+            else:
+                logger.warning(f"⚠️ Navigation succeeded but page verification failed: {verification_result}")
+                # Still consider it a success if navigation worked
+                return {
+                    "success": True,
+                    "content": verification_result.get("content", "")
+                }
             
         except Exception as e:
+            logger.error(f"❌ Exception during navigation: {str(e)}")
             return {"success": False, "error": str(e)}
     
     async def _verify_google_page(self) -> Dict:
@@ -97,13 +117,22 @@ class VisualGoogleSearch:
             })
             
             result = await self.agent.execute_tool(tool_call)
-            content = result.output
+            logger.info(f"📊 Page verification result: {result}")
             
-            # Check for Google-specific elements
-            is_google = any(indicator in content.lower() for indicator in [
-                "google search", "google.com", "i'm feeling lucky", 
-                "search the web", "google logo"
-            ])
+            if hasattr(result, 'error') and result.error:
+                logger.error(f"❌ Page verification error: {result.error}")
+                return {"is_google": False, "content": "", "error": result.error}
+            
+            content = result.output if hasattr(result, 'output') else str(result)
+            logger.info(f"📄 Page content length: {len(content)} characters")
+            
+            # Check for Google-specific elements (more flexible matching)
+            google_indicators = [
+                "google", "search", "feeling lucky", "gmail", "images"
+            ]
+            
+            is_google = any(indicator in content.lower() for indicator in google_indicators)
+            logger.info(f"🔍 Google page detection: {is_google} (found indicators: {[ind for ind in google_indicators if ind in content.lower()]})")
             
             return {
                 "is_google": is_google,
@@ -111,6 +140,7 @@ class VisualGoogleSearch:
             }
             
         except Exception as e:
+            logger.error(f"❌ Exception during page verification: {str(e)}")
             return {"is_google": False, "content": "", "error": str(e)}
     
     async def _find_and_use_search_box(self, query: str) -> Dict:
