@@ -5,6 +5,7 @@ Enhanced with numbered element annotation for precise Llama 3.2 Vision interacti
 
 import asyncio
 import json
+import re
 from typing import Dict, List, Optional
 
 from app.agent.visual_element_annotator import VisualElementAnnotator
@@ -46,43 +47,76 @@ class VisualGoogleSearch:
     async def _navigate_to_google(self) -> Dict:
         """Navigate to Google.com with visual verification"""
         logger.info("🌐 Navigating to Google.com")
+        max_retries = 3
+        retry_count = 0
 
-        try:
-            # Navigate to Google
-            nav_call = self._create_tool_call(
-                "browser_use", {"action": "go_to_url", "url": "https://www.google.com"}
-            )
-
-            nav_result = await self.agent.execute_tool(nav_call)
-            logger.info(f"📍 Navigation result: {nav_result}")
-
-            # Check for navigation errors
-            if hasattr(nav_result, "output") and "Error:" in str(nav_result.output):
-                logger.error(f"❌ Browser navigation error: {nav_result.output}")
-                return {"success": False, "error": "Failed to navigate to Google"}
-
-            logger.info("✅ Navigation to Google.com appears successful")
-
-            # Wait for page to load
-            await asyncio.sleep(3)
-
-            # Verify we're on Google with visual annotation
-            verification_result = await self.annotator.get_annotated_screenshot_and_analyze(
-                "Verify this is Google search page with search box and identify the search input element"
-            )
-
-            if verification_result["success"]:
-                logger.info("✅ Google page verified with visual annotation")
-                return {"success": True, "verification": verification_result}
-            else:
-                logger.warning(
-                    f"⚠️ Visual verification failed, but navigation succeeded: {verification_result}"
+        while retry_count < max_retries:
+            try:
+                # Clear browser state first
+                clear_call = self._create_tool_call(
+                    "browser_use", {"action": "clear_state"}
                 )
-                return {"success": True, "verification": verification_result}
+                await self.agent.execute_tool(clear_call)
+                await asyncio.sleep(1)
 
-        except Exception as e:
-            logger.error(f"❌ Navigation failed: {str(e)}")
-            return {"success": False, "error": str(e)}
+                # Navigate to Google with explicit wait conditions
+                nav_call = self._create_tool_call(
+                    "browser_use",
+                    {
+                        "action": "go_to_url",
+                        "url": "https://www.google.com",
+                        "wait_for": {
+                            "selector": "input[name='q']",  # Google search input
+                            "timeout": 10000,  # 10 seconds
+                        },
+                    },
+                )
+
+                nav_result = await self.agent.execute_tool(nav_call)
+                logger.info(f"📍 Navigation result: {nav_result}")
+
+                # Check for navigation errors
+                if hasattr(nav_result, "output"):
+                    if "Error:" in str(nav_result.output):
+                        logger.warning(
+                            f"⚠️ Navigation attempt {retry_count + 1} failed: {nav_result.output}"
+                        )
+                        retry_count += 1
+                        continue
+                    else:
+                        logger.info("✅ Navigation to Google.com appears successful")
+
+                # Wait for page to be fully interactive
+                await asyncio.sleep(2)
+
+                # Do a basic interaction test
+                test_call = self._create_tool_call(
+                    "browser_use",
+                    {"action": "check_element", "selector": "input[name='q']"},
+                )
+                test_result = await self.agent.execute_tool(test_call)
+
+                if (
+                    hasattr(test_result, "output")
+                    and "success" in str(test_result.output).lower()
+                ):
+                    logger.info("✅ Search box interaction test passed")
+                    return {"success": True}
+
+                logger.warning("⚠️ Search box interaction test failed, retrying...")
+                retry_count += 1
+
+            except Exception as e:
+                logger.error(
+                    f"❌ Navigation attempt {retry_count + 1} failed: {str(e)}"
+                )
+                retry_count += 1
+                await asyncio.sleep(2 * retry_count)  # Exponential backoff
+
+        return {
+            "success": False,
+            "error": "Failed to establish reliable page interaction after retries",
+        }
 
     async def _find_and_use_search_box_with_annotation(self, query: str) -> Dict:
         """Find search box using visual annotation and type query"""
@@ -91,7 +125,31 @@ class VisualGoogleSearch:
         )
 
         try:
-            # Find search box using visual annotation
+            # Try direct selector first (faster and more reliable)
+            type_call = self._create_tool_call(
+                "browser_use",
+                {
+                    "action": "type",
+                    "selector": "input[name='q']",
+                    "text": query,
+                    "wait_for": {"selector": "input[name='q']", "timeout": 5000},
+                },
+            )
+
+            type_result = await self.agent.execute_tool(type_call)
+
+            # If direct selector works, submit the form
+            if hasattr(type_result, "output") and "Error:" not in str(
+                type_result.output
+            ):
+                submit_call = self._create_tool_call(
+                    "browser_use", {"action": "press_key", "key": "Enter"}
+                )
+                await self.agent.execute_tool(submit_call)
+                await asyncio.sleep(2)  # Wait for search results
+                return {"success": True}
+
+            # Fallback to visual annotation if direct selector fails
             search_box_result = await self.annotator.find_element_by_description(
                 "Google search input box or search field where I can type a query"
             )
