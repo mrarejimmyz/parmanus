@@ -89,7 +89,7 @@ class VisualGoogleSearch:
                 )
 
                 # Check if verification was successful
-                result_text = verify_result.result if not verify_result.error else ""
+                result_text = verify_result.output if not verify_result.error else ""
                 is_verified = result_text and (
                     "search box" in result_text.lower()
                     or "google" in result_text.lower()
@@ -125,9 +125,19 @@ class VisualGoogleSearch:
 
         while retry_count < max_retries:
             try:
-                # Input text into the search box
+                # First locate the search box
+                find_result = await self.browser.execute(
+                    action="find_element", selector="input[name='q']"
+                )
+
+                if find_result.error:
+                    raise Exception(f"Failed to find search box: {find_result.error}")
+
+                # Input text into the found search box
                 input_result = await self.browser.execute(
-                    action="input_text", selector="input[name='q']", text=query
+                    action="input_text",
+                    index=0,  # Use the first matching element
+                    text=query,
                 )
 
                 if input_result.error:
@@ -151,7 +161,7 @@ class VisualGoogleSearch:
                 )
 
                 # Check if verification was successful
-                result_text = verify_result.result if not verify_result.error else ""
+                result_text = verify_result.output if not verify_result.error else ""
                 is_verified = result_text and (
                     "search result" in result_text.lower()
                     or "results page" in result_text.lower()
@@ -197,7 +207,7 @@ class VisualGoogleSearch:
                 return []
 
             # Parse the extracted content
-            content = extract_result.result
+            content = extract_result.output
             if not content:
                 logger.warning("⚠️ No content extracted from search results")
                 return []
