@@ -22,9 +22,9 @@ class VisionBrowserInteraction:
         logger.info(f"📸 Taking screenshot for vision analysis: {goal}")
         
         try:
-            # Take screenshot using browser tool
+            # Get current browser state which includes screenshot
             screenshot_call = self._create_tool_call("browser_use", {
-                "action": "take_screenshot"
+                "action": "get_current_state"
             })
             
             screenshot_result = await self.agent.execute_tool(screenshot_call)
@@ -181,37 +181,52 @@ class VisionBrowserInteraction:
     def _extract_screenshot_data(self, screenshot_result) -> Optional[str]:
         """Extract base64 screenshot data from browser tool result"""
         try:
+            logger.info(f"🔍 Extracting screenshot from result: {type(screenshot_result)}")
+            
             # Handle different possible result formats
+            if hasattr(screenshot_result, 'base64_image') and screenshot_result.base64_image:
+                logger.info("✅ Found screenshot in base64_image attribute")
+                return screenshot_result.base64_image
+            
             if hasattr(screenshot_result, 'output'):
                 output = screenshot_result.output
+                logger.info(f"📊 Checking output field: {type(output)}")
                 
                 # If output is a string, try to parse as JSON
                 if isinstance(output, str):
                     try:
                         parsed = json.loads(output)
                         if 'base64_image' in parsed:
+                            logger.info("✅ Found screenshot in parsed output.base64_image")
                             return parsed['base64_image']
                         elif 'screenshot' in parsed:
+                            logger.info("✅ Found screenshot in parsed output.screenshot")
                             return parsed['screenshot']
                     except json.JSONDecodeError:
                         # If not JSON, check if it's base64 data directly
                         if len(output) > 100 and output.replace('+', '').replace('/', '').replace('=', '').isalnum():
+                            logger.info("✅ Found screenshot as direct base64 string")
                             return output
                 
                 # If output is a dict
                 elif isinstance(output, dict):
                     if 'base64_image' in output:
+                        logger.info("✅ Found screenshot in output dict.base64_image")
                         return output['base64_image']
                     elif 'screenshot' in output:
+                        logger.info("✅ Found screenshot in output dict.screenshot")
                         return output['screenshot']
             
             # Check if result itself has screenshot data
-            if hasattr(screenshot_result, 'base64_image'):
-                return screenshot_result.base64_image
-            elif hasattr(screenshot_result, 'screenshot'):
+            if hasattr(screenshot_result, 'screenshot'):
+                logger.info("✅ Found screenshot in screenshot attribute")
                 return screenshot_result.screenshot
             
-            logger.warning("⚠️ No screenshot data found in result")
+            # Log the actual structure for debugging
+            logger.warning(f"⚠️ No screenshot data found. Result structure: {dir(screenshot_result)}")
+            if hasattr(screenshot_result, 'output'):
+                logger.warning(f"⚠️ Output content preview: {str(screenshot_result.output)[:200]}...")
+            
             return None
             
         except Exception as e:
