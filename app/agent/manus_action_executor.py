@@ -543,7 +543,7 @@ print(f"✅ Research report saved to: {{workspace_path}}")
         )
     
     async def _google_search(self, query: str) -> bool:
-        """Perform a Google search with the given query using visual browser."""
+        """Perform a Google search with the given query using truly visual browser interaction."""
         try:
             logger.info(f"🔍 Opening browser and searching Google for: {query}")
             
@@ -552,27 +552,88 @@ print(f"✅ Research report saved to: {{workspace_path}}")
                 "action": "go_to_url",
                 "url": "https://www.google.com/"
             })
-            await self.agent.execute_tool(tool_call)
-            await asyncio.sleep(2)
+            result = await self.agent.execute_tool(tool_call)
+            logger.info(f"🌐 Navigation result: {result}")
             
-            # Type the search query in the search box
+            if "error" in str(result).lower():
+                logger.error(f"Failed to navigate to Google: {result}")
+                return False
+                
+            await asyncio.sleep(3)  # Wait for page to fully load
+            
+            # First, visually examine the page to see what elements are available
             tool_call = self._create_tool_call("browser_use", {
-                "action": "input_text",
-                "index": 0,  # Usually the first input element is the search box
-                "text": query
+                "action": "extract_content",
+                "goal": "Identify all interactive elements on the page, especially input fields and search boxes"
             })
-            await self.agent.execute_tool(tool_call)
+            result = await self.agent.execute_tool(tool_call)
+            logger.info(f"👁️ Page analysis result: {result}")
             
-            # Press Enter to search
+            # Look for the search input field visually
+            # Google's search box is typically the main input field on the page
+            search_attempted = False
+            
+            # Try different approaches to find and interact with the search box
+            for attempt in range(3):
+                logger.info(f"🔍 Search attempt #{attempt + 1}: Looking for search input field")
+                
+                # Try clicking on the search area first (this often helps focus the input)
+                tool_call = self._create_tool_call("browser_use", {
+                    "action": "click_element", 
+                    "index": attempt  # Try different indices
+                })
+                click_result = await self.agent.execute_tool(tool_call)
+                logger.info(f"🖱️ Click attempt {attempt + 1} result: {click_result}")
+                
+                await asyncio.sleep(1)
+                
+                # Now try to type the search query
+                tool_call = self._create_tool_call("browser_use", {
+                    "action": "input_text",
+                    "index": attempt,
+                    "text": query
+                })
+                input_result = await self.agent.execute_tool(tool_call)
+                logger.info(f"⌨️ Input attempt {attempt + 1} result: {input_result}")
+                
+                # If input was successful, try to submit the search
+                if "error" not in str(input_result).lower():
+                    logger.info(f"✅ Successfully typed query on attempt {attempt + 1}")
+                    
+                    # Press Enter to search
+                    tool_call = self._create_tool_call("browser_use", {
+                        "action": "send_keys",
+                        "keys": "Return"
+                    })
+                    search_result = await self.agent.execute_tool(tool_call)
+                    logger.info(f"⏎ Search submission result: {search_result}")
+                    
+                    if "error" not in str(search_result).lower():
+                        search_attempted = True
+                        break
+                
+                await asyncio.sleep(1)
+            
+            if not search_attempted:
+                logger.error("❌ Failed to find and interact with search input field after multiple attempts")
+                return False
+            
+            await asyncio.sleep(4)  # Wait for search results to load
+            
+            # Verify that search results are now visible
             tool_call = self._create_tool_call("browser_use", {
-                "action": "send_keys",
-                "keys": "Return"
+                "action": "extract_content",
+                "goal": "Check if search results are now visible on the page"
             })
-            await self.agent.execute_tool(tool_call)
+            result = await self.agent.execute_tool(tool_call)
+            logger.info(f"🔍 Search results verification: {result}")
             
-            await asyncio.sleep(3)  # Wait for search results to load
-            logger.info("✅ Google search completed, results visible in browser")
-            return True
+            if "search" in str(result).lower() or "results" in str(result).lower():
+                logger.info("✅ Google search completed successfully with real visual browser actions")
+                return True
+            else:
+                logger.error("❌ Search results not found - search may have failed")
+                return False
             
         except Exception as e:
             logger.error(f"Error performing Google search: {str(e)}")
@@ -583,34 +644,72 @@ print(f"✅ Research report saved to: {{workspace_path}}")
         try:
             logger.info(f"📖 Visiting top {num_results} search results visually")
             
-            for i in range(1, num_results + 1):
-                logger.info(f"🔗 Clicking on search result #{i}")
+            # First, analyze the page to see what search results are available
+            tool_call = self._create_tool_call("browser_use", {
+                "action": "extract_content",
+                "goal": "Identify all clickable search result links on the page"
+            })
+            result = await self.agent.execute_tool(tool_call)
+            logger.info(f"👁️ Search results analysis: {result}")
+            
+            visited_count = 0
+            
+            # Try to visit search results by clicking on different elements
+            for i in range(num_results * 2):  # Try more indices to find actual search results
+                if visited_count >= num_results:
+                    break
+                    
+                logger.info(f"🔗 Attempting to click on element #{i} (looking for search result)")
                 
-                # Click on search result (index starts from 1 for search results)
+                # Try clicking on this element
                 tool_call = self._create_tool_call("browser_use", {
                     "action": "click_element",
-                    "index": i + 2  # Adjust index for search results (skip search box and other elements)
+                    "index": i
                 })
-                await self.agent.execute_tool(tool_call)
+                result = await self.agent.execute_tool(tool_call)
+                logger.info(f"🖱️ Click result for element {i}: {result}")
                 
-                await asyncio.sleep(4)  # Allow page to fully load
+                # Check if we successfully navigated to a new page
+                if "error" not in str(result).lower():
+                    await asyncio.sleep(3)  # Allow page to load
+                    
+                    # Check if we're on a different page (not Google search results)
+                    tool_call = self._create_tool_call("browser_use", {
+                        "action": "extract_content",
+                        "goal": "Check current page URL and content to see if we navigated away from Google search results"
+                    })
+                    page_check = await self.agent.execute_tool(tool_call)
+                    logger.info(f"📄 Page check result: {page_check}")
+                    
+                    # If we're on a different page, extract content and go back
+                    if "google.com/search" not in str(page_check).lower():
+                        visited_count += 1
+                        logger.info(f"✅ Successfully visited search result #{visited_count}")
+                        
+                        # Extract content from this page
+                        logger.info(f"📊 Extracting data from search result #{visited_count}")
+                        tool_call = self._create_tool_call("browser_use", {
+                            "action": "extract_content",
+                            "goal": "Extract key information, prices, headlines, or data from this page"
+                        })
+                        extraction_result = await self.agent.execute_tool(tool_call)
+                        logger.info(f"📄 Extraction result: {extraction_result}")
+                        
+                        # Go back to search results
+                        tool_call = self._create_tool_call("browser_use", {"action": "go_back"})
+                        back_result = await self.agent.execute_tool(tool_call)
+                        logger.info(f"⬅️ Go back result: {back_result}")
+                        
+                        await asyncio.sleep(2)  # Wait for search results page to load
                 
-                # Extract content from the page visually
-                logger.info(f"📊 Extracting data from page #{i}")
-                tool_call = self._create_tool_call("browser_use", {
-                    "action": "extract_content",
-                    "goal": "Extract key information, prices, headlines, or data from this page"
-                })
-                await self.agent.execute_tool(tool_call)
-                
-                # Go back to search results
-                tool_call = self._create_tool_call("browser_use", {"action": "go_back"})
-                await self.agent.execute_tool(tool_call)
-                
-                await asyncio.sleep(2)  # Wait for page to load
-                
-            logger.info("✅ Finished visiting search results")
-            return True
+                await asyncio.sleep(1)  # Small delay between attempts
+            
+            if visited_count > 0:
+                logger.info(f"✅ Successfully visited {visited_count} search results with real visual browser actions")
+                return True
+            else:
+                logger.error("❌ Failed to visit any search results - no clickable results found")
+                return False
             
         except Exception as e:
             logger.error(f"Error visiting search results: {str(e)}")
