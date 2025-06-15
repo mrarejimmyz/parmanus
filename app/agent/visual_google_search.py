@@ -50,32 +50,41 @@ class VisualGoogleSearch:
         max_retries = 3
         retry_count = 0
 
+        # List of selectors to try, in order of preference
+        search_box_selectors = [
+            "input[name='q']",  # Standard search box
+            "textarea[name='q']",  # Alternative search box type
+            "input[type='text']",  # Any text input
+            "input[title*='Search']",  # Input with Search in title
+            "input[aria-label*='Search']",  # Accessibility label
+        ]
+
         while retry_count < max_retries:
             try:
-                # Clear browser state first
+                # Reset browser state thoroughly
+                await asyncio.sleep(1)
                 clear_call = self._create_tool_call(
-                    "browser_use", {"action": "clear_state"}
+                    "browser_use",
+                    {
+                        "action": "execute_js",
+                        "code": "window.localStorage.clear(); window.sessionStorage.clear(); document.cookie.split(';').forEach(c => document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/'));",
+                    },
                 )
                 await self.agent.execute_tool(clear_call)
-                await asyncio.sleep(1)
 
-                # Navigate to Google with explicit wait conditions
+                # Navigate with longer timeout and wait for network idle
                 nav_call = self._create_tool_call(
                     "browser_use",
                     {
                         "action": "go_to_url",
                         "url": "https://www.google.com",
-                        "wait_for": {
-                            "selector": "input[name='q']",  # Google search input
-                            "timeout": 10000,  # 10 seconds
-                        },
+                        "options": {"timeout": 30000, "waitUntil": "networkidle0"},
                     },
                 )
 
                 nav_result = await self.agent.execute_tool(nav_call)
                 logger.info(f"📍 Navigation result: {nav_result}")
 
-                # Check for navigation errors
                 if hasattr(nav_result, "output"):
                     if "Error:" in str(nav_result.output):
                         logger.warning(
@@ -83,35 +92,95 @@ class VisualGoogleSearch:
                         )
                         retry_count += 1
                         continue
-                    else:
-                        logger.info("✅ Navigation to Google.com appears successful")
+
+                logger.info("✅ Navigation to Google.com appears successful")
 
                 # Wait for page to be fully interactive
                 await asyncio.sleep(2)
 
-                # Do a basic interaction test
-                test_call = self._create_tool_call(
+                # Get page title to verify we're on Google
+                title_call = self._create_tool_call(
                     "browser_use",
-                    {"action": "check_element", "selector": "input[name='q']"},
+                    {"action": "execute_js", "code": "return document.title;"},
                 )
-                test_result = await self.agent.execute_tool(test_call)
+                title_result = await self.agent.execute_tool(title_call)
 
-                if (
-                    hasattr(test_result, "output")
-                    and "success" in str(test_result.output).lower()
+                if not (
+                    hasattr(title_result, "output")
+                    and "google" in str(title_result.output).lower()
                 ):
-                    logger.info("✅ Search box interaction test passed")
-                    return {"success": True}
+                    logger.warning("⚠️ Not on Google homepage, retrying...")
+                    retry_count += 1
+                    continue
 
-                logger.warning("⚠️ Search box interaction test failed, retrying...")
+                # Try each selector for the search box
+                for selector in search_box_selectors:
+                    logger.debug(f"🔍 Trying selector: {selector}")
+
+                    # Check if element exists and is visible
+                    check_call = self._create_tool_call(
+                        "browser_use",
+                        {
+                            "action": "execute_js",
+                            "code": f"""
+                                const el = document.querySelector('{selector}');
+                                if (!el) return false;
+                                const rect = el.getBoundingClientRect();
+                                const style = window.getComputedStyle(el);
+                                return rect.width > 0 &&
+                                       rect.height > 0 &&
+                                       style.display !== 'none' &&
+                                       style.visibility !== 'hidden';
+                            """,
+                        },
+                    )
+                    check_result = await self.agent.execute_tool(check_call)
+
+                    if (
+                        hasattr(check_result, "output")
+                        and "true" in str(check_result.output).lower()
+                    ):
+                        logger.info(
+                            f"✅ Found visible search box with selector: {selector}"
+                        )
+
+                        # Try to focus and verify interactivity
+                        focus_call = self._create_tool_call(
+                            "browser_use",
+                            {
+                                "action": "execute_js",
+                                "code": f"""
+                                    const el = document.querySelector('{selector}');
+                                    el.focus();
+                                    return document.activeElement === el;
+                                """,
+                            },
+                        )
+                        focus_result = await self.agent.execute_tool(focus_call)
+
+                        if (
+                            hasattr(focus_result, "output")
+                            and "true" in str(focus_result.output).lower()
+                        ):
+                            logger.info("✅ Successfully focused search box")
+                            return {"success": True, "selector": selector}
+                        else:
+                            logger.warning(
+                                f"⚠️ Failed to focus search box with selector: {selector}"
+                            )
+
+                logger.warning(
+                    f"⚠️ Search box interaction test failed (attempt {retry_count + 1})"
+                )
                 retry_count += 1
+                await asyncio.sleep(2 * (retry_count + 1))  # Exponential backoff
 
             except Exception as e:
                 logger.error(
                     f"❌ Navigation attempt {retry_count + 1} failed: {str(e)}"
                 )
                 retry_count += 1
-                await asyncio.sleep(2 * retry_count)  # Exponential backoff
+                await asyncio.sleep(2 * (retry_count + 1))
 
         return {
             "success": False,
