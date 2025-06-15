@@ -16,9 +16,8 @@ from app.config import config
 from app.llm import LLM
 from app.logger import logger
 from app.tool.base import BaseTool, ToolResult
-from app.tool.web_search import WebSearch
 from app.tool.enhanced_browser import EnhancedContentExtractor
-
+from app.tool.web_search import WebSearch
 
 _BROWSER_DESCRIPTION = """\
 A powerful browser automation tool that allows interaction with web pages through various actions.
@@ -198,15 +197,17 @@ class BrowserUseTool(BaseTool, Generic[Context]):
     selector_tracker: SelectorTracker = Field(
         default_factory=SelectorTracker, exclude=True
     )
-    
+
     # Add enhanced content extractor for JavaScript support
-    enhanced_content_extractor: Optional[EnhancedContentExtractor] = Field(default=None, exclude=True)
+    enhanced_content_extractor: Optional[EnhancedContentExtractor] = Field(
+        default=None, exclude=True
+    )
 
     # Action deduplication system to prevent loops
     last_action: Optional[str] = Field(default=None, exclude=True)
     last_action_time: float = Field(default=0.0, exclude=True)
     action_cooldown: float = Field(default=2.0, exclude=True)  # seconds
-    
+
     # EMERGENCY FIX: Add action_history field properly
     action_history: List[str] = Field(default_factory=list, exclude=True)
 
@@ -314,37 +315,42 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                 # Action deduplication check to prevent loops - ENHANCED VERSION
                 current_time = time.time()
                 current_action_key = f"{action}:{url or ''}"
-                
+
                 # EMERGENCY FIX: Enhanced rate limiting for browser actions
-                if (self.last_action == current_action_key and 
-                    current_time - self.last_action_time < self.action_cooldown):
+                if (
+                    self.last_action == current_action_key
+                    and current_time - self.last_action_time < self.action_cooldown
+                ):
                     # Add exponential backoff for repeated actions
                     wait_time = min(self.action_cooldown * 2, 10)  # Max 10 seconds
                     return ToolResult(
                         error=f"Action '{action}' was just performed. Please wait {wait_time:.1f} seconds before retrying or try a different approach."
                     )
-                
+
                 # EMERGENCY FIX: Detect infinite loops with SMART STRATEGY ADAPTATION
                 self.action_history.append(current_action_key)
                 # Keep only last 10 actions for better pattern detection
                 if len(self.action_history) > 10:
                     self.action_history.pop(0)
-                
+
                 # ENHANCED LOOP DETECTION: Allow retries with strategy changes
                 if len(self.action_history) >= 5:
                     # Check for exact same action repeated 5+ times
                     recent_actions = self.action_history[-5:]
-                    if all(action_key == current_action_key for action_key in recent_actions):
+                    if all(
+                        action_key == current_action_key
+                        for action_key in recent_actions
+                    ):
                         return ToolResult(
                             error=f"Detected persistent failure pattern: action '{action}' failed 5+ times. STRATEGY CHANGE REQUIRED: Try alternative approach, different URL format, or use different tool entirely."
                         )
-                    
+
                     # Check for alternating pattern (A-B-A-B-A)
                     if len(set(recent_actions)) <= 2 and len(recent_actions) >= 4:
                         return ToolResult(
                             error=f"Detected alternating failure pattern. STRATEGY ADAPTATION NEEDED: Current approach not working, try fundamentally different method."
                         )
-                
+
                 # Update action tracking
                 self.last_action = current_action_key
                 self.last_action_time = current_time
@@ -520,39 +526,51 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                     # Use enhanced content extraction with JavaScript support
                     try:
                         page = await context.get_current_page()
-                        
+
                         # Get current page URL for logging
                         page_url = page.url
-                        logger.info(f"Using enhanced content extraction for: {page_url}")
-                        
+                        logger.info(
+                            f"Using enhanced content extraction for: {page_url}"
+                        )
+
                         # Use enhanced content extraction
-                        extraction_results = await self.enhanced_content_extractor.extract_content_with_js_support(page, goal)
-                        
+                        extraction_results = await self.enhanced_content_extractor.extract_content_with_js_support(
+                            page, goal
+                        )
+
                         # Check if extraction was successful
-                        text_content = extraction_results.get('text_content', '')
+                        text_content = extraction_results.get("text_content", "")
                         if not text_content or len(text_content.strip()) < 50:
                             # Try fallback strategies
-                            logger.warning("Primary extraction failed, trying fallback strategies...")
-                            
+                            logger.warning(
+                                "Primary extraction failed, trying fallback strategies..."
+                            )
+
                             # Fallback 1: Wait longer and retry
                             await asyncio.sleep(5)
-                            extraction_results = await self.enhanced_content_extractor.extract_content_with_js_support(page, goal)
-                            text_content = extraction_results.get('text_content', '')
-                            
+                            extraction_results = await self.enhanced_content_extractor.extract_content_with_js_support(
+                                page, goal
+                            )
+                            text_content = extraction_results.get("text_content", "")
+
                             # Fallback 2: Take screenshot for visual analysis
                             if not text_content or len(text_content.strip()) < 50:
                                 try:
                                     screenshot = await page.screenshot()
-                                    extraction_results['screenshot_taken'] = True
-                                    extraction_results['fallback_reason'] = "Text extraction failed, screenshot captured for visual analysis"
+                                    extraction_results["screenshot_taken"] = True
+                                    extraction_results["fallback_reason"] = (
+                                        "Text extraction failed, screenshot captured for visual analysis"
+                                    )
                                 except Exception as e:
                                     logger.warning(f"Screenshot fallback failed: {e}")
-                        
+
                         # Analyze results with LLM
-                        analysis_results = await self.enhanced_content_extractor.analyze_extraction_results(extraction_results, goal)
-                        
+                        analysis_results = await self.enhanced_content_extractor.analyze_extraction_results(
+                            extraction_results, goal
+                        )
+
                         # Format final output
-                        if analysis_results.get('extraction_success'):
+                        if analysis_results.get("extraction_success"):
                             output = f"""✅ ENHANCED CONTENT EXTRACTION SUCCESSFUL
 
 🎯 **Analysis Goal:** {goal}
@@ -574,7 +592,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 """
                         else:
                             # Provide helpful error information
-                            dynamic_info = extraction_results.get('dynamic_info', {})
+                            dynamic_info = extraction_results.get("dynamic_info", {})
                             error_details = f"""❌ CONTENT EXTRACTION CHALLENGES
 
 🎯 **Attempted Goal:** {goal}
@@ -600,9 +618,9 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 {json.dumps(extraction_results, indent=2)}
 """
                             output = error_details
-                        
+
                         return ToolResult(output=output)
-                        
+
                     except Exception as e:
                         logger.error(f"Enhanced content extraction failed: {e}")
                         return ToolResult(
@@ -642,7 +660,7 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 
             except Exception as e:
                 error_msg = f"Browser action '{action}' failed: {str(e)}"
-                
+
                 # Add specific guidance for common errors
                 error_str = str(e).lower()
                 if "tool_calls" in error_str:
@@ -654,10 +672,12 @@ class BrowserUseTool(BaseTool, Generic[Context]):
                 elif "selector" in error_str:
                     error_msg += "\nSuggestion: Try using element indices instead of CSS selectors, or use a simpler selector."
                 elif "connection" in error_str or "network" in error_str:
-                    error_msg += "\nSuggestion: Check your internet connection and try again."
+                    error_msg += (
+                        "\nSuggestion: Check your internet connection and try again."
+                    )
                 else:
                     error_msg += "\nSuggestion: Try a different approach or check if the page has loaded completely."
-                
+
                 return ToolResult(error=error_msg)
 
     async def get_current_state(
@@ -716,3 +736,56 @@ class BrowserUseTool(BaseTool, Generic[Context]):
             logger.info("Browser resources cleaned up")
         except Exception as e:
             logger.error(f"Error during browser cleanup: {e}")
+
+    async def vision_analyze(
+        self,
+        image: str,
+        prompt: str,
+        model: str = "llama3.2-vision",
+        options: Dict = None,
+    ) -> ToolResult:
+        """
+        Analyze an image using the Llama 3.2 Vision model.
+
+        Args:
+            image: Base64 encoded image
+            prompt: The analysis goal/prompt
+            model: Vision model to use (default: llama3.2-vision)
+            options: Additional options for analysis
+        """
+        try:
+            # Create a vision-specific prompt that helps with element identification
+            vision_prompt = f"""
+            I'm showing you a screenshot of a webpage where interactive elements are marked with numbered boxes.
+
+            Your task: {prompt}
+
+            There are {options.get('num_elements', 0)} numbered elements in this image.
+            Element types present: {', '.join(options.get('element_types', []))}
+
+            If you need to identify a specific element, please respond with its number (e.g., "Element 3" or just "3").
+
+            Please analyze the image and respond based on what you see.
+            """
+
+            # Use the vision model
+            from app.llm import LLM
+
+            llm = LLM()
+            llm.model = model  # Ensure we're using the vision model
+
+            response = await llm.vision_analyze(
+                image=image,
+                prompt=vision_prompt,
+                require_element_number=options.get("require_element_number", True),
+            )
+
+            return ToolResult(
+                success=True, output=response, message="Vision analysis complete"
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Vision analysis failed: {str(e)}")
+            return ToolResult(
+                success=False, error=str(e), message="Vision analysis failed"
+            )
