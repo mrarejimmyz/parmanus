@@ -1,6 +1,6 @@
 """
 Visual Google Search Implementation
-Provides true visual browser interaction with Google search
+Provides true visual browser interaction with Google search using Llama 3.2 Vision
 """
 
 import asyncio
@@ -9,13 +9,15 @@ import re
 from typing import Dict, List, Optional, Tuple
 from app.logger import logger
 from app.schema import ToolCall, Function
+from app.agent.vision_browser_interaction import VisionBrowserInteraction
 
 
 class VisualGoogleSearch:
-    """Handles visual Google search interactions like a human would"""
+    """Handles visual Google search interactions like a human would, enhanced with Llama 3.2 Vision"""
     
     def __init__(self, agent):
         self.agent = agent
+        self.vision_browser = VisionBrowserInteraction(agent)
         
     async def perform_visual_google_search(self, query: str) -> Dict:
         """
@@ -60,7 +62,7 @@ class VisualGoogleSearch:
             return {"success": False, "error": str(e)}
     
     async def _navigate_to_google(self) -> Dict:
-        """Navigate to Google.com and verify we're there"""
+        """Navigate to Google.com and verify we're there using vision"""
         logger.info("🌐 Navigating to Google.com")
         
         try:
@@ -85,21 +87,31 @@ class VisualGoogleSearch:
             # If we get here, navigation seems successful
             logger.info("✅ Navigation to Google.com appears successful")
             
-            # Verify we're on Google by extracting page content
-            verification_result = await self._verify_google_page()
+            # Wait for page to load
+            await asyncio.sleep(3)
             
-            if verification_result["is_google"]:
-                logger.info("✅ Successfully verified we're on Google page")
-                return {
-                    "success": True,
-                    "content": verification_result["content"]
-                }
+            # Verify we're on Google using VISION
+            vision_verification = await self.vision_browser.verify_page_visually("Google search page with search box")
+            
+            if vision_verification["success"]:
+                if vision_verification["is_correct_page"]:
+                    logger.info("✅ Vision confirmed we're on Google page")
+                    return {
+                        "success": True,
+                        "content": vision_verification["visual_analysis"]
+                    }
+                else:
+                    logger.warning(f"⚠️ Vision says this might not be Google: {vision_verification['visual_analysis']}")
+                    # Still try to proceed
+                    return {
+                        "success": True,
+                        "content": vision_verification["visual_analysis"]
+                    }
             else:
-                logger.warning(f"⚠️ Navigation succeeded but page verification failed: {verification_result}")
-                # Still consider it a success if navigation worked
+                logger.warning(f"⚠️ Vision verification failed, but navigation succeeded: {vision_verification}")
                 return {
                     "success": True,
-                    "content": verification_result.get("content", "")
+                    "content": "Navigation succeeded but vision verification failed"
                 }
             
         except Exception as e:
@@ -144,13 +156,33 @@ class VisualGoogleSearch:
             return {"is_google": False, "content": "", "error": str(e)}
     
     async def _find_and_use_search_box(self, query: str) -> Dict:
-        """Find the search box and type the query"""
+        """Find the search box and type the query using vision guidance"""
         logger.info(f"🔍 Looking for search box to type: {query}")
         
+        # Use vision to find the search box
+        search_box_result = await self.vision_browser.find_element_visually("Google search input box or search field")
+        
+        if not search_box_result["success"]:
+            logger.error(f"❌ Vision failed to analyze page: {search_box_result}")
+            return {"success": False, "error": "Vision analysis failed"}
+        
+        if not search_box_result["element_found"]:
+            logger.warning("⚠️ Vision couldn't find search box, trying fallback approach")
+            # Fallback to trying different indices
+            return await self._fallback_search_box_detection(query)
+        
+        logger.info(f"👁️ Vision found search element: {search_box_result['location_description']}")
+        
+        # Get interaction guidance from vision
+        guidance_result = await self.vision_browser.get_interaction_guidance(f"Type '{query}' in the search box")
+        
+        if guidance_result["success"]:
+            logger.info(f"🎯 Vision guidance: {guidance_result['guidance']}")
+        
         # Try different element indices to find the search box
-        # Google's search box is usually at index 0, 1, or 2
+        # Vision guidance helps us understand what to look for
         for index in range(0, 10):  # Try first 10 elements
-            logger.info(f"🎯 Trying to type in element #{index}")
+            logger.info(f"🎯 Trying to type in element #{index} (guided by vision)")
             
             try:
                 # Try to input text at this index
@@ -163,26 +195,63 @@ class VisualGoogleSearch:
                 result = await self.agent.execute_tool(tool_call)
                 
                 # Check if input was successful
-                if "error" not in result.output.lower() and "failed" not in result.output.lower():
+                if "error" not in str(result).lower() and "failed" not in str(result).lower():
                     logger.info(f"✅ Successfully typed query in element #{index}")
                     
                     # Now press Enter to submit the search
                     enter_result = await self._submit_search()
                     
                     if enter_result["success"]:
-                        return {"success": True, "search_box_index": index}
+                        # Verify search worked using vision
+                        verification = await self.vision_browser.verify_page_visually("Google search results page")
+                        
+                        if verification["success"] and verification["is_correct_page"]:
+                            logger.info("✅ Vision confirmed search results appeared")
+                            return {"success": True, "search_box_index": index}
+                        else:
+                            logger.info(f"✅ Search submitted successfully (vision verification: {verification})")
+                            return {"success": True, "search_box_index": index}
                     else:
                         logger.warning(f"⚠️ Typed successfully but Enter failed for element #{index}")
                         continue
                 else:
-                    logger.debug(f"❌ Failed to type in element #{index}: {result.output}")
+                    logger.debug(f"❌ Failed to type in element #{index}: {result}")
                     continue
                     
             except Exception as e:
                 logger.debug(f"❌ Exception trying element #{index}: {str(e)}")
                 continue
         
-        return {"success": False, "error": "Could not find working search box"}
+        return {"success": False, "error": "Could not find working search box even with vision guidance"}
+    
+    async def _fallback_search_box_detection(self, query: str) -> Dict:
+        """Fallback method when vision can't find search box"""
+        logger.info("🔄 Using fallback search box detection")
+        
+        # Try different element indices without vision guidance
+        for index in range(0, 10):
+            logger.info(f"🎯 Fallback: Trying element #{index}")
+            
+            try:
+                tool_call = self._create_tool_call("browser_use", {
+                    "action": "input_text",
+                    "index": index,
+                    "text": query
+                })
+                
+                result = await self.agent.execute_tool(tool_call)
+                
+                if "error" not in str(result).lower():
+                    logger.info(f"✅ Fallback: Successfully typed in element #{index}")
+                    
+                    enter_result = await self._submit_search()
+                    if enter_result["success"]:
+                        return {"success": True, "search_box_index": index}
+                        
+            except Exception as e:
+                continue
+        
+        return {"success": False, "error": "Fallback search box detection failed"}
     
     async def _submit_search(self) -> Dict:
         """Submit the search by pressing Enter"""
