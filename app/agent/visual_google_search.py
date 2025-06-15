@@ -8,7 +8,7 @@ import json
 import re
 from typing import Dict, List, Optional, Tuple
 from app.logger import logger
-from app.agent.toolcall import ToolCall, Function
+from app.schema import ToolCall, Function
 
 
 class VisualGoogleSearch:
