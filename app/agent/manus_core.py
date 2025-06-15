@@ -141,9 +141,41 @@ class Manus(ToolCallAgent):
         try:
             await self._initialize_browser_state()
 
+            # Validate and recover from invalid position
             if not await self.utils_module._validate_current_position():
-                logger.error("Invalid position in plan")
-                return False
+                logger.warning("Invalid position detected, attempting recovery")
+                
+                # Ensure we have a valid plan
+                if not self.current_plan or "phases" not in self.current_plan:
+                    logger.error("No valid plan exists")
+                    return False
+                
+                # Fix phase index if out of bounds
+                if self.current_phase >= len(self.current_plan["phases"]):
+                    self.current_phase = len(self.current_plan["phases"]) - 1
+                    logger.info(f"Reset phase to {self.current_phase}")
+                
+                # Fix step index if out of bounds
+                current_phase = self.current_plan["phases"][self.current_phase]
+                if "steps" in current_phase:
+                    if self.current_step >= len(current_phase["steps"]):
+                        self.current_step = len(current_phase["steps"]) - 1
+                        logger.info(f"Reset step to {self.current_step}")
+                    
+                    # If still invalid, reset to beginning of phase
+                    if self.current_step < 0:
+                        self.current_step = 0
+                        logger.info("Reset step to 0")
+                else:
+                    self.current_step = 0
+                    logger.info("No steps in current phase, reset step to 0")
+                
+                # Validate again after recovery
+                if not await self.utils_module._validate_current_position():
+                    logger.error("Recovery failed, position still invalid")
+                    return False
+                
+                logger.info(f"Successfully recovered to phase {self.current_phase}, step {self.current_step}")
 
             current_phase = await self.utils_module._get_current_phase()
             current_step = await self.utils_module._get_current_step()
@@ -152,6 +184,7 @@ class Manus(ToolCallAgent):
             if not current_phase or not current_step:
                 logger.error("No valid phase or step found in plan")
                 return False
+                
             url = await self._extract_url_from_request(current_step)
             if url:
                 if not self.browser_state.get("initialized"):
@@ -173,8 +206,13 @@ class Manus(ToolCallAgent):
                 "Navigate to website" in current_step
                 or "navigate" in current_step.lower()
             ):
-                await self.utils_module.progress_to_next_step()
+                # Progress to next step safely
+                success = await self.utils_module.progress_to_next_step()
+                if not success:
+                    logger.warning("Failed to progress to next step")
                 return True
+
+            return True
 
         except AgentTaskComplete:
             raise
@@ -198,6 +236,16 @@ class Manus(ToolCallAgent):
                 self.current_plan = await self.create_task_plan(request)
                 await self.create_todo_list(self.current_plan)
                 return "Created initial task plan"
+
+            # Validate position before proceeding
+            if not await self.utils_module._validate_current_position():
+                logger.warning("Invalid position detected in step(), attempting recovery")
+                # Attempt recovery using the recovery method
+                recovery_success = await self.utils_module.recover_from_invalid_position()
+                if not recovery_success:
+                    logger.error("Failed to recover from invalid position")
+                    return "Error: Unable to recover from invalid position"
+                logger.info("Successfully recovered from invalid position")
 
             # For subsequent steps, use think() to determine and take actions
             success = await self.think()

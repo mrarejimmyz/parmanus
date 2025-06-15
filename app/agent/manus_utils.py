@@ -83,20 +83,17 @@ class ManusUtils:
             logger.error("No valid phase for progression")
             return False
 
-        # Calculate next step
-        next_step = self.agent.current_step + 1
-
-        # If we've completed all steps in the current phase
-        if next_step >= len(current_phase["steps"]):
+        # Check if we can move to next step in current phase
+        if self.agent.current_step + 1 < len(current_phase["steps"]):
+            self.agent.current_step += 1
+            logger.info(
+                f"Progressed to step {self.agent.current_step} in phase {self.agent.current_phase}"
+            )
+            await self.agent.update_todo_progress()
+            return True
+        else:
+            # Move to next phase
             return await self.progress_to_next_phase()
-
-        # Move to next step in current phase
-        self.agent.current_step = next_step
-        logger.info(
-            f"Progressed to step {self.agent.current_step} in phase {self.agent.current_phase}"
-        )
-        await self.agent.update_todo_progress()
-        return True
 
     async def progress_to_next_phase(self) -> bool:
         """Progress to the next phase and reset step counter"""
@@ -120,3 +117,34 @@ class ManusUtils:
         )
         await self.agent.update_todo_progress()
         return True
+
+    async def recover_from_invalid_position(self) -> bool:
+        """Recover from invalid position by resetting to valid indices"""
+        try:
+            if not self.agent.current_plan or "phases" not in self.agent.current_plan:
+                logger.error("Cannot recover: no valid plan exists")
+                return False
+            
+            # Reset phase if out of bounds
+            if self.agent.current_phase >= len(self.agent.current_plan["phases"]):
+                self.agent.current_phase = len(self.agent.current_plan["phases"]) - 1
+            elif self.agent.current_phase < 0:
+                self.agent.current_phase = 0
+            
+            # Reset step if out of bounds
+            current_phase = self.agent.current_plan["phases"][self.agent.current_phase]
+            if "steps" in current_phase:
+                if self.agent.current_step >= len(current_phase["steps"]):
+                    self.agent.current_step = len(current_phase["steps"]) - 1
+                elif self.agent.current_step < 0:
+                    self.agent.current_step = 0
+            else:
+                self.agent.current_step = 0
+            
+            logger.info(f"Position recovered to phase {self.agent.current_phase}, step {self.agent.current_step}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during position recovery: {str(e)}")
+            return False
+
