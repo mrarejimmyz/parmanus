@@ -221,3 +221,15 @@ verify_gpy.py
 
 models/Llama-3.2-11B-Vision-Instruct.Q4_K_M.gguf
 sessions/last_session.json
+test_crypto_agent.py
+test_crypto_simple.py
+test_direct_reports.py
+test_manus_functions.py
+TEST_RESULTS_SUMMARY.md
+test_simple_integration.py
+TERMINAL_ANALYSIS_FIXES.md
+test_direct_llm_reasoning.py
+test_intelligent_creation.py
+test_quick_crypto.py
+test_reasoning_resume.py
+test_resume_creation.py
