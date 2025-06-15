@@ -22,7 +22,10 @@ class ManusActionExecutor:
     def __init__(self, agent):
         """Initialize with reference to the main agent."""
         self.agent = agent
-        self.visual_google = VisualGoogleSearch(agent)
+        self.browser_handler = BrowserUseTool(agent)  # Initialize browser handler
+        self.visual_google = VisualGoogleSearch(
+            self.browser_handler
+        )  # Pass browser handler instead of agent
         self.last_search_results: Optional[Dict[str, Any]] = None
         self.search_count = 0
         self.max_search_retries = 3

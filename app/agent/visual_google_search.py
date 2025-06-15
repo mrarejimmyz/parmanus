@@ -19,9 +19,10 @@ from app.tool.browser_use_tool import BrowserUseTool
 class VisualGoogleSearch:
     """Handles visual Google search with vision-enabled browser interaction"""
 
-    def __init__(self, agent):
-        self.agent = agent
-        self.annotator = VisualElementAnnotator(agent)
+    def __init__(self, browser_handler):
+        """Initialize with browser handler for direct browser interaction"""
+        self.browser = browser_handler
+        self.annotator = VisualElementAnnotator(browser_handler)
 
     async def perform_visual_google_search(self, query: str) -> Dict:
         """Perform Google search using vision-enabled browser interaction"""
@@ -47,13 +48,24 @@ class VisualGoogleSearch:
             logger.error(f"❌ Visual Google search failed: {str(e)}")
             return {"success": False, "error": str(e)}
 
-    def _create_tool_call(self, name: str, args: Dict) -> ToolCall:
-        """Create a properly formatted tool call"""
-        return ToolCall(
-            id=f"call_{name}_{uuid4().hex[:8]}",
-            type="function",
-            function=Function(name=name, arguments=json.dumps(args)),
-        )
+    def _create_navigation_args(self, url: str) -> Dict:
+        """Create navigation arguments"""
+        return {"url": url}
+
+    def _create_vision_args(
+        self, prompt: str, element_types: List[str], screenshot_area: str = None
+    ) -> Dict:
+        """Create vision analysis arguments"""
+        args = {"prompt": prompt, "element_types": element_types}
+        if screenshot_area:
+            args["screenshot_area"] = screenshot_area
+        return args
+
+    def _create_element_action_args(self, action: str, **kwargs) -> Dict:
+        """Create element action arguments"""
+        args = {"action": action}
+        args.update(kwargs)
+        return args
 
     async def _navigate_to_google(self) -> Dict:
         """Navigate to Google.com with visual verification"""
@@ -63,23 +75,16 @@ class VisualGoogleSearch:
 
         while retry_count < max_retries:
             try:
-                # Create navigation tool call
-                nav_call = self._create_tool_call(
-                    "browser_navigate", {"url": "https://www.google.com"}
-                )
-
-                # Execute navigation
-                nav_result = await self.agent.execute_tool_call(nav_call)
+                # Navigate to Google
+                nav_args = self._create_navigation_args("https://www.google.com")
+                await self.browser.navigate(nav_args)
 
                 # Verify page load with vision
-                verify_call = self._create_tool_call(
-                    "browser_vision_analyze",
-                    {
-                        "prompt": "Verify this is the Google search homepage with search box visible",
-                        "element_types": ["search input", "Google logo"],
-                    },
+                vision_args = self._create_vision_args(
+                    prompt="Verify this is the Google search homepage with search box visible",
+                    element_types=["search input", "Google logo"],
                 )
-                verify_result = await self.agent.execute_tool_call(verify_call)
+                verify_result = await self.browser.analyze_page(vision_args)
 
                 if verify_result.get("is_verified"):
                     logger.info("✅ Successfully navigated to Google.com")
@@ -112,52 +117,40 @@ class VisualGoogleSearch:
         while retry_count < max_retries:
             try:
                 # Use vision to locate search box
-                locate_call = self._create_tool_call(
-                    "browser_vision_analyze",
-                    {
-                        "prompt": "Locate the main Google search input box",
-                        "element_types": ["search input"],
-                    },
+                vision_args = self._create_vision_args(
+                    prompt="Locate the main Google search input box",
+                    element_types=["search input"],
                 )
-                locate_result = await self.agent.execute_tool_call(locate_call)
+                locate_result = await self.browser.analyze_page(vision_args)
 
                 if locate_result.get("elements"):
                     # Input the search query
-                    input_call = self._create_tool_call(
-                        "browser_element_action",
-                        {
-                            "action": "input",
-                            "value": query,
-                            "selector": locate_result["elements"][0].get(
-                                "selector", "input[name='q']"
-                            ),
-                        },
+                    input_args = self._create_element_action_args(
+                        "input",
+                        value=query,
+                        selector=locate_result["elements"][0].get(
+                            "selector", "input[name='q']"
+                        ),
                     )
-                    await self.agent.execute_tool_call(input_call)
+                    await self.browser.interact_with_element(input_args)
 
                     # Submit the search
-                    submit_call = self._create_tool_call(
-                        "browser_element_action",
-                        {
-                            "action": "press",
-                            "key": "Enter",
-                            "selector": locate_result["elements"][0].get(
-                                "selector", "input[name='q']"
-                            ),
-                        },
+                    submit_args = self._create_element_action_args(
+                        "press",
+                        key="Enter",
+                        selector=locate_result["elements"][0].get(
+                            "selector", "input[name='q']"
+                        ),
                     )
-                    await self.agent.execute_tool_call(submit_call)
+                    await self.browser.interact_with_element(submit_args)
 
                     # Verify search results page loaded
                     await asyncio.sleep(2)  # Brief delay for page load
-                    verify_call = self._create_tool_call(
-                        "browser_vision_analyze",
-                        {
-                            "prompt": "Verify this is a Google search results page",
-                            "element_types": ["search results", "result links"],
-                        },
+                    verify_args = self._create_vision_args(
+                        prompt="Verify this is a Google search results page",
+                        element_types=["search results", "result links"],
                     )
-                    verify_result = await self.agent.execute_tool_call(verify_call)
+                    verify_result = await self.browser.analyze_page(verify_args)
 
                     if verify_result.get("is_verified"):
                         logger.info("✅ Successfully executed search")
@@ -187,16 +180,13 @@ class VisualGoogleSearch:
 
         try:
             # Take screenshot and analyze search results
-            vision_call = self._create_tool_call(
-                "browser_vision_analyze",
-                {
-                    "prompt": "Analyze Google search results. Find main result titles, URLs, and descriptions.",
-                    "element_types": ["search result", "link", "text snippet"],
-                    "screenshot_area": "main",
-                },
+            vision_args = self._create_vision_args(
+                prompt="Analyze Google search results. Find main result titles, URLs, and descriptions.",
+                element_types=["search result", "link", "text snippet"],
+                screenshot_area="main",
             )
 
-            vision_result = await self.agent.execute_tool_call(vision_call)
+            vision_result = await self.browser.analyze_page(vision_args)
 
             if not vision_result.get("elements"):
                 logger.warning("⚠️ No search results found in visual analysis")
@@ -224,8 +214,7 @@ class VisualGoogleSearch:
         """Cleanup browser resources"""
         logger.info("🧹 Cleaning up browser resources")
         try:
-            close_call = self._create_tool_call("browser_close", {})
-            await self.agent.execute_tool_call(close_call)
+            await self.browser.close()
         except Exception as e:
             logger.error(f"❌ Failed to close browser: {str(e)}")
 
@@ -282,7 +271,7 @@ class VisualGoogleSearch:
                 "browser_use", {"action": "go_to_url", "url": url}
             )
 
-            nav_result = await self.agent.execute_tool(tool_call)
+            nav_result = await self.browser.execute_tool(tool_call)
 
             if "error" in nav_result.output.lower():
                 return {"success": False, "error": nav_result.output}
@@ -299,7 +288,7 @@ class VisualGoogleSearch:
                 },
             )
 
-            content_result = await self.agent.execute_tool(tool_call)
+            content_result = await self.browser.execute_tool(tool_call)
 
             return {"success": True, "url": url, "content": content_result.output}
 
