@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from app.agent.visual_google_search import VisualGoogleSearch
 from app.exceptions import AgentTaskComplete
+from app.llm import LLM
 from app.logger import logger
 from app.schema import Function, Message, ToolCall
 from app.tool.browser_use_tool import BrowserUseTool
@@ -22,10 +23,24 @@ class ManusActionExecutor:
     def __init__(self, agent):
         """Initialize with reference to the main agent."""
         self.agent = agent
-        self.browser_handler = BrowserUseTool(agent)  # Initialize browser handler
-        self.visual_google = VisualGoogleSearch(
-            self.browser_handler
-        )  # Pass browser handler instead of agent
+
+        # Get LLM from agent - accept any LLM implementation
+        self.llm = getattr(agent, "llm", None)
+        if self.llm is None:
+            # Try to get LLM from agent's implementation
+            self.llm = getattr(getattr(agent, "_impl", None), "llm", None)
+        if self.llm is None:
+            # Create new default LLM if none found
+            from app.llm import LLM
+
+            self.llm = LLM()
+            logger.warning(
+                "Using default LLM instance - vision capabilities may be limited"
+            )
+
+        # Initialize browser with the LLM instance
+        self.browser_handler = BrowserUseTool(llm=self.llm)
+        self.visual_google = VisualGoogleSearch(self.browser_handler)
         self.last_search_results: Optional[Dict[str, Any]] = None
         self.search_count = 0
         self.max_search_retries = 3

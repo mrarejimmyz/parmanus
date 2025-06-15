@@ -3,7 +3,7 @@ import base64
 import json
 import re
 import time
-from typing import Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from browser_use import Browser as BrowserUseBrowser
 from browser_use import BrowserConfig
@@ -98,7 +98,9 @@ class SelectorTracker:
         return True
 
 
-class BrowserUseTool(BaseTool, Generic[Context]):
+class BrowserUseTool(Generic[Context], BaseTool):
+    """Browser Use Tool with enhanced visual analysis and error recovery."""
+
     name: str = "browser_use"
     description: str = _BROWSER_DESCRIPTION
     parameters: dict = {
@@ -214,12 +216,25 @@ class BrowserUseTool(BaseTool, Generic[Context]):
     # Context for generic functionality
     tool_context: Optional[Context] = Field(default=None, exclude=True)
 
-    llm: Optional[LLM] = Field(default_factory=LLM)
+    # Update LLM field definition to accept any LLM type
+    llm: Any = Field(
+        default_factory=lambda: LLM(),
+        description="LLM instance for processing. Can be any type that provides LLM capabilities.",
+    )
 
     @field_validator("parameters", mode="before")
     def validate_parameters(cls, v: dict, info: ValidationInfo) -> dict:
         if not v:
             raise ValueError("Parameters cannot be empty")
+        return v
+
+    @field_validator("llm")
+    def validate_llm(cls, v: Any) -> Any:
+        """Validate LLM instance - allow any LLM implementation class"""
+        if not v:
+            from app.llm import LLM
+
+            return LLM()
         return v
 
     async def _ensure_browser_initialized(self) -> BrowserContext:

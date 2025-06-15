@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from app.agent.visual_element_annotator import VisualElementAnnotator
 from app.logger import logger
-from app.schema import Function, ToolCall, Message
+from app.schema import Function, Message, ToolCall
 from app.tool.browser_use_tool import BrowserUseTool
 
 
@@ -223,10 +223,7 @@ class VisualGoogleSearch:
         return ToolCall(
             id=f"call_{name}_{uuid4().hex[:8]}",
             type="function",
-            function=Function(
-                name=name,
-                arguments=json.dumps(args)
-            )
+            function=Function(name=name, arguments=json.dumps(args)),
         )
 
     async def _structure_search_results(self, raw_content: str) -> List[Dict]:
