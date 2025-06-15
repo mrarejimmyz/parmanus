@@ -164,11 +164,16 @@ class StrReplaceEditor(BaseTool):
 
     async def validate_path(
         self, command: str, path: Path, operator: FileOperator
-    ) -> None:
+    ) -> Path:
         """Validate path and command combination based on execution environment."""
-        # Check if path is absolute
+        # Convert relative paths to absolute paths
         if not path.is_absolute():
-            raise ToolError(f"The path {path} is not an absolute path")
+            # Convert relative path to absolute path based on current working directory
+            import os
+
+            current_dir = Path(os.getcwd())
+            path = current_dir / path
+            path = path.resolve()  # Normalize the path
 
         # Only check if path exists for non-create commands
         if command != "create":
@@ -191,6 +196,8 @@ class StrReplaceEditor(BaseTool):
                 raise ToolError(
                     f"File already exists at: {path}. Cannot overwrite files using command `create`."
                 )
+
+        return path
 
     async def view(
         self,

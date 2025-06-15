@@ -313,14 +313,19 @@ class OllamaLLM:
                 "stream": False,
             }
 
-            response = await self._generate_single_response(request_params, timeout)
-
-            # Parse tool calls from response
+            response = await self._generate_single_response(
+                request_params, timeout
+            )  # Parse tool calls from response
             tool_calls = (
                 self._parse_tool_calls(response) if tools else []
             )  # Calculate token usage
             prompt_tokens = sum(
-                self.count_tokens(msg.get("content", "")) for msg in formatted_messages
+                self.count_tokens(
+                    getattr(msg, "content", "")
+                    if hasattr(msg, "content")
+                    else msg.get("content", "")
+                )
+                for msg in formatted_messages
             )
             completion_tokens = self.count_tokens(response)
             total_tokens = prompt_tokens + completion_tokens

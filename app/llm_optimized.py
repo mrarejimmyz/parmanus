@@ -30,7 +30,7 @@ from app.schema import (
 # Define models that support vision capabilities
 MULTIMODAL_MODELS = ["qwen-vl-7b"]
 
-# Global model cache to persist models between requests
+# Model cache to persist models between requests
 MODEL_CACHE = {}
 
 # Global locks to prevent concurrent loading of the same model
@@ -462,39 +462,115 @@ class LLMOptimized:
         except Exception as e:
             logger.error(f"Browser cleanup failed: {e}")
 
-    def _parse_tool_calls(self, content: str) -> Optional[List[Dict]]:
-        """Parse tool calls from model output."""
+    def _parse_tool_calls(self, content: str) -> List[Dict]:
+        """Parse tool calls from model output with robust error handling."""
         tool_calls = []
 
-        # Look for function call patterns
-        pattern = r"(\w+)\((.*?)\)"
-        matches = re.finditer(pattern, content)
+        if not content or not isinstance(content, str):
+            return tool_calls
 
-        for match in matches:
-            func_name = match.group(1)
-            args_str = match.group(2)
+        try:
+            import json
+            import re
+            import time
 
-            # Try to parse arguments as JSON
-            try:
-                args = json.loads(args_str)
-            except json.JSONDecodeError:
-                # If not valid JSON, treat as plain string
-                args = args_str
+            # Pattern 1: Look for direct function call patterns
+            function_patterns = [
+                r"(\w+)\s*\(\s*([^)]*)\s*\)",  # function_name(args)
+                r"call\s+(\w+)\s*with\s*([^.]*)",  # call function_name with args
+                r"use\s+(\w+)\s*:\s*([^.]*)",  # use function_name: args
+            ]
 
-            tool_calls.append(
-                {
-                    "id": f"call_{len(tool_calls)}",
-                    "type": "function",
-                    "function": {
-                        "name": func_name,
-                        "arguments": (
-                            json.dumps(args) if isinstance(args, (dict, list)) else args
-                        ),
-                    },
-                }
-            )
+            for pattern in function_patterns:
+                matches = re.finditer(pattern, content, re.IGNORECASE)
 
-        return tool_calls if tool_calls else None
+                for match in matches:
+                    try:
+                        func_name = match.group(1).strip()
+                        args_str = (
+                            match.group(2).strip() if len(match.groups()) > 1 else ""
+                        )
+
+                        # Skip common non-tool words
+                        if func_name.lower() in [
+                            "if",
+                            "for",
+                            "while",
+                            "def",
+                            "class",
+                            "print",
+                            "len",
+                            "str",
+                            "int",
+                            "float",
+                            "return",
+                            "import",
+                            "from",
+                        ]:
+                            continue
+
+                        # Parse arguments
+                        args = {}
+                        if args_str:
+                            try:
+                                # Try parsing as JSON first
+                                if args_str.startswith("{") and args_str.endswith("}"):
+                                    args = json.loads(args_str)
+                                else:
+                                    # Simple key=value parsing
+                                    for pair in args_str.split(","):
+                                        if "=" in pair:
+                                            key, value = pair.split("=", 1)
+                                            key = key.strip().strip("\"'")
+                                            value = value.strip().strip("\"'")
+                                            args[key] = value
+                                        elif pair.strip():
+                                            args["input"] = pair.strip().strip("\"'")
+                            except:
+                                args = {"input": args_str}
+
+                        tool_call = {
+                            "id": f"call_{time.time_ns()}",
+                            "type": "function",
+                            "function": {
+                                "name": func_name,
+                                "arguments": json.dumps(args),
+                            },
+                        }
+                        tool_calls.append(tool_call)
+
+                    except Exception as e:
+                        logger.debug(f"Error parsing tool call match: {e}")
+                        continue
+
+            # Pattern 2: Look for JSON blocks
+            json_pattern = r"```(?:json)?\s*(\{[^}]*\})\s*```"
+            json_matches = re.finditer(json_pattern, content, re.DOTALL)
+
+            for match in json_matches:
+                try:
+                    json_str = match.group(1)
+                    data = json.loads(json_str)
+
+                    if isinstance(data, dict) and "name" in data:
+                        tool_call = {
+                            "id": f"call_{time.time_ns()}",
+                            "type": "function",
+                            "function": {
+                                "name": data["name"],
+                                "arguments": json.dumps(data.get("arguments", {})),
+                            },
+                        }
+                        tool_calls.append(tool_call)
+
+                except Exception as e:
+                    logger.debug(f"Error parsing JSON tool call: {e}")
+                    continue
+
+        except Exception as e:
+            logger.error(f"Error in _parse_tool_calls: {e}")
+
+        return tool_calls
 
     def _format_prompt_for_llama(
         self,
@@ -687,18 +763,41 @@ class LLMOptimized:
                 # Format messages
                 formatted_messages = []
                 if system_msgs:
-                    formatted_messages.extend(
-                        [
-                            msg if isinstance(msg, dict) else msg.to_dict()
-                            for msg in system_msgs
-                        ]
-                    )
-                formatted_messages.extend(
-                    [
-                        msg if isinstance(msg, dict) else msg.to_dict()
-                        for msg in messages
-                    ]
-                )
+                    try:
+                        for i, msg in enumerate(system_msgs):
+                            if isinstance(msg, dict):
+                                formatted_messages.append(msg)
+                            else:
+                                if hasattr(msg, "to_dict"):
+                                    formatted_messages.append(msg.to_dict())
+                                else:
+                                    logger.error(
+                                        f"System message {i} has no to_dict method: {type(msg)} - {msg}"
+                                    )
+                                    formatted_messages.append(
+                                        {"role": "system", "content": str(msg)}
+                                    )
+                    except Exception as e:
+                        logger.error(f"Error formatting system messages: {e}")
+                        raise
+
+                try:
+                    for i, msg in enumerate(messages):
+                        if isinstance(msg, dict):
+                            formatted_messages.append(msg)
+                        else:
+                            if hasattr(msg, "to_dict"):
+                                formatted_messages.append(msg.to_dict())
+                            else:
+                                logger.error(
+                                    f"Message {i} has no to_dict method: {type(msg)} - {msg}"
+                                )
+                                formatted_messages.append(
+                                    {"role": "user", "content": str(msg)}
+                                )
+                except Exception as e:
+                    logger.error(f"Error formatting messages: {e}")
+                    raise
 
                 # Create enhanced prompt with tool information
                 prompt = self._format_prompt_for_llama(formatted_messages)
@@ -707,7 +806,9 @@ class LLMOptimized:
                 if tools:
                     tool_definitions = "\n\nAvailable tools:\n"
                     for tool in tools:
-                        tool_definitions += f"- {tool['name']}: {tool['description']}\n"
+                        tool_name = tool.get("name", "unknown_tool")
+                        tool_desc = tool.get("description", "No description available")
+                        tool_definitions += f"- {tool_name}: {tool_desc}\n"
                     prompt += tool_definitions
 
                     # Add tool choice instructions
@@ -745,7 +846,30 @@ class LLMOptimized:
                 )
 
                 # Extract completion text
-                completion_text = completion["choices"][0]["text"].strip()
+                try:
+                    completion_text = completion["choices"][0]["text"].strip()
+                except (KeyError, IndexError, TypeError) as ce:
+                    logger.error(f"Error extracting completion text: {ce}")
+                    logger.error(f"Completion structure: {completion}")
+                    # Try alternative extraction methods
+                    if isinstance(completion, dict):
+                        if "choices" in completion and completion["choices"]:
+                            choice = completion["choices"][0]
+                            if isinstance(choice, dict):
+                                # Try different keys
+                                completion_text = choice.get(
+                                    "text", choice.get("message", {}).get("content", "")
+                                )
+                            else:
+                                completion_text = str(choice)
+                        else:
+                            completion_text = str(completion)
+                    else:
+                        completion_text = str(completion)
+
+                    if not completion_text:
+                        logger.warning("Empty completion text, using fallback")
+                        completion_text = "No response generated"
 
                 # Parse tool calls from response
                 tool_calls = self._parse_tool_calls(completion_text) if tools else []

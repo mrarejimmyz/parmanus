@@ -247,10 +247,12 @@ class Manus(ToolCallAgent):
 
             # Check for research/search requests and handle them directly
             user_messages = [
-                msg for msg in formatted_messages if msg.get("role") == "user"
+                msg
+                for msg in formatted_messages
+                if getattr(msg, "role", None) == "user"
             ]
             if user_messages:
-                last_user_msg = user_messages[-1].get("content", "").lower()
+                last_user_msg = getattr(user_messages[-1], "content", "").lower()
 
                 # If user wants AI safety research or trending topics, use browser directly
                 if any(
@@ -272,8 +274,9 @@ class Manus(ToolCallAgent):
                     ask_human_count = sum(
                         1
                         for msg in recent_msgs
-                        if msg.get("role") == "assistant"
-                        and "what specific topics" in msg.get("content", "").lower()
+                        if getattr(msg, "role", None) == "assistant"
+                        and "what specific topics"
+                        in getattr(msg, "content", "").lower()
                     )
 
                     if ask_human_count >= 1:
@@ -304,12 +307,15 @@ class Manus(ToolCallAgent):
             # Only process browser context if browser features are enabled
             if self.browser_enabled and formatted_messages:
                 recent_messages = formatted_messages[-3:]
-                browser_in_use = any(
-                    tc.get("function", {}).get("name") == BrowserUseTool().name
-                    for msg in recent_messages
-                    if "tool_calls" in msg
-                    for tc in msg.get("tool_calls", [])
-                )
+                # Simplified browser detection - check for browser usage without complex logic
+                browser_in_use = False
+                for msg in recent_messages:
+                    if hasattr(msg, "tool_calls") and msg.tool_calls:
+                        for tc in msg.tool_calls:
+                            if hasattr(tc, "function") and hasattr(tc.function, "name"):
+                                if tc.function.name == BrowserUseTool().name:
+                                    browser_in_use = True
+                                    break
 
                 if browser_in_use:
                     original_prompt = self.next_step_prompt
@@ -322,7 +328,23 @@ class Manus(ToolCallAgent):
 
             # Pass formatted messages to LLM
             if hasattr(self, "llm") and self.llm is not None:
-                self.llm.messages = formatted_messages
+                # Convert Message objects to dictionaries for LLM
+                formatted_dicts = []
+                for msg in formatted_messages:
+                    if hasattr(msg, "to_dict"):
+                        formatted_dicts.append(msg.to_dict())
+                    elif isinstance(msg, dict):
+                        formatted_dicts.append(msg)
+                    else:
+                        # Fallback for unexpected types
+                        formatted_dicts.append(
+                            {
+                                "role": getattr(msg, "role", "user"),
+                                "content": getattr(msg, "content", str(msg)),
+                            }
+                        )
+
+                self.llm.messages = formatted_dicts
                 return await super().think()
             else:
                 logger.error("LLM not properly initialized")
@@ -402,7 +424,9 @@ class Manus(ToolCallAgent):
         # Set default values for required fields if not provided in kwargs
         try:
             if "llm" not in kwargs:
-                self.llm = LLMOptimized(config.llm)
+                from app.llm_factory import create_llm
+
+                self.llm = create_llm(config.llm)
 
             if "available_tools" not in kwargs:
                 # Initialize tools with proper error handling

@@ -201,19 +201,24 @@ cython_debug/
 # node
 node_modules
 
-# Model files (large files that should not be in Git)
-models/
+### Large Model Files ###
+# All GGUF model files (typically very large)
 *.gguf
+*.ggml
 *.bin
 *.safetensors
-*.pt
-*.pth
-*.h5
-*.pkl
-*.model
-*.weights
-*.ckpt
-*.pb
+
+# Model directories
+models/
+weights/
+checkpoints/
+
+# Specific model files already present
+models/llava-model.gguf
+models/llama-jb.gguf
+models/llava-vision.gguf
+models/mmproj-model.gguf
+models/Llama-3.2.gguf
 examples/cat.png
 .vs/parmanus/v17/.wsuo
 .vs/parmanus/CopilotIndices/17.14.719.50355/CodeChunks.db
@@ -267,3 +272,7 @@ user_request.txt
 assets/logo.jpg
 CALCULATOR_ISSUE_COMPLETION_REPORT.md
 optimize_gpu.sh
+kitchener_attractions.html
+.gitignore
+.gitignore
+kitchener_top_attractions.html
