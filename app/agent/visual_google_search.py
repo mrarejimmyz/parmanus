@@ -74,19 +74,28 @@ class VisualGoogleSearch:
         retry_count = 0
 
         while retry_count < max_retries:
-            try:
-                # Navigate to Google
-                nav_args = self._create_navigation_args("https://www.google.com")
-                await self.browser.navigate(nav_args)
+            try:  # Navigate to Google
+                nav_result = await self.browser.execute(
+                    action="go_to_url", url="https://www.google.com"
+                )
+
+                if nav_result.error:
+                    raise Exception(f"Navigation failed: {nav_result.error}")
 
                 # Verify page load with vision
-                vision_args = self._create_vision_args(
-                    prompt="Verify this is the Google search homepage with search box visible",
-                    element_types=["search input", "Google logo"],
+                verify_result = await self.browser.execute(
+                    action="extract_content",
+                    goal="Verify this is the Google search homepage with search box visible",
                 )
-                verify_result = await self.browser.analyze_page(vision_args)
 
-                if verify_result.get("is_verified"):
+                # Check if verification was successful
+                result_text = verify_result.result if not verify_result.error else ""
+                is_verified = result_text and (
+                    "search box" in result_text.lower()
+                    or "google" in result_text.lower()
+                )
+
+                if is_verified:
                     logger.info("✅ Successfully navigated to Google.com")
                     return {"success": True}
 
@@ -116,45 +125,41 @@ class VisualGoogleSearch:
 
         while retry_count < max_retries:
             try:
-                # Use vision to locate search box
-                vision_args = self._create_vision_args(
-                    prompt="Locate the main Google search input box",
-                    element_types=["search input"],
+                # Input text into the search box
+                input_result = await self.browser.execute(
+                    action="input_text", selector="input[name='q']", text=query
                 )
-                locate_result = await self.browser.analyze_page(vision_args)
 
-                if locate_result.get("elements"):
-                    # Input the search query
-                    input_args = self._create_element_action_args(
-                        "input",
-                        value=query,
-                        selector=locate_result["elements"][0].get(
-                            "selector", "input[name='q']"
-                        ),
+                if input_result.error:
+                    raise Exception(
+                        f"Failed to input search text: {input_result.error}"
                     )
-                    await self.browser.interact_with_element(input_args)
 
-                    # Submit the search
-                    submit_args = self._create_element_action_args(
-                        "press",
-                        key="Enter",
-                        selector=locate_result["elements"][0].get(
-                            "selector", "input[name='q']"
-                        ),
-                    )
-                    await self.browser.interact_with_element(submit_args)
+                # Submit the search with Enter key
+                submit_result = await self.browser.execute(
+                    action="send_keys", keys="Enter"
+                )
 
-                    # Verify search results page loaded
-                    await asyncio.sleep(2)  # Brief delay for page load
-                    verify_args = self._create_vision_args(
-                        prompt="Verify this is a Google search results page",
-                        element_types=["search results", "result links"],
-                    )
-                    verify_result = await self.browser.analyze_page(verify_args)
+                if submit_result.error:
+                    raise Exception(f"Failed to submit search: {submit_result.error}")
 
-                    if verify_result.get("is_verified"):
-                        logger.info("✅ Successfully executed search")
-                        return {"success": True}
+                # Verify search results page loaded
+                await asyncio.sleep(2)  # Brief delay for page load
+                verify_result = await self.browser.execute(
+                    action="extract_content",
+                    goal="Verify this is a Google search results page with visible search results and links",
+                )
+
+                # Check if verification was successful
+                result_text = verify_result.result if not verify_result.error else ""
+                is_verified = result_text and (
+                    "search result" in result_text.lower()
+                    or "results page" in result_text.lower()
+                )
+
+                if is_verified:
+                    logger.info("✅ Successfully executed search")
+                    return {"success": True}
 
                 retry_count += 1
                 logger.warning(
@@ -179,32 +184,63 @@ class VisualGoogleSearch:
         logger.info("📑 Extracting search results with visual analysis")
 
         try:
-            # Take screenshot and analyze search results
-            vision_args = self._create_vision_args(
-                prompt="Analyze Google search results. Find main result titles, URLs, and descriptions.",
-                element_types=["search result", "link", "text snippet"],
-                screenshot_area="main",
+            # Extract search results using content extraction
+            extract_result = await self.browser.execute(
+                action="extract_content",
+                goal="Extract search result titles, URLs, and descriptions from the Google search results page",
             )
 
-            vision_result = await self.browser.analyze_page(vision_args)
-
-            if not vision_result.get("elements"):
-                logger.warning("⚠️ No search results found in visual analysis")
+            if extract_result.error:
+                logger.error(
+                    f"❌ Failed to extract search results: {extract_result.error}"
+                )
                 return []
 
-            results = []
-            for element in vision_result.get("elements", []):
-                if element.get("type") == "search result":
-                    result = {
-                        "title": element.get("text", "").strip(),
-                        "url": element.get("url", ""),
-                        "snippet": element.get("description", "").strip(),
-                    }
-                    if result["title"] and (result["url"] or result["snippet"]):
-                        results.append(result)
+            # Parse the extracted content
+            content = extract_result.result
+            if not content:
+                logger.warning("⚠️ No content extracted from search results")
+                return []
 
-            logger.info(f"✅ Successfully extracted {len(results)} search results")
-            return results
+            # Try to extract structured results
+            try:
+                # Look for titles followed by URLs and descriptions
+                results = []
+                lines = content.split("\n")
+                current_result = {}
+
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    if line.startswith("http") or line.startswith("www"):
+                        if current_result.get(
+                            "title"
+                        ):  # Only add URL if we have a title
+                            current_result["url"] = line
+                    elif current_result.get("url") and not current_result.get(
+                        "snippet"
+                    ):
+                        current_result["snippet"] = line
+                        results.append(current_result)
+                        current_result = {}
+                    else:
+                        if not current_result.get("title"):
+                            current_result["title"] = line
+
+                # Add the last result if complete
+                if current_result.get("title") and (
+                    current_result.get("url") or current_result.get("snippet")
+                ):
+                    results.append(current_result)
+
+                logger.info(f"✅ Successfully extracted {len(results)} search results")
+                return results
+
+            except Exception as e:
+                logger.error(f"❌ Failed to parse search results: {str(e)}")
+                return []
 
         except Exception as e:
             logger.error(f"❌ Failed to extract search results: {str(e)}")
