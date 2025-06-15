@@ -8,6 +8,19 @@ data/
 # Workspace
 workspace/
 
+# Large model files
+models/
+*.gguf
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
