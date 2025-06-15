@@ -1,6 +1,6 @@
 """
 Visual Google Search Implementation
-Enhanced with numbered element annotation for precise Llama 3.2 Vision interaction
+Enhanced with Nodriver for captcha bypass and anti-bot detection avoidance
 """
 
 import asyncio
@@ -8,41 +8,73 @@ import json
 import re
 from typing import Dict, List, Optional
 
-from app.agent.visual_element_annotator import VisualElementAnnotator
+# Import the new Nodriver implementation
+from app.agent.nodriver_google_search import NodriverGoogleSearch
 from app.logger import logger
 from app.schema import Function, ToolCall
 
 
 class VisualGoogleSearch:
-    """Handles visual Google search with element annotation for precise interaction"""
+    """Handles visual Google search with Nodriver for stealth browsing"""
 
     def __init__(self, agent):
         self.agent = agent
-        self.annotator = VisualElementAnnotator(agent)
+        self.nodriver_search = NodriverGoogleSearch(agent)
 
     async def perform_visual_google_search(self, query: str) -> Dict:
-        """Perform Google search using visual element annotation"""
-        logger.info(f"🔍 Starting visual Google search with annotation for: {query}")
+        """Perform Google search using Nodriver for captcha bypass"""
+        logger.info(f"🔍 Starting Nodriver-powered visual Google search for: {query}")
 
         try:
-            # Step 1: Navigate to Google
-            navigation_result = await self._navigate_to_google()
-            if not navigation_result["success"]:
-                return navigation_result
+            # Use Nodriver implementation
+            result = await self.nodriver_search.perform_visual_google_search(query)
 
-            # Step 2: Find and use search box with visual annotation
-            search_result = await self._find_and_use_search_box_with_annotation(query)
-            if not search_result["success"]:
-                return search_result
+            if result["success"]:
+                logger.info(f"✅ Nodriver Google search completed successfully!")
+                logger.info(f"📊 Found {len(result.get('results', []))} search results")
+            else:
+                logger.error(
+                    f"❌ Nodriver Google search failed: {result.get('error', 'Unknown error')}"
+                )
 
-            # Step 3: Extract search results
-            results = await self._extract_search_results()
-
-            return {"success": True, "query": query, "results": results}
+            return result
 
         except Exception as e:
             logger.error(f"❌ Visual Google search failed: {str(e)}")
             return {"success": False, "error": str(e)}
+
+    async def close(self) -> None:
+        """Close the search engine and clean up resources"""
+        await self.nodriver_search.close()
+
+    # Legacy methods for backward compatibility
+    async def _navigate_to_google(self) -> Dict:
+        """Legacy method - now handled by Nodriver"""
+        logger.info(
+            "🔄 Legacy navigation method called - using Nodriver implementation"
+        )
+        return {"success": True, "message": "Using Nodriver implementation"}
+
+    async def _find_and_use_search_box_with_annotation(self, query: str) -> Dict:
+        """Legacy method - now handled by Nodriver"""
+        logger.info(
+            "🔄 Legacy search box method called - using Nodriver implementation"
+        )
+        return {"success": True, "message": "Using Nodriver implementation"}
+
+    async def _extract_search_results(self) -> List[Dict]:
+        """Legacy method - now handled by Nodriver"""
+        logger.info(
+            "🔄 Legacy extraction method called - using Nodriver implementation"
+        )
+        return []
+
+    def _create_tool_call(self, tool_name: str, arguments: Dict) -> ToolCall:
+        """Legacy method for tool call creation"""
+        return ToolCall(
+            id=f"call_{tool_name}_{hash(str(arguments)) % 10000}",
+            function=Function(name=tool_name, arguments=json.dumps(arguments)),
+        )
 
     async def _navigate_to_google(self) -> Dict:
         """Navigate to Google.com with visual verification"""

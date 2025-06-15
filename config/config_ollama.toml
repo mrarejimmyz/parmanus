@@ -24,8 +24,8 @@ max_tokens = 2048
 temperature = 0.0
 
 # Local vision model settings (for when you get GGUF models)
-model_path = "models/llava-1.6-mistral-7b-gguf/ggml-model-q4_k.gguf"
-clip_model_path = "models/llava-1.6-mistral-7b-gguf/mmproj-model-f16.gguf"
+# model_path = "models/llava-1.6-mistral-7b-gguf/ggml-model-q4_k.gguf"
+# clip_model_path = "models/llava-1.6-mistral-7b-gguf/mmproj-model-f16.gguf"
 
 # Browser configuration
 [browser]
@@ -44,4 +44,3 @@ memory_compression = false
 speak = false
 listen = false
 agent_name = "Friday"
-

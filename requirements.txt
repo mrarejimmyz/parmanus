@@ -1,4 +1,4 @@
-# ParManus AI dependencies - Ollama Only (Simplified)
+# ParManus AI dependencies - Enhanced with Nodriver
 pydantic~=2.10.6
 
 # For Ollama API (primary and only backend)
@@ -19,6 +19,9 @@ python-dotenv>=1.0.0
 # Tool-specific dependencies
 selenium>=4.15.0
 webdriver-manager>=4.0.0
+
+# Nodriver for stealth browsing and captcha bypass
+nodriver>=0.34
 
 # Optional: Voice interaction (uncomment if needed)
 # pyttsx3~=2.90
