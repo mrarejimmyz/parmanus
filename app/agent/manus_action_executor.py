@@ -4,8 +4,10 @@ Keeps manus_core.py clean and optimized for easier debugging
 """
 
 import asyncio
+import json
 from typing import Dict, List, Optional
 from app.logger import logger
+from app.schema import ToolCall, Function
 
 
 class ManusActionExecutor:
@@ -165,14 +167,11 @@ class ManusActionExecutor:
         """Navigate to a specific URL using visual browser tool."""
         try:
             logger.info(f"🌐 Navigating to: {url}")
-            tool_call = {
-                "function": "browser_use",
-                "arguments": {
-                    "action": "go_to_url",
-                    "url": url
-                }
-            }
-            await self.agent.execute_tool_call(tool_call)
+            tool_call = self._create_tool_call("browser_use", {
+                "action": "go_to_url",
+                "url": url
+            })
+            await self.agent.execute_tool(tool_call)
             await asyncio.sleep(2)  # Allow page to load
             logger.info(f"✅ Successfully navigated to {url}")
             return True
@@ -532,42 +531,44 @@ print(f"✅ Research report saved to: {{workspace_path}}")
             
         return queries
     
+    def _create_tool_call(self, function_name: str, arguments: Dict) -> ToolCall:
+        """Create a properly formatted ToolCall object."""
+        return ToolCall(
+            id=f"call_{function_name}_{id(arguments)}",
+            type="function",
+            function=Function(
+                name=function_name,
+                arguments=json.dumps(arguments)
+            )
+        )
+    
     async def _google_search(self, query: str) -> bool:
         """Perform a Google search with the given query using visual browser."""
         try:
             logger.info(f"🔍 Opening browser and searching Google for: {query}")
             
             # Navigate to Google
-            tool_call = {
-                "function": "browser_use",
-                "arguments": {
-                    "action": "go_to_url",
-                    "url": "https://www.google.com/"
-                }
-            }
-            await self.agent.execute_tool_call(tool_call)
+            tool_call = self._create_tool_call("browser_use", {
+                "action": "go_to_url",
+                "url": "https://www.google.com/"
+            })
+            await self.agent.execute_tool(tool_call)
             await asyncio.sleep(2)
             
             # Type the search query in the search box
-            tool_call = {
-                "function": "browser_use",
-                "arguments": {
-                    "action": "input_text",
-                    "index": 0,  # Usually the first input element is the search box
-                    "text": query
-                }
-            }
-            await self.agent.execute_tool_call(tool_call)
+            tool_call = self._create_tool_call("browser_use", {
+                "action": "input_text",
+                "index": 0,  # Usually the first input element is the search box
+                "text": query
+            })
+            await self.agent.execute_tool(tool_call)
             
             # Press Enter to search
-            tool_call = {
-                "function": "browser_use",
-                "arguments": {
-                    "action": "send_keys",
-                    "text": "Return"
-                }
-            }
-            await self.agent.execute_tool_call(tool_call)
+            tool_call = self._create_tool_call("browser_use", {
+                "action": "send_keys",
+                "text": "Return"
+            })
+            await self.agent.execute_tool(tool_call)
             
             await asyncio.sleep(3)  # Wait for search results to load
             logger.info("✅ Google search completed, results visible in browser")
@@ -586,34 +587,25 @@ print(f"✅ Research report saved to: {{workspace_path}}")
                 logger.info(f"🔗 Clicking on search result #{i}")
                 
                 # Click on search result (index starts from 1 for search results)
-                tool_call = {
-                    "function": "browser_use",
-                    "arguments": {
-                        "action": "click_element",
-                        "index": i + 2  # Adjust index for search results (skip search box and other elements)
-                    }
-                }
-                await self.agent.execute_tool_call(tool_call)
+                tool_call = self._create_tool_call("browser_use", {
+                    "action": "click_element",
+                    "index": i + 2  # Adjust index for search results (skip search box and other elements)
+                })
+                await self.agent.execute_tool(tool_call)
                 
                 await asyncio.sleep(4)  # Allow page to fully load
                 
                 # Extract content from the page visually
                 logger.info(f"📊 Extracting data from page #{i}")
-                tool_call = {
-                    "function": "browser_use",
-                    "arguments": {
-                        "action": "extract_content",
-                        "text": "Extract key information, prices, headlines, or data from this page"
-                    }
-                }
-                await self.agent.execute_tool_call(tool_call)
+                tool_call = self._create_tool_call("browser_use", {
+                    "action": "extract_content",
+                    "text": "Extract key information, prices, headlines, or data from this page"
+                })
+                await self.agent.execute_tool(tool_call)
                 
                 # Go back to search results
-                tool_call = {
-                    "function": "browser_use",
-                    "arguments": {"action": "go_back"}
-                }
-                await self.agent.execute_tool_call(tool_call)
+                tool_call = self._create_tool_call("browser_use", {"action": "go_back"})
+                await self.agent.execute_tool(tool_call)
                 
                 await asyncio.sleep(2)  # Wait for page to load
                 
