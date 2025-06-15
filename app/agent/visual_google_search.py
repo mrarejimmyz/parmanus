@@ -98,18 +98,74 @@ class VisualGoogleSearch:
                 # Wait for page to be fully interactive
                 await asyncio.sleep(2)
 
-                # Get page title to verify we're on Google
-                title_call = self._create_tool_call(
+                # Get page info to verify we're on Google
+                verify_call = self._create_tool_call(
                     "browser_use",
-                    {"action": "execute_js", "code": "return document.title;"},
+                    {
+                        "action": "execute_js",
+                        "code": """
+                        return {
+                            title: document.title,
+                            url: window.location.href,
+                            readyState: document.readyState,
+                            hasSearchBox: !!document.querySelector('input[name="q"]'),
+                            hasGoogleLogo: !!document.querySelector('img[alt*="Google"]'),
+                            bodyContent: document.body.innerText.slice(0, 200)
+                        }
+                    """,
+                    },
                 )
-                title_result = await self.agent.execute_tool(title_call)
+                verify_result = await self.agent.execute_tool(verify_call)
 
-                if not (
-                    hasattr(title_result, "output")
-                    and "google" in str(title_result.output).lower()
-                ):
-                    logger.warning("⚠️ Not on Google homepage, retrying...")
+                # Log detailed diagnostics
+                if hasattr(verify_result, "output"):
+                    try:
+                        page_info = json.loads(str(verify_result.output))
+                        logger.info(f"Page diagnostics:")
+                        logger.info(f"  Title: {page_info.get('title', 'N/A')}")
+                        logger.info(f"  URL: {page_info.get('url', 'N/A')}")
+                        logger.info(
+                            f"  Ready State: {page_info.get('readyState', 'N/A')}"
+                        )
+                        logger.info(
+                            f"  Has Search Box: {page_info.get('hasSearchBox', False)}"
+                        )
+                        logger.info(
+                            f"  Has Google Logo: {page_info.get('hasGoogleLogo', False)}"
+                        )
+
+                        # Check multiple indicators that we're on Google
+                        is_google_page = (
+                            (
+                                "google" in str(page_info.get("title", "")).lower()
+                                or "google" in str(page_info.get("url", "")).lower()
+                            )
+                            and page_info.get("readyState") == "complete"
+                            and (
+                                page_info.get("hasSearchBox", False)
+                                or page_info.get("hasGoogleLogo", False)
+                            )
+                        )
+
+                        if not is_google_page:
+                            logger.warning(
+                                "⚠️ Not on Google homepage (failed verification checks)"
+                            )
+                            logger.warning(
+                                f"  Body preview: {page_info.get('bodyContent', 'N/A')}"
+                            )
+                            retry_count += 1
+                            continue
+
+                        logger.info("✅ Successfully verified Google homepage")
+
+                    except json.JSONDecodeError:
+                        logger.warning("⚠️ Failed to parse page verification result")
+                        logger.warning(f"Raw output: {verify_result.output}")
+                        retry_count += 1
+                        continue
+                else:
+                    logger.warning("⚠️ No output from page verification")
                     retry_count += 1
                     continue
 
