@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from app.agent.visual_element_annotator import VisualElementAnnotator
 from app.logger import logger
-from app.schema import Function, ToolCall
+from app.schema import Function, ToolCall, Message
 from app.tool.browser_use_tool import BrowserUseTool
 
 
@@ -218,12 +218,15 @@ class VisualGoogleSearch:
         except Exception as e:
             logger.error(f"❌ Failed to close browser: {str(e)}")
 
-    def _create_tool_call(self, function_name: str, arguments: Dict) -> ToolCall:
-        """Create a properly formatted ToolCall object"""
+    def _create_tool_call(self, name: str, args: Dict) -> ToolCall:
+        """Create a properly formatted tool call using pydantic models"""
         return ToolCall(
-            id=f"call_{function_name}_{id(arguments)}",
+            id=f"call_{name}_{uuid4().hex[:8]}",
             type="function",
-            function=Function(name=function_name, arguments=json.dumps(arguments)),
+            function=Function(
+                name=name,
+                arguments=json.dumps(args)
+            )
         )
 
     async def _structure_search_results(self, raw_content: str) -> List[Dict]:
@@ -294,11 +297,3 @@ class VisualGoogleSearch:
 
         except Exception as e:
             return {"success": False, "error": str(e)}
-
-    def _create_tool_call(self, function_name: str, arguments: Dict) -> ToolCall:
-        """Create a properly formatted ToolCall object"""
-        return ToolCall(
-            id=f"call_{function_name}_{id(arguments)}",
-            type="function",
-            function=Function(name=function_name, arguments=json.dumps(arguments)),
-        )
