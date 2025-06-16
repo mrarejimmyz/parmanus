@@ -368,181 +368,7 @@ class ManusActionExecutor:
         else:
             return []
 
-    async def _create_crypto_report(self) -> bool:
-        """Create cryptocurrency report file."""
-        try:
-            logger.info("📊 Creating cryptocurrency report...")
-
-            # Get any extracted data from recent searches
-            extracted_crypto_data = []
-            if hasattr(self, "last_search_results") and self.last_search_results:
-                search_results = self.last_search_results.get("results", [])
-                extracted_crypto_data = search_results
-
-            # Also store for agent access
-            if hasattr(self.agent, "latest_search_results"):
-                self.agent.latest_search_results = extracted_crypto_data
-
-            crypto_list = []
-            valid_extracted_data = False
-
-            if extracted_crypto_data:
-                # Validate that extracted data is actual crypto data, not metadata
-                for data in extracted_crypto_data:
-                    title = data.get("title", "")
-                    snippet = data.get("snippet", "")
-
-                    # Check if this looks like metadata rather than crypto data
-                    metadata_indicators = [
-                        "enhanced content extraction",
-                        "analysis goal",
-                        "website analysis",
-                        "content overview",
-                        "key findings",
-                        "successfully extracted",
-                    ]
-
-                    is_metadata = any(
-                        indicator in title.lower() or indicator in snippet.lower()
-                        for indicator in metadata_indicators
-                    )
-
-                    if not is_metadata and any(
-                        crypto in title.lower() + snippet.lower()
-                        for crypto in ["bitcoin", "ethereum", "btc", "eth", "crypto"]
-                    ):
-                        valid_extracted_data = True
-                        break
-
-                if valid_extracted_data:
-                    # Use extracted data if it's valid crypto data
-                    for i, data in enumerate(extracted_crypto_data[:10], 1):
-                        title = data.get("title", f"Cryptocurrency #{i}")
-                        snippet = data.get("snippet", "Leading digital asset")
-                        # Clean up any remaining metadata formatting
-                        title = (
-                            title.replace("✅", "")
-                            .replace("🎯", "")
-                            .replace("📊", "")
-                            .strip()
-                        )
-                        snippet = (
-                            snippet.replace("✅", "")
-                            .replace("🎯", "")
-                            .replace("📊", "")
-                            .strip()
-                        )
-                        crypto_list.append(f"{i}. **{title}** - {snippet}")
-
-            if not valid_extracted_data:
-                # Fallback to static list when no valid extracted data
-                crypto_list = [
-                    "1. **Bitcoin (BTC)** - The original cryptocurrency and digital gold standard",
-                    "2. **Ethereum (ETH)** - Smart contract platform and DeFi ecosystem",
-                    "3. **Tether (USDT)** - Stablecoin pegged to USD for stability",
-                    "4. **BNB (BNB)** - Binance exchange token with utility benefits",
-                    "5. **XRP (XRP)** - Cross-border payment solution for banks",
-                    "6. **Solana (SOL)** - High-performance blockchain for DApps",
-                    "7. **USDC (USDC)** - USD-backed stablecoin by Circle",
-                    "8. **Cardano (ADA)** - Research-driven blockchain platform",
-                    "9. **Dogecoin (DOGE)** - Community-driven meme cryptocurrency",
-                    "10. **Avalanche (AVAX)** - Scalable blockchain for enterprise",
-                ]
-
-            # Create the crypto report directly
-            report_content = f"""# Top 10 Cryptocurrency Report
-Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-## Data Sources
-- CoinMarketCap
-- CoinGecko
-- Binance
-- Coinbase
-- Real-time web search data
-
-## Top 10 Cryptocurrencies by Market Cap
-
-{chr(10).join(crypto_list)}
-
-## Market Analysis
-The cryptocurrency market continues to evolve with Bitcoin maintaining its dominance as digital gold. Ethereum leads the smart contract space, while stablecoins provide crucial stability. Emerging platforms like Solana and Avalanche offer high-performance alternatives for decentralized applications.
-
-## Key Trends
-- Institutional adoption increasing
-- DeFi ecosystem maturing
-- Layer 2 solutions gaining traction
-- Central bank digital currencies (CBDCs) in development
-- ESG concerns driving green crypto initiatives
-
----
-Report generated by ParManus AI Agent with real-time data
-"""
-
-            # Save to workspace
-            workspace_path = os.path.join(os.getcwd(), "workspace", "crypto_report.md")
-            os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
-            with open(workspace_path, "w", encoding="utf-8") as f:
-                f.write(report_content)
-
-            logger.info(f"✅ Crypto report saved to: {workspace_path}")
-            print(
-                f"\n📊 **TOP 10 CRYPTOCURRENCIES REPORT CREATED**\n✅ File saved to: {workspace_path}"
-            )
-            return True
-
-        except Exception as e:
-            logger.error(f"Error creating crypto report: {str(e)}")
-            return False
-
-    async def _create_news_report(self) -> bool:
-        """Create news report file."""
-        try:
-            logger.info("📰 Creating news report...")
-
-            # Create the news report directly
-            report_content = f"""# Top 10 News Stories
-Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-## Data Sources
-- BBC News
-- Reuters
-- CNN
-- Associated Press
-
-## Current Headlines
-[Real headlines extracted from news websites will be populated here]
-
-1. [Breaking: Latest Market Updates]
-2. [Technology Innovation Advances]
-3. [Economic Growth Indicators]
-4. [Global Climate Action Updates]
-5. [Healthcare Research Breakthroughs]
-6. [Educational Policy Changes]
-7. [Infrastructure Development News]
-8. [International Trade Agreements]
-9. [Environmental Conservation Efforts]
-10. [Social Media Platform Updates]
-
-## Summary
-Today's news covers a wide range of topics from market movements to technological innovations. Key themes include economic recovery, environmental sustainability, and digital transformation across various sectors.
-
----
-Report generated by ParManus AI Agent
-"""
-
-            # Save to workspace
-            workspace_path = os.path.join(os.getcwd(), "workspace", "news_report.md")
-            os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
-            with open(workspace_path, "w", encoding="utf-8") as f:
-                f.write(report_content)
-
-            logger.info(f"✅ News report saved to: {workspace_path}")
-            print(f"\n📰 **TOP 10 NEWS STORIES**\n{report_content}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error creating news report: {str(e)}")
-            return False
+    # Old hardcoded functions removed - now using intelligent document creation
 
     async def _create_general_report(self, step: str) -> bool:
         """Create intelligent report using LLM reasoning based on user request."""
@@ -551,7 +377,7 @@ Report generated by ParManus AI Agent
 
             # Get the full user message for context
             user_message = self._get_user_message()
-            
+
             # Use LLM reasoning to determine document type and content
             if self.llm:
                 try:
@@ -564,30 +390,39 @@ Task Context: {step}
 
 Instructions:
 1. If this is a resume request, create a professional resume
-2. If this is a report request, create a comprehensive report  
+2. If this is a report request, create a comprehensive report
 3. If this is any other document request, create appropriate content
 4. Use professional formatting and include relevant sections
 5. Make the content comprehensive and well-structured
 
 Generate the complete document content in markdown format:
 """
-                    
+
                     # Get LLM response for document content
                     from app.schema import Message
+
                     messages = [Message(role="user", content=reasoning_prompt)]
-                    
+
                     response = await self.llm.generate_response(messages)
-                    generated_content = response.content if hasattr(response, 'content') else str(response)
-                    
+                    generated_content = (
+                        response.content
+                        if hasattr(response, "content")
+                        else str(response)
+                    )
+
                     # If LLM generated good content, use it
                     if generated_content and len(generated_content) > 200:
                         report_content = generated_content
                         logger.info("✅ Using LLM-generated content")
                     else:
                         # Fallback to template
-                        report_content = self._create_fallback_content(user_message, step)
-                        logger.info("⚠️ Using fallback template - LLM response too short")
-                        
+                        report_content = self._create_fallback_content(
+                            user_message, step
+                        )
+                        logger.info(
+                            "⚠️ Using fallback template - LLM response too short"
+                        )
+
                 except Exception as e:
                     logger.warning(f"LLM reasoning failed: {str(e)}, using fallback")
                     report_content = self._create_fallback_content(user_message, step)
@@ -597,7 +432,7 @@ Generate the complete document content in markdown format:
 
             # Determine filename based on content type
             filename = self._determine_filename(user_message, step)
-            
+
             # Save to workspace
             workspace_path = os.path.join(os.getcwd(), "workspace", filename)
             os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
@@ -619,7 +454,7 @@ Generate the complete document content in markdown format:
             name = "Professional"
             if "ashish regmi" in user_message.lower():
                 name = "Ashish Regmi"
-            
+
             return f"""# {name} - Professional Resume
 Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
@@ -635,7 +470,7 @@ Experienced professional with strong technical background and proven track recor
 
 ## Core Competencies
 - Software Development & Engineering
-- Project Management & Leadership  
+- Project Management & Leadership
 - Technical Problem Solving
 - Team Collaboration & Communication
 - Continuous Learning & Adaptation
@@ -906,123 +741,7 @@ Report generated by ParManus AI Agent with intelligent reasoning
             function=Function(name=function_name, arguments=json.dumps(arguments)),
         )
 
-    async def _create_resume_report(self, step: str) -> bool:
-        """Create professional resume file."""
-        try:
-            logger.info(f"📄 Creating resume report for: {step}")
-
-            # Extract name from the request
-            user_message = self._get_user_message()
-            name = "Professional"
-            
-            # Try to extract name from the request
-            if "ashish regmi" in user_message.lower():
-                name = "Ashish Regmi"
-            elif "resume of" in user_message.lower():
-                # Try to extract name after "resume of"
-                match = re.search(r'resume of ([^a-z]*)', user_message.lower())
-                if match:
-                    name = match.group(1).strip().title()
-
-            # Create comprehensive resume content
-            resume_content = f"""# {name} - Professional Resume
-Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-## Contact Information
-- **Name:** {name}
-- **Email:** [Email Address]
-- **Phone:** [Phone Number] 
-- **LinkedIn:** [LinkedIn Profile]
-- **Location:** [City, Country]
-
-## Professional Summary
-Experienced professional with a strong background in technology and software development. Demonstrated expertise in project management, technical leadership, and innovative solution delivery. Passionate about leveraging cutting-edge technologies to solve complex business challenges.
-
-## Core Competencies
-- **Technical Skills:** Software Development, System Architecture, Database Management
-- **Programming Languages:** Python, JavaScript, Java, C++
-- **Web Technologies:** HTML, CSS, React, Node.js, Django
-- **Database Systems:** MySQL, PostgreSQL, MongoDB
-- **Cloud Platforms:** AWS, Azure, Google Cloud Platform
-- **DevOps Tools:** Docker, Kubernetes, Jenkins, Git
-- **Project Management:** Agile, Scrum, Kanban
-- **Leadership:** Team Management, Mentoring, Strategic Planning
-
-## Professional Experience
-
-### Senior Software Developer | [Company Name] | [Date Range]
-- Led development of enterprise-level applications serving 10,000+ users
-- Implemented scalable microservices architecture reducing system downtime by 40%
-- Collaborated with cross-functional teams to deliver projects on time and under budget
-- Mentored junior developers and conducted code reviews
-
-### Software Developer | [Company Name] | [Date Range]  
-- Developed and maintained web applications using modern frameworks
-- Optimized database queries improving application performance by 30%
-- Participated in agile development processes and sprint planning
-- Contributed to technical documentation and best practices
-
-### Junior Developer | [Company Name] | [Date Range]
-- Built responsive web interfaces using HTML, CSS, and JavaScript
-- Assisted in backend development and API integration
-- Participated in debugging and testing processes
-- Gained experience in version control and collaborative development
-
-## Education
-
-### Bachelor of Computer Science | [University Name] | [Year]
-- **Relevant Coursework:** Data Structures, Algorithms, Database Systems, Software Engineering
-- **Academic Projects:** [Notable projects or achievements]
-- **GPA:** [If applicable]
-
-## Projects & Achievements
-
-### [Project Name 1]
-- **Description:** Comprehensive project description showcasing technical skills
-- **Technologies Used:** List of technologies and frameworks
-- **Impact:** Quantifiable results or benefits achieved
-
-### [Project Name 2]  
-- **Description:** Another significant project or contribution
-- **Technologies Used:** Relevant technical stack
-- **Recognition:** Any awards or acknowledgments received
-
-## Certifications & Training
-- **Professional Certifications:** [Relevant certifications]
-- **Technical Training:** [Specialized courses or workshops]
-- **Continuous Learning:** [Ongoing education initiatives]
-
-## Technical Portfolio
-- **GitHub:** [GitHub profile link]
-- **Personal Website:** [Portfolio website]
-- **Open Source Contributions:** [Notable contributions]
-
-## Languages
-- **English:** Fluent
-- **[Other Languages]:** [Proficiency level]
-
-## Professional References
-Available upon request
-
----
-*Resume generated by ParManus AI Agent with intelligent formatting*
-"""
-
-            # Save to workspace
-            workspace_path = os.path.join(
-                os.getcwd(), "workspace", f"{name.lower().replace(' ', '_')}_resume.md"
-            )
-            os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
-            with open(workspace_path, "w", encoding="utf-8") as f:
-                f.write(resume_content)
-
-            logger.info(f"✅ Resume report saved to: {workspace_path}")
-            print(f"\n📄 **PROFESSIONAL RESUME CREATED**\n✅ File saved to: {workspace_path}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error creating resume report: {str(e)}")
-            return False
+    # Old hardcoded resume function removed - now using intelligent document creation
 
     async def _create_intelligent_document(self, step: str) -> bool:
         """Create any type of document using pure LLM reasoning without hardcoded functions."""
@@ -1031,14 +750,14 @@ Available upon request
 
             # Get the full user context
             user_message = self._get_user_message()
-            
+
             # Get any available data from recent searches or context
             available_data = self._get_available_context()
-            
+
             if self.llm:
                 # Use LLM reasoning to understand the request and generate content
                 reasoning_prompt = f"""
-You are an AI document generator with access to web research capabilities and vision models. 
+You are an AI document generator with access to web research capabilities and vision models.
 Analyze the user's request and create the appropriate professional document.
 
 USER REQUEST: {user_message}
@@ -1060,33 +779,44 @@ INSTRUCTIONS:
 
 Generate the complete document content in markdown format:
 """
-                
+
                 try:
                     from app.schema import Message
+
                     messages = [Message(role="user", content=reasoning_prompt)]
-                    
+
                     logger.info("🔄 Generating document content with LLM reasoning...")
                     content = await self.llm.ask(messages)
-                    
+
                     if content and len(content) > 200:
                         # Determine appropriate filename based on content analysis
-                        filename = await self._determine_intelligent_filename(user_message, content)
-                        
+                        filename = await self._determine_intelligent_filename(
+                            user_message, content
+                        )
+
                         # Save the generated document
-                        workspace_path = os.path.join(os.getcwd(), "workspace", filename)
+                        workspace_path = os.path.join(
+                            os.getcwd(), "workspace", filename
+                        )
                         os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
-                        
+
                         with open(workspace_path, "w", encoding="utf-8") as f:
                             f.write(content)
 
-                        logger.info(f"✅ Intelligent document created: {workspace_path}")
-                        print(f"\n📄 **INTELLIGENT DOCUMENT CREATED**\n✅ File: {filename}\n✅ Path: {workspace_path}")
-                        
+                        logger.info(
+                            f"✅ Intelligent document created: {workspace_path}"
+                        )
+                        print(
+                            f"\n📄 **INTELLIGENT DOCUMENT CREATED**\n✅ File: {filename}\n✅ Path: {workspace_path}"
+                        )
+
                         return True
                     else:
-                        logger.warning("LLM generated insufficient content, using fallback")
+                        logger.warning(
+                            "LLM generated insufficient content, using fallback"
+                        )
                         return await self._create_fallback_document(step, user_message)
-                        
+
                 except Exception as e:
                     logger.error(f"LLM reasoning failed: {str(e)}, using fallback")
                     return await self._create_fallback_document(step, user_message)
@@ -1098,7 +828,9 @@ Generate the complete document content in markdown format:
             logger.error(f"Error in intelligent document creation: {str(e)}")
             return False
 
-    async def _determine_intelligent_filename(self, user_message: str, content: str) -> str:
+    async def _determine_intelligent_filename(
+        self, user_message: str, content: str
+    ) -> str:
         """Use LLM reasoning to determine the best filename for the generated document."""
         try:
             if self.llm:
@@ -1113,25 +845,27 @@ Return ONLY the filename (including .md extension) without any explanation.
 Examples: "john_doe_resume.md", "crypto_market_report.md", "quarterly_analysis.md"
 
 Filename:"""
-                
+
                 from app.schema import Message
+
                 messages = [Message(role="user", content=filename_prompt)]
                 filename = await self.llm.ask(messages)
                 filename = filename.strip().replace(" ", "_").lower()
-                
+
                 # Ensure it ends with .md
-                if not filename.endswith('.md'):
-                    filename += '.md'
-                    
+                if not filename.endswith(".md"):
+                    filename += ".md"
+
                 # Clean the filename
                 import re
-                filename = re.sub(r'[^\w\-_.]', '', filename)
-                
+
+                filename = re.sub(r"[^\w\-_.]", "", filename)
+
                 if filename and len(filename) > 3:
                     return filename
         except Exception as e:
             logger.warning(f"Filename determination failed: {str(e)}")
-        
+
         # Fallback filename generation
         if "resume" in user_message.lower():
             return "generated_resume.md"
@@ -1145,39 +879,48 @@ Filename:"""
     def _get_available_context(self) -> str:
         """Get any available context data from searches or workspace files."""
         context_parts = []
-        
+
         # Add search results if available
-        if hasattr(self, 'last_search_results') and self.last_search_results:
-            search_results = self.last_search_results.get('results', [])
+        if hasattr(self, "last_search_results") and self.last_search_results:
+            search_results = self.last_search_results.get("results", [])
             if search_results:
                 context_parts.append("Recent web search results:")
                 for i, result in enumerate(search_results[:5], 1):
-                    title = result.get('title', 'No title')
-                    snippet = result.get('snippet', 'No description')
+                    title = result.get("title", "No title")
+                    snippet = result.get("snippet", "No description")
                     context_parts.append(f"{i}. {title}: {snippet}")
-        
+
         # Add agent's latest results if available
-        if hasattr(self.agent, 'latest_search_results') and self.agent.latest_search_results:
+        if (
+            hasattr(self.agent, "latest_search_results")
+            and self.agent.latest_search_results
+        ):
             context_parts.append("Agent search data:")
             context_parts.extend(str(self.agent.latest_search_results)[:500])
-        
+
         # Check for relevant workspace files
         try:
             workspace_path = os.path.join(os.getcwd(), "workspace")
             if os.path.exists(workspace_path):
-                files = [f for f in os.listdir(workspace_path) if f.endswith('.md')]
+                files = [f for f in os.listdir(workspace_path) if f.endswith(".md")]
                 if files:
-                    context_parts.append(f"Existing workspace files: {', '.join(files)}")
+                    context_parts.append(
+                        f"Existing workspace files: {', '.join(files)}"
+                    )
         except Exception:
             pass
-        
-        return "\n".join(context_parts) if context_parts else "No additional context available - relying on LLM knowledge"
+
+        return (
+            "\n".join(context_parts)
+            if context_parts
+            else "No additional context available - relying on LLM knowledge"
+        )
 
     async def _create_fallback_document(self, step: str, user_message: str) -> bool:
         """Create a fallback document when LLM reasoning is not available."""
         try:
             logger.info("📝 Creating fallback document...")
-            
+
             # Determine document type from keywords
             if "resume" in user_message.lower():
                 content = self._generate_resume_template(user_message)
@@ -1191,18 +934,18 @@ Filename:"""
             else:
                 content = self._generate_generic_template(user_message, step)
                 filename = f"document_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-            
+
             # Save the document
             workspace_path = os.path.join(os.getcwd(), "workspace", filename)
             os.makedirs(os.path.dirname(workspace_path), exist_ok=True)
-            
+
             with open(workspace_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             logger.info(f"✅ Fallback document created: {workspace_path}")
             print(f"\n📄 **FALLBACK DOCUMENT CREATED**\n✅ File: {filename}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error creating fallback document: {str(e)}")
             return False
@@ -1213,7 +956,7 @@ Filename:"""
         name = "Professional Candidate"
         if "ashish regmi" in user_message.lower():
             name = "Ashish Regmi"
-        
+
         return f"""# {name} - Professional Resume
 Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
